@@ -1,0 +1,3 @@
+[submodule "Sentinel/third-party/mcuboot"]
+	path = Sentinel/third-party/mcuboot
+	url = https://github.com/mcu-tools/mcuboot.git
