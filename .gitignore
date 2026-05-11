@@ -1,0 +1,95 @@
+# Prerequisites
+*.d
+
+# Compiled Object Files
+*.elf
+*.ko
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Linker Files
+*.ilk
+*.map
+*.exp
+
+# Debugger Files
+*.pdb
+
+# Compiled Dynamic Libraries
+*.so
+*.dylib
+*.dll
+*.so.*
+
+# Fortran Module Files
+*.mod
+*.smod
+
+# Compiled Static Libraries
+*.lai
+*.la
+*.a
+*.lib
+*.lo
+
+# Executables
+*.exe
+*.out
+*.app
+*.i*86
+*.x86_64
+*.hex
+
+# Debug Files
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# Vim Swap Files
+*.swp
+
+# Build Directories
+build/
+Build/
+build-*/
+
+# Temporary Files
+*.tmp
+*.log
+*.bak
+*.swp
+
+# vcpkg
+vcpkg_installed/
+
+# Debug Information Files
+*.dwo
+
+# Kernel Module Compile Results
+*.cmd
+.tmp_versions/
+modules.order
+Module.symvers
+Mkfile.old
+dkms.conf
+
+# ModusToolbox shared files
+mtb_shared/
+
+# macOS Finder incidental files
+.DS_Store
+
+# Test Output & Cache
+Testing/
+.cache/
+
+# LLM
+.claude/
+
