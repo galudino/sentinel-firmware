@@ -28,7 +28,6 @@ function start_python_env() {
 function main() {
     local config="Debug"
     local app_name="sentinel-firmware"
-    
 
     start_python_env
     make program CONFIG=$config APPNAME=$app_name
