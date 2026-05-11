@@ -300,3 +300,16 @@
 14669	15209	1778531608331294794	/Users/gemuelealudino/Developer/Repositories/GitHub/galudino/sentinel-firmware/Sentinel/build/Release/libraries_shared/retarget-io/source/cy_retarget_io.o	9d183b77cb10baa1
 14518	15240	1778531608179939104	/Users/gemuelealudino/Developer/Repositories/GitHub/galudino/sentinel-firmware/Sentinel/build/Release/libraries_shared/ota-update/source/port_support/untar/untar.o	5025c23377738eb5
 15240	15624	1778531608902563978	build/APP_CYBLE-416045-EVAL/Release/sentinel-firmware.elf	591a5e7ef6701cf1
+78	260	1778534151718491963	/Users/gemuelealudino/Developer/Repositories/GitHub/galudino/sentinel-firmware/Sentinel/build/Release/local/src/app/GeneratedSource/cycfg_gap.o	cfd29aeddd9ce932
+77	273	1778534151717762504	/Users/gemuelealudino/Developer/Repositories/GitHub/galudino/sentinel-firmware/Sentinel/build/Release/local/src/app/GeneratedSource/cycfg_bt_settings.o	c7e5901f0ccc88b3
+78	280	1778534151718794213	/Users/gemuelealudino/Developer/Repositories/GitHub/galudino/sentinel-firmware/Sentinel/build/Release/local/src/app/GeneratedSource/cycfg_gatt_db.o	10ad9bbdc22c86d0
+81	619	1778534151722071593	/Users/gemuelealudino/Developer/Repositories/GitHub/galudino/sentinel-firmware/Sentinel/build/Release/libraries_shared/ota-update/source/cy_ota_ble.o	91223018d7495439
+78	860	1778534151719063880	/Users/gemuelealudino/Developer/Repositories/GitHub/galudino/sentinel-firmware/Sentinel/build/Release/local/src/app/main.o	ff1dff8eb9ae217a
+81	874	1778534151721768426	/Users/gemuelealudino/Developer/Repositories/GitHub/galudino/sentinel-firmware/Sentinel/build/Release/local/src/tasks/battery_service_task.o	e2ba793d9d9899c9
+79	1108	1778534151719342797	/Users/gemuelealudino/Developer/Repositories/GitHub/galudino/sentinel-firmware/Sentinel/build/Release/local/src/bluetooth/ble_context.o	ed6d68200d7e0577
+80	1122	1778534151720989550	/Users/gemuelealudino/Developer/Repositories/GitHub/galudino/sentinel-firmware/Sentinel/build/Release/local/src/bluetooth/ble_gatt.o	52e0d1cc430c3dc6
+1122	1435	1778534152762334938	build/APP_CYBLE-416045-EVAL/Release/sentinel-firmware.elf	591a5e7ef6701cf1
+26	534	1778534758326197335	/Users/gemuelealudino/Developer/Repositories/GitHub/galudino/sentinel-firmware/Sentinel/build/Release/local/src/app/main.o	ff1dff8eb9ae217a
+534	915	1778534758834817688	build/APP_CYBLE-416045-EVAL/Release/sentinel-firmware.elf	591a5e7ef6701cf1
+88	725	1778535098879321699	/Users/gemuelealudino/Developer/Repositories/GitHub/galudino/sentinel-firmware/Sentinel/build/Release/local/src/app/main.o	ff1dff8eb9ae217a
+725	1096	1778535099516254969	build/APP_CYBLE-416045-EVAL/Release/sentinel-firmware.elf	591a5e7ef6701cf1

@@ -144,11 +144,7 @@ static inline void initialize() {
     }
 
     cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-               "========= BTStack FreeRTOS Example =============\r\n");
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-               "======= Battery Server Application Start =======\r\n");
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-               "================================================\n");
+               "===== sentinel-firmware ========================\r\n");
     cy_log_msg(CYLF_DEF, CY_LOG_INFO, "Application version: %d.%d.%d.%d\n",
                APP_VERSION_MAJOR, APP_VERSION_MINOR, APP_VERSION_BUILD,
                APP_VERSION_PATCH);
