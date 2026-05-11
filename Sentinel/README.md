@@ -48,7 +48,7 @@ This repository is a modernized **C++ rewrite** of the original Infineon example
 Clone this repository with the `--recurse-submodules` flag to include MCUboot:
 
 ```bash
-git clone --recurse-submodules https://github.com/galudino/mtb-bluetooth-le-battery-server
+git clone --recurse-submodules https://github.com/galudino/sentinel-firmware
 ```
 
 If you already cloned without submodules, initialize them with:
