@@ -44,9 +44,9 @@
                                         <Field>
                                             <FieldProperties>
                                                 <Property id="Name" value="Name"/>
-                                                <Property id="Value" value="Battery Server"/>
+                                                <Property id="Value" value="Sentinel"/>
                                                 <Property id="Format" value="f_utf8s"/>
-                                                <Property id="ByteLength" value="14"/>
+                                                <Property id="ByteLength" value="8"/>
                                             </FieldProperties>
                                         </Field>
                                     </Fields>
@@ -239,6 +239,39 @@
                                                 <Property id="WriteAuthenticated" value="false"/>
                                             </Permission>
                                         </Descriptor>
+                                        <Descriptor type="org.bluetooth.descriptor.gatt.characteristic_user_description">
+                                            <Fields>
+                                                <Field>
+                                                    <FieldProperties>
+                                                        <Property id="Name" value="User Description"/>
+                                                        <Property id="Value" value="Battery Level"/>
+                                                        <Property id="Format" value="f_utf8s"/>
+                                                        <Property id="ByteLength" value="13"/>
+                                                    </FieldProperties>
+                                                </Field>
+                                            </Fields>
+                                            <Properties>
+                                                <BleProperty>
+                                                    <Property id="PropertyType" value="Read"/>
+                                                    <Property id="Present" value="true"/>
+                                                    <Property id="Mandatory" value="false"/>
+                                                </BleProperty>
+                                                <BleProperty>
+                                                    <Property id="PropertyType" value="Write"/>
+                                                    <Property id="Present" value="false"/>
+                                                    <Property id="Mandatory" value="false"/>
+                                                </BleProperty>
+                                            </Properties>
+                                            <Permission>
+                                                <Property id="Read" value="true"/>
+                                                <Property id="ReadAuthenticated" value="false"/>
+                                                <Property id="VariableLength" value="false"/>
+                                                <Property id="Write" value="false"/>
+                                                <Property id="WriteNoResponse" value="false"/>
+                                                <Property id="WriteReliable" value="false"/>
+                                                <Property id="WriteAuthenticated" value="false"/>
+                                            </Permission>
+                                        </Descriptor>
                                     </Descriptors>
                                 </Characteristic>
                             </Characteristics>
@@ -359,6 +392,39 @@
                                                 <Property id="WriteAuthenticated" value="false"/>
                                             </Permission>
                                         </Descriptor>
+                                        <Descriptor type="org.bluetooth.descriptor.gatt.characteristic_user_description">
+                                            <Fields>
+                                                <Field>
+                                                    <FieldProperties>
+                                                        <Property id="Name" value="User Description"/>
+                                                        <Property id="Value" value="OTA Upgrade Control Point"/>
+                                                        <Property id="Format" value="f_utf8s"/>
+                                                        <Property id="ByteLength" value="25"/>
+                                                    </FieldProperties>
+                                                </Field>
+                                            </Fields>
+                                            <Properties>
+                                                <BleProperty>
+                                                    <Property id="PropertyType" value="Read"/>
+                                                    <Property id="Present" value="true"/>
+                                                    <Property id="Mandatory" value="false"/>
+                                                </BleProperty>
+                                                <BleProperty>
+                                                    <Property id="PropertyType" value="Write"/>
+                                                    <Property id="Present" value="false"/>
+                                                    <Property id="Mandatory" value="false"/>
+                                                </BleProperty>
+                                            </Properties>
+                                            <Permission>
+                                                <Property id="Read" value="true"/>
+                                                <Property id="ReadAuthenticated" value="false"/>
+                                                <Property id="VariableLength" value="false"/>
+                                                <Property id="Write" value="false"/>
+                                                <Property id="WriteNoResponse" value="false"/>
+                                                <Property id="WriteReliable" value="false"/>
+                                                <Property id="WriteAuthenticated" value="false"/>
+                                            </Permission>
+                                        </Descriptor>
                                     </Descriptors>
                                 </Characteristic>
                                 <Characteristic type="org.bluetooth.characteristic.custom">
@@ -432,7 +498,41 @@
                                         <Property id="WriteReliable" value="true"/>
                                         <Property id="WriteAuthenticated" value="false"/>
                                     </Permission>
-                                    <Descriptors/>
+                                    <Descriptors>
+                                        <Descriptor type="org.bluetooth.descriptor.gatt.characteristic_user_description">
+                                            <Fields>
+                                                <Field>
+                                                    <FieldProperties>
+                                                        <Property id="Name" value="User Description"/>
+                                                        <Property id="Value" value="OTA Upgrade Data"/>
+                                                        <Property id="Format" value="f_utf8s"/>
+                                                        <Property id="ByteLength" value="16"/>
+                                                    </FieldProperties>
+                                                </Field>
+                                            </Fields>
+                                            <Properties>
+                                                <BleProperty>
+                                                    <Property id="PropertyType" value="Read"/>
+                                                    <Property id="Present" value="true"/>
+                                                    <Property id="Mandatory" value="false"/>
+                                                </BleProperty>
+                                                <BleProperty>
+                                                    <Property id="PropertyType" value="Write"/>
+                                                    <Property id="Present" value="false"/>
+                                                    <Property id="Mandatory" value="false"/>
+                                                </BleProperty>
+                                            </Properties>
+                                            <Permission>
+                                                <Property id="Read" value="true"/>
+                                                <Property id="ReadAuthenticated" value="false"/>
+                                                <Property id="VariableLength" value="false"/>
+                                                <Property id="Write" value="false"/>
+                                                <Property id="WriteNoResponse" value="false"/>
+                                                <Property id="WriteReliable" value="false"/>
+                                                <Property id="WriteAuthenticated" value="false"/>
+                                            </Permission>
+                                        </Descriptor>
+                                    </Descriptors>
                                 </Characteristic>
                             </Characteristics>
                         </Service>
@@ -445,7 +545,7 @@
         <General>
             <Property id="DeviceAddress" value="00A050-000000"/>
             <Property id="MacGeneratedAddress" value="false"/>
-            <Property id="DeviceName" value="Battery Server"/>
+            <Property id="DeviceName" value="Sentinel"/>
             <Property id="Appearance" value="0"/>
             <Property id="HostTxPowerLevel" value="Pos_0"/>
             <Property id="EnableRpaTimeout" value="true"/>
