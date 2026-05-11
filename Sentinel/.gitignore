@@ -19,7 +19,8 @@ GeneratedSource/
 .mtbqueryapi
 
 # ModusToolbox BSP files. Any custom BSP file for code examples is shipped within the 'templates' folder
-bsps/
+# Temporarily allowing BSP files to be tracked until we have a better solution for sharing custom BSP files for code examples
+# bsps/
 
 # ModusToolbox build system output
 build/
