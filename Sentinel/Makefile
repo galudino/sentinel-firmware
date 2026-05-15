@@ -191,6 +191,25 @@ endif
 
 ###############################################################################
 #
+# Main app vs Testbench
+#
+# TESTBENCH=0 builds the main application (src/app/main.cpp).
+# TESTBENCH=1 builds the testbench application (src/testbench/testbench.cpp).
+# Only one of the two source dirs is included in the build; the other is
+# excluded via CY_IGNORE so the linker sees exactly one main().
+#
+###############################################################################
+ifeq ($(TESTBENCH), 1)
+    APPNAME=sentinel-testbench
+    CY_IGNORE+="./src/app/"
+    DEFINES+=SENTINEL_TESTBENCH=1
+else
+    CY_IGNORE+="./src/testbench/"
+    DEFINES+=SENTINEL_APP=1
+endif
+
+###############################################################################
+#
 # App name string as directive
 #
 ###############################################################################
