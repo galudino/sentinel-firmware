@@ -408,8 +408,7 @@ ble_gatt_command_write_handler(wiced_bt_gatt_event_data_t *event_data,
     auto *write_request = &event_data->attribute_request.data.write_req;
 
     *error_handle = write_request->handle;
-
-    CY_ASSERT((p_data != nullptr) && (p_write_req != nullptr));
+    CY_ASSERT((write_request->p_val != nullptr) && (write_request != nullptr));
 
     switch (write_request->handle) {
     case HDLD_OTA_FW_UPGRADE_SERVICE_OTA_UPGRADE_CONTROL_POINT_CLIENT_CHAR_CONFIG:

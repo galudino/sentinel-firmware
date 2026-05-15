@@ -42,10 +42,14 @@ extern "C" {
 ///< Tasks
 #include "battery_service_task.hpp"
 
+///< Tests
+#include "test_bme280_i2c.hpp"
+
 ///< Utilities
 #include "utilities.hpp"
 
 ///< Drivers
+#include "bme280_i2c.hpp"
 #include "led_pwm.hpp"
 
 ///< Device Configurator Resources
@@ -59,6 +63,12 @@ extern "C" {
 ///
 static inline void create_tasks() {
     BaseType_t rtos_result{};
+
+    rtos_result = sentinel::test::bme280_i2c::task_create();
+
+    if (rtos_result != pdPASS) {
+        cy_log_msg(CYLF_DEF, CY_LOG_ERR, "BME280 test task creation failed\n");
+    }
 
     rtos_result = battery_service_task_create();
 
@@ -144,7 +154,7 @@ static inline void initialize() {
     }
 
     cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-               "===== sentinel-firmware ========================\r\n");
+               "sentinel-firmware ==============================\r\n");
     cy_log_msg(CYLF_DEF, CY_LOG_INFO, "Application version: %d.%d.%d.%d\n",
                APP_VERSION_MAJOR, APP_VERSION_MINOR, APP_VERSION_BUILD,
                APP_VERSION_PATCH);
