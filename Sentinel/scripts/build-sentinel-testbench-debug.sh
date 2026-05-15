@@ -8,10 +8,10 @@
 ## /path/to/sentinel-firmware/Sentinel
 ##
 ## # Build Sentinel application debug hex file
-## % ./scripts/build-sentinel-firmware-debug.sh nocopy
+## % ./scripts/build-sentinel-testbench-debug.sh nocopy
 ##
 ## # Use the "copy" argument to copy the final hex to current directory
-## % ./scripts/build-sentinel-firmware-debug.sh copy
+## % ./scripts/build-sentinel-testbench-debug.sh copy
 ##
 
 function validate_argument() {
@@ -44,8 +44,8 @@ function main() {
     local command_line_argument=$1
 
     local config="Debug"
-    local app_name_string="sentinel-firmware"
-    local testbench_mode=0
+    local app_name_string="sentinel-testbench"
+    local testbench_mode=1
     local app_bin_string="./build/TARGET_CYBLE-416045-EVAL/$config/$app_name_string.bin"
     local timestamp_string="$(date +"%Y.%m.%d_%H.%M.%S")"
     local destination_bin_string="$app_name_string""_"$config"_"$timestamp_string".bin"

@@ -15,11 +15,15 @@
 #ifndef LED_PWM_HPP
 #define LED_PWM_HPP
 
-#include "pwm_signal.hpp"
-#include "utilities.hpp"
+#include "sentinel_pwm_signal.hpp"
+#include "sentinel_utilities.hpp"
+
+namespace sentinel {
 
 template <typename PWMImplementation>
 class led_pwm;
+
+} // namespace sentinel
 
 ///
 /// \brief LED controller using PWM signal
@@ -33,13 +37,13 @@ class led_pwm;
 ///                           pwm_signal
 ///
 template <typename PWMImplementation>
-class led_pwm : pwm_signal<PWMImplementation> {
+class sentinel::led_pwm : sentinel::pwm_signal<PWMImplementation> {
 public:
     // Require PWM signal implementation (compile-time check)
-    static_assert(std::is_base_of<pwm_signal<PWMImplementation>,
+    static_assert(std::is_base_of<sentinel::pwm_signal<PWMImplementation>,
                                   PWMImplementation>::value,
                   "PWMImplementation must derive from "
-                  "pwm_signal<PWMImplementation>");
+                  "sentinel::pwm_signal<PWMImplementation>");
 
     ///
     /// \brief Predefined LED duty cycle states
@@ -68,7 +72,7 @@ public:
     ///          flashing effect at ADVERTISING_LED_PWM_FREQUENCY.
     ///
     uint32_t set_blink_rate(duty_cycle duty) {
-        return m_pwm.set_duty_cycle(util::to_underlying(duty),
+        return m_pwm.set_duty_cycle(sentinel::to_underlying(duty),
                                     ADVERTISING_LED_PWM_FREQUENCY);
     }
 

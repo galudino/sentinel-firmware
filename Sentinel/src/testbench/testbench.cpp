@@ -1,5 +1,5 @@
 ///
-/// \file    main.cpp
+/// \file    testbench.cpp
 /// \brief   Main application entry point
 ///
 /// \details This file contains only the main() function which initializes the

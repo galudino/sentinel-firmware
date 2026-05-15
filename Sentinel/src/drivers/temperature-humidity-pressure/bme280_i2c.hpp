@@ -11,8 +11,8 @@ extern "C" {
 }
 #pragma GCC diagnostic pop
 
-#include "resource.hpp"
-#include "utilities.hpp"
+#include "sentinel_resource.hpp"
+#include "sentinel_utilities.hpp"
 
 #include <algorithm>
 #include <vector>
@@ -58,13 +58,13 @@ inline int8_t write(uint8_t reg_addr, const uint8_t *tx, uint32_t tx_size,
 }
 
 inline void delay_us(uint32_t period, void *intf_ptr) {
-    util::unused(intf_ptr);
+    sentinel::unused(intf_ptr);
     cyhal_system_delay_us(period);
 }
 
 inline void bme280_init_cyhal(bme280_dev *const dev) {
     dev->intf = BME280_I2C_INTF;
-    dev->intf_ptr = &resource::cybsp_i2c;
+    dev->intf_ptr = &sentinel::resource::cybsp_i2c;
 
     dev->read = write_read;
     dev->write = write;

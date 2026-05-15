@@ -45,7 +45,7 @@ function main() {
 
     local config="Release"
     local app_name_string="sentinel-firmware"
-    
+    local testbench_mode=0
     local app_bin_string="./build/TARGET_CYBLE-416045-EVAL/$config/$app_name_string.bin"
     local timestamp_string="$(date +"%Y.%m.%d_%H.%M.%S")"
     local destination_bin_string="$app_name_string""_"$config"_"$timestamp_string".bin"
@@ -53,7 +53,7 @@ function main() {
     validate_argument $command_line_argument
 
     start_python_env
-    make build CONFIG=$config APPNAME=$app_name_string
+    make build CONFIG=$config APPNAME=$app_name_string TESTBENCH=$testbench_mode
     deactivate
 
     try_copy_bin_file $command_line_argument $app_bin_string $destination_bin_string
