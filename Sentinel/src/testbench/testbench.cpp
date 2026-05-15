@@ -171,7 +171,7 @@ static inline void initialize() {
     }
 
     cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-               "sentinel-firmware testbench ====================\r\n");
+               "sentinel-testbench =============================\r\n");
     cy_log_msg(
         CYLF_DEF, CY_LOG_INFO, "Application version: %d.%d.%d.%d\n",
         current_firmware_version.major(), current_firmware_version.minor(),
