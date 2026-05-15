@@ -46,6 +46,7 @@ extern "C" {
 #include "test_bme280_i2c.hpp"
 
 ///< Utilities
+#include "firmware_version.hpp"
 #include "utilities.hpp"
 
 ///< Drivers
@@ -155,9 +156,10 @@ static inline void initialize() {
 
     cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                "sentinel-firmware ==============================\r\n");
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO, "Application version: %d.%d.%d.%d\n",
-               APP_VERSION_MAJOR, APP_VERSION_MINOR, APP_VERSION_BUILD,
-               APP_VERSION_PATCH);
+    cy_log_msg(
+        CYLF_DEF, CY_LOG_INFO, "Application version: %d.%d.%d.%d\n",
+        current_firmware_version.major(), current_firmware_version.minor(),
+        current_firmware_version.patch(), current_firmware_version.build());
     cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                "================================================\n\n");
 }
