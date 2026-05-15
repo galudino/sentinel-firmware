@@ -142,9 +142,16 @@ Backup*
 # macOS Finder incidental files
 .DS_Store
 
+# Test Output & Cache
+Testing/
+.cache/
+
 # Windows Explorer incidental files
 Thumbs.db
 Thumbs.db:encryptable
 ehthumbs.db
 ehthumbs_vista.db
 [Dd]esktop.ini
+
+# LLM
+.claude/

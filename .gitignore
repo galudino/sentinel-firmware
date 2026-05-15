@@ -89,3 +89,7 @@ mtb_shared/
 # Test Output & Cache
 Testing/
 .cache/
+
+# LLM
+.claude/
+
