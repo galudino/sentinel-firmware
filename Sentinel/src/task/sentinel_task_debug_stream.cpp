@@ -27,6 +27,7 @@ extern "C" {
 #include "sentinel_gatt_debug.hpp"
 #include "sentinel_resource.hpp"
 #include "sentinel_task_debug_stream.hpp"
+#include "sentinel_utilities.hpp"
 
 #include <cstdio>
 #include <cstring>
@@ -85,11 +86,11 @@ void debug_stream::task_function(void *args) {
     /// TODO: Wait for Persistent Task to be ready
 
     // Send a startup message to confirm the pipeline is working
-    logi("DebugStreamTask started - BLE debug output ready", "");
+    logi("Debug Stream Task started - BLE debug output ready", "");
 
     // NOTE: Do NOT force-enable here.
-    // The client app controls this by writing 1/0 to the
-    // Output Stream Notify Enable characteristic.
+    // The client app controls this by writing 1 (enable) or 0 (disable)
+    // to the Output Stream Notify Enable characteristic.
 
     // Main loop: drain buffer and send notifications at ~50Hz
     while (true) {

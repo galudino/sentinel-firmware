@@ -20,7 +20,7 @@ static inline sentinel::span<char> output_stream() {
 }
 
 static inline bool output_notify_stream_enabled() {
-    return app_debug_output_stream_notify_enable[0] = enabled ? 1 : 0;
+    return app_debug_output_stream_notify_enable[0] != 0;
 }
 
 static inline void set_output_notify_stream_enabled(bool enabled) {
