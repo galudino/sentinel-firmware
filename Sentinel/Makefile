@@ -47,7 +47,7 @@ TARGET=APP_CYBLE-416045-EVAL
 # TESTBENCH=1, will use sources/files for testbench application
 #
 # Included shell scripts set this variable explicitly when calling make.
-TESTBENCH=1
+TESTBENCH=0
 
 # Change the application version here or override by setting an environment variable
 # before building the application.

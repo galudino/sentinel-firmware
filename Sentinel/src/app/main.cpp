@@ -64,12 +64,6 @@ namespace sentinel::app {
 static inline void create_tasks() {
     BaseType_t rtos_result{};
 
-    rtos_result = test::bme280_i2c::task_create();
-
-    if (rtos_result != pdPASS) {
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR, "BME280 test task creation failed\n");
-    }
-
     rtos_result = task::battery_service::task_create();
 
     if (rtos_result != pdPASS) {
@@ -175,7 +169,7 @@ static inline void initialize() {
 /// \brief Application entry point
 ///
 /// Initializes the device hardware, OTA functionality, Bluetooth stack,
-/// creates the battery service task, and starts the FreeRTOS scheduler.
+/// creates all tasks, and starts the FreeRTOS scheduler.
 ///
 /// \return Application exit status (never returns in normal operation)
 ///

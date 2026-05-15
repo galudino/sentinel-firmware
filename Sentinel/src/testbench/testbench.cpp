@@ -185,7 +185,7 @@ static inline void initialize() {
 /// \brief Application entry point
 ///
 /// Initializes the device hardware, OTA functionality, Bluetooth stack,
-/// creates the battery service task, and starts the FreeRTOS scheduler.
+/// creates all tasks, creates all tests, and starts the FreeRTOS scheduler.
 ///
 /// \return Application exit status (never returns in normal operation)
 ///

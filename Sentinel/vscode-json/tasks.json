@@ -59,6 +59,33 @@
             }
         },
         {
+            "label": "Build Debug Testbench",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "--norc",
+                "-c",
+                "./scripts/build-sentinel-testbench-debug.sh nocopy"
+            ],
+
+            "windows": {
+                "command": "${config:modustoolbox.toolsPath}/modus-shell/bin/bash.exe",
+                "args": [
+                    "--norc",
+                    "-c",
+                    "python3 -m venv ~/.mtb-venv",
+                    "source ~/.mtb-venv/bin/activate",
+                    "pip install click cryptography intelhex",
+                    "export PATH=/bin:/usr/bin:$PATH ; ${config:modustoolbox.toolsPath}/modus-shell/bin/make.exe -j10 build CONFIG=\"Debug\" TESTBENCH=1",
+                    "deactivate"
+                ]
+            },
+            "problemMatcher": "$gcc",
+            "group": {
+                "kind": "build"
+            }
+        },
+        {
             "label": "Build Release",
             "type": "shell",
             "command": "bash",
@@ -86,6 +113,33 @@
             }
         },
         {
+            "label": "Build Release Testbench",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "--norc",
+                "-c",
+                "./scripts/build-sentinel-testbench-release.sh nocopy"
+            ],
+
+            "windows": {
+                "command": "${config:modustoolbox.toolsPath}/modus-shell/bin/bash.exe",
+                "args": [
+                    "--norc",
+                    "-c",
+                    "python3 -m venv ~/.mtb-venv",
+                    "source ~/.mtb-venv/bin/activate",
+                    "pip install click cryptography intelhex",
+                    "export PATH=/bin:/usr/bin:$PATH ; ${config:modustoolbox.toolsPath}/modus-shell/bin/make.exe -j10 build CONFIG=\"Release\" TESTBENCH=1",
+                    "deactivate"
+                ]
+            },
+            "problemMatcher": "$gcc",
+            "group": {
+                "kind": "build"
+            }
+        },
+        {
             "label": "Rebuild",
             "dependsOrder": "sequence",
             "dependsOn": ["Clean", "Build"],
@@ -102,9 +156,25 @@
             }
         },
         {
+            "label": "Rebuild Debug Testbench",
+            "dependsOrder": "sequence",
+            "dependsOn": ["Clean", "Build Debug Testbench"],
+            "group": {
+                "kind": "build"
+            }
+        },
+        {
             "label": "Rebuild Release",
             "dependsOrder": "sequence",
             "dependsOn": ["Clean", "Build Release"],
+            "group": {
+                "kind": "build"
+            }
+        },
+        {
+            "label": "Rebuild Release Testbench",
+            "dependsOrder": "sequence",
+            "dependsOn": ["Clean", "Build Release Testbench"],
             "group": {
                 "kind": "build"
             }
@@ -182,6 +252,33 @@
             }
         },
         {
+            "label": "Program Debug Testbench",
+            "type": "process",
+            "command": "bash",
+            "args": [
+                "--norc",
+                "-c",
+                "./scripts/program-sentinel-testbench-debug.sh"
+            ],
+
+            "windows": {
+                "command": "${config:modustoolbox.toolsPath}/modus-shell/bin/bash.exe",
+                "args": [
+                    "--norc",
+                    "-c",
+                    "python3 -m venv ~/.mtb-venv",
+                    "source ~/.mtb-venv/bin/activate",
+                    "pip install click cryptography intelhex",
+                    "export PATH=/bin:/usr/bin:$PATH ; ${config:modustoolbox.toolsPath}/modus-shell/bin/make.exe -j10 program CONFIG=\"Debug\" TESTBENCH=1",
+                    "deactivate"
+                ]
+            },
+            "problemMatcher": "$gcc",
+            "group": {
+                "kind": "build"
+            }
+        },
+        {
             "label": "Program Release",
             "type": "shell",
             "command": "bash",
@@ -200,6 +297,33 @@
                     "source ~/.mtb-venv/bin/activate",
                     "pip install click cryptography intelhex",
                     "export PATH=/bin:/usr/bin:$PATH ; ${config:modustoolbox.toolsPath}/modus-shell/bin/make.exe -j10 program CONFIG=\"Release\"",
+                    "deactivate"
+                ]
+            },
+            "problemMatcher": "$gcc",
+            "group": {
+                "kind": "build"
+            }
+        },
+        {
+            "label": "Program Release Testbench",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "--norc",
+                "-c",
+                "./scripts/program-sentinel-testbench-release.sh"
+            ],
+
+            "windows": {
+                "command": "${config:modustoolbox.toolsPath}/modus-shell/bin/bash.exe",
+                "args": [
+                    "--norc",
+                    "-c",
+                    "python3 -m venv ~/.mtb-venv",
+                    "source ~/.mtb-venv/bin/activate",
+                    "pip install click cryptography intelhex",
+                    "export PATH=/bin:/usr/bin:$PATH ; ${config:modustoolbox.toolsPath}/modus-shell/bin/make.exe -j10 program CONFIG=\"Release\" TESTBENCH=1",
                     "deactivate"
                 ]
             },
@@ -234,6 +358,42 @@
                 "--norc",
                 "-c",
                 "./scripts/build-combined-mcuboot-app-and-sentinel-firmware-release.sh"
+            ],
+
+            "windows": {
+                // TODO: Add Windows support
+            },
+            "problemMatcher": "$gcc",
+            "group": {
+                "kind": "build"
+            }
+        },
+        {
+            "label": "Build combined MCUBootApp and sentinel-testbench hex file (Debug)",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "--norc",
+                "-c",
+                "./scripts/build-combined-mcuboot-app-and-sentinel-testbench-debug.sh"
+            ],
+
+            "windows": {
+                // TODO: Add Windows support
+            },
+            "problemMatcher": "$gcc",
+            "group": {
+                "kind": "build"
+            }
+        },
+        {
+            "label": "Build combined MCUBootApp and sentinel-testbench hex file (Release)",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "--norc",
+                "-c",
+                "./scripts/build-combined-mcuboot-app-and-sentinel-testbench-release.sh"
             ],
 
             "windows": {
