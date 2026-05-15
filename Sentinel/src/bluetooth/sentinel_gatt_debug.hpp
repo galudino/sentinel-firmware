@@ -1,5 +1,5 @@
-#ifndef GATT_DEBUG_HPP
-#define GATT_DEBUG_HPP
+#ifndef SENTINEL_GATT_DEBUG_HPP
+#define SENTINEL_GATT_DEBUG_HPP
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
@@ -10,11 +10,11 @@ extern "C" {
 }
 #pragma GCC diagnostic pop
 
-#include "span.hpp"
+#include "sentinel_span.hpp"
 
-namespace gatt::debug {
+namespace sentinel::gatt::debug {
 
-static inline span<char> output_stream() {
+static inline sentinel::span<char> output_stream() {
     return {reinterpret_cast<char *>(app_debug_output_stream),
             app_debug_output_stream_len};
 }
@@ -32,6 +32,6 @@ static inline bool output_stream_notifications_enabled() {
            wiced_bt_gatt_client_char_config_e::GATT_CLIENT_CONFIG_NOTIFICATION;
 }
 
-} // namespace gatt::debug
+} // namespace sentinel::gatt::debug
 
-#endif /* GATT_DEBUG_HPP */
+#endif /* SENTINEL_GATT_DEBUG_HPP */

@@ -24,7 +24,7 @@ extern "C" {
 
 #include "battery_service_task.hpp"
 #include "ble_context.hpp"
-#include "utilities.hpp"
+#include "sentinel_utilities.hpp"
 
 constexpr auto BATTERY_LEVEL_CHANGE =
     uint32_t(2); ///< Rate of change of battery level
@@ -67,7 +67,7 @@ BaseType_t battery_service_task_create(void) {
 }
 
 void battery_service_task(void *task_parameter) {
-    util::unused(task_parameter);
+    sentinel::util::unused(task_parameter);
 
     // Initialize the HAL timer used to count seconds
     auto result = cyhal_timer_init(&battery_service_timer, NC, nullptr);
@@ -137,8 +137,8 @@ void battery_service_task(void *task_parameter) {
 
 static void battery_service_timer_callback(void *callback_argument,
                                            cyhal_timer_event_t timer_event) {
-    util::unused(callback_argument);
-    util::unused(timer_event);
+    sentinel::util::unused(callback_argument);
+    sentinel::util::unused(timer_event);
 
     auto xHigherPriorityTaskWoken = BaseType_t{};
     xHigherPriorityTaskWoken = pdFALSE;

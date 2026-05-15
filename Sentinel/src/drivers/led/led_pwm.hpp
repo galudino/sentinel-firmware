@@ -16,7 +16,7 @@
 #define LED_PWM_HPP
 
 #include "pwm_signal.hpp"
-#include "utilities.hpp"
+#include "sentinel_utilities.hpp"
 
 template <typename PWMImplementation>
 class led_pwm;
@@ -68,7 +68,7 @@ public:
     ///          flashing effect at ADVERTISING_LED_PWM_FREQUENCY.
     ///
     uint32_t set_blink_rate(duty_cycle duty) {
-        return m_pwm.set_duty_cycle(util::to_underlying(duty),
+        return m_pwm.set_duty_cycle(sentinel::util::to_underlying(duty),
                                     ADVERTISING_LED_PWM_FREQUENCY);
     }
 

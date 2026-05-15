@@ -1,5 +1,5 @@
 ///
-/// \file    resource.hpp
+/// \file    sentinel_resource.hpp
 /// \brief   Hardware peripheral resource definitions and initialization
 ///
 /// \details This header provides global peripheral resource handles and
@@ -11,8 +11,8 @@
 /// \version 1.0 - Peripheral resources
 ///
 
-#ifndef RESOURCE_HPP
-#define RESOURCE_HPP
+#ifndef SENTINEL_RESOURCE_HPP
+#define SENTINEL_RESOURCE_HPP
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
@@ -23,7 +23,7 @@ extern "C" {
 }
 #pragma GCC diagnostic pop
 
-namespace resource {
+namespace sentinel::resource {
 
 inline cyhal_pwm_t led1;
 inline cyhal_pwm_t led2;
@@ -53,6 +53,6 @@ inline void peripheral_deinitialize() noexcept {
     cyhal_pwm_free(&led1);
 }
 
-} // namespace resource
+} // namespace sentinel::resource
 
-#endif /* RESOURCE_HPP */
+#endif /* SENTINEL_RESOURCE_HPP */

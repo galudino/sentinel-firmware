@@ -1,5 +1,5 @@
-#ifndef GATT_BATTERY_HPP
-#define GATT_BATTERY_HPP
+#ifndef SENTINEL_GATT_BATTERY_HPP
+#define SENTINEL_GATT_BATTERY_HPP
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
@@ -12,7 +12,7 @@ extern "C" {
 
 #include <cstdint>
 
-namespace gatt::battery {
+namespace sentinel::gatt::battery {
 
 ///
 /// \brief Get current battery level percentage
@@ -44,6 +44,6 @@ static inline void set_level(uint8_t level) {
     app_bas_battery_level[0] = level;
 }
 
-} // namespace gatt::battery
+} // namespace sentinel::gatt::battery
 
-#endif /* GATT_BATTERY_HPP */
+#endif /* SENTINEL_GATT_BATTERY_HPP */

@@ -1,5 +1,5 @@
 ///
-/// \file       format_string.hpp
+/// \file       sentinel_format_string.hpp
 /// \brief      String Formatting Utilities - Header
 ///
 /// Provides lightweight, reusable string formatting utilities for log messages
@@ -16,14 +16,14 @@
 /// \date       2026-01-31
 ///
 
-#ifndef FORMAT_STRING_HPP
-#define FORMAT_STRING_HPP
+#ifndef SENTINEL_FORMAT_STRING_HPP
+#define SENTINEL_FORMAT_STRING_HPP
 
 #include <cstdarg>
 #include <cstddef>
 #include <cstdint>
 
-namespace logging {
+namespace sentinel::logging {
 
 //==============================================================================
 // Public API
@@ -74,6 +74,6 @@ int build_string(char *out, size_t size, uint64_t unix_time_ms,
                  const char *file, int line, const char *function,
                  const char *level, const char *fmt, va_list args);
 
-} // namespace logging
+} // namespace sentinel::logging
 
-#endif /* FORMAT_STRING_HPP */
+#endif /* SENTINEL_FORMAT_STRING_HPP */

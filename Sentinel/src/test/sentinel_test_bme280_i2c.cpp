@@ -3,9 +3,10 @@
 extern "C" {
 #include "cy_result.h"
 }
+#pragma GCC diagnostic pop
 
-#include "resource.hpp"
-#include "test_bme280_i2c.hpp"
+#include "sentinel_resource.hpp"
+#include "sentinel_test_bme280_i2c.hpp"
 
 using namespace sentinel;
 

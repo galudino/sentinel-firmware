@@ -1,5 +1,5 @@
 ///
-/// \file       debug_print.cpp
+/// \file       sentinel_debug_print.cpp
 /// \brief      Debug Print Utilities - Implementation
 ///
 /// \author     galudino
@@ -18,28 +18,28 @@ extern "C" {
 }
 #pragma GCC diagnostic pop
 
-#include "debug_print.hpp"
-#include "format_string.hpp"
-#include "resource.hpp"
+#include "sentinel_debug_print.hpp"
+#include "sentinel_format_string.hpp"
+#include "sentinel_resource.hpp"
 
 #include <cstdio>
 
-namespace logging {
+namespace sentinel::logging {
 
 static char
     g_log_buffer[DEBUG_OUTPUT_STREAM_MAX_LEN]; ///< Static buffer for formatting
                                                ///< log messages
 
-} // namespace logging
+} // namespace sentinel::logging
 
-void logging::bleprint_format(const char *fmt, ...) {
+void sentinel::logging::bleprint_format(const char *fmt, ...) {
     va_list args;
     va_start(args, fmt);
     blevprint_format(fmt, args);
     va_end(args);
 }
 
-void logging::blevprint_format(const char *fmt, va_list args) {
+void sentinel::logging::blevprint_format(const char *fmt, va_list args) {
     char buf[128];
 
     auto len = vsnprintf(buf, sizeof(buf), fmt, args);
@@ -57,10 +57,9 @@ void logging::blevprint_format(const char *fmt, va_list args) {
     }
 }
 
-void logging::enqueue_log_for_debug_stream(const char *file, int line,
-                                           const char *function,
-                                           const char *level, const char *fmt,
-                                           ...) {
+void sentinel::logging::enqueue_log_for_debug_stream(
+    const char *file, int line, const char *function, const char *level,
+    const char *fmt, ...) {
     // Use critical section to protect the static g_log_buffer
     taskENTER_CRITICAL();
 
@@ -73,9 +72,9 @@ void logging::enqueue_log_for_debug_stream(const char *file, int line,
     va_list args;
     va_start(args, fmt);
 
-    auto length =
-        logging::build_string(g_log_buffer, sizeof(g_log_buffer), unix_ms, file,
-                              line, function, level, fmt, args);
+    auto length = sentinel::logging::build_string(
+        g_log_buffer, sizeof(g_log_buffer), unix_ms, file, line, function,
+        level, fmt, args);
 
     va_end(args);
 
@@ -94,7 +93,7 @@ void logging::enqueue_log_for_debug_stream(const char *file, int line,
     taskEXIT_CRITICAL();
 }
 
-using logging::ring_buffer;
+using sentinel::logging::ring_buffer;
 
 bool ring_buffer::push(uint8_t b) {
     taskENTER_CRITICAL();

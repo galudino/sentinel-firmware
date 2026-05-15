@@ -53,15 +53,15 @@ extern "C" {
 #include "cyhal_pwm_signal.hpp"
 #include "led_pwm.hpp"
 #include "pwm_signal.hpp"
-#include "resource.hpp"
-#include "utilities.hpp"
+#include "sentinel_resource.hpp"
+#include "sentinel_utilities.hpp"
 
 #include <algorithm>
 #include <cstring>
 
 using Signal = cyhal_pwm_signal;
 
-static auto led_pwm_block = Signal(&resource::led3);
+static auto led_pwm_block = Signal(&sentinel::resource::led3);
 
 ///
 /// \brief Initialize and start BLE advertising
@@ -352,7 +352,7 @@ wiced_bt_dev_status_t ble_context::stack_management_callback(
 
     case wiced_bt_management_evt_e::BTM_ENCRYPTION_STATUS_EVT:
         encryption_status = &event_data->encryption_status;
-        util::unused(encryption_status);
+        sentinel::util::unused(encryption_status);
         result = wiced_result_t::WICED_BT_SUCCESS;
         break;
 

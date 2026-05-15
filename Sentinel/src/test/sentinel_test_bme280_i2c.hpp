@@ -1,3 +1,6 @@
+#ifndef SENTINEL_TEST_BME280_I2C_HPP
+#define SENTINEL_TEST_BME280_I2C_HPP
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
 extern "C" {
@@ -8,9 +11,10 @@ extern "C" {
 #include "portmacro.h"
 #include "task.h"
 }
+#pragma GCC diagnostic pop
 
 #include "bme280_i2c.hpp"
-#include "resource.hpp"
+#include "sentinel_resource.hpp"
 
 namespace sentinel::test::bme280_i2c {
 
@@ -39,3 +43,5 @@ static inline BaseType_t task_create() {
 void init();
 
 } // namespace sentinel::test::bme280_i2c
+
+#endif /* SENTINEL_TEST_BME280_I2C_HPP */

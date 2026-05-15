@@ -1,5 +1,5 @@
 ///
-/// \file       format_string.cpp
+/// \file       sentinel_format_string.cpp
 /// \brief      String Formatting Utilities - Implementation
 ///
 /// Implements lightweight string formatting utilities for log messages
@@ -12,11 +12,11 @@
 /// \date       2026-01-31
 ///
 
-#include "format_string.hpp"
+#include "sentinel_format_string.hpp"
 
 #include <cstdio>
 
-namespace logging {
+namespace sentinel::logging {
 
 struct datetime {
     int year;
@@ -42,13 +42,13 @@ static constexpr int days_in_month[] = {31, 28, 31, 30, 31, 30,
 static bool is_leap_year(int year);
 static datetime unix_seconds_to_datetime(int64_t unix_seconds);
 
-} // namespace logging
+} // namespace sentinel::logging
 
 //==============================================================================
 // Public API Implementation
 //==============================================================================
 
-int logging::format_unix_timestamp_ms(int64_t unix_time_ms, char *out_buf,
+int sentinel::logging::format_unix_timestamp_ms(int64_t unix_time_ms, char *out_buf,
                                       size_t out_buf_size, bool local_time) {
     static_cast<void>(local_time); // UTC only for simplicity
 
@@ -65,7 +65,7 @@ int logging::format_unix_timestamp_ms(int64_t unix_time_ms, char *out_buf,
     return length;
 }
 
-int logging::build_string(char *out, size_t size, uint64_t unix_time_ms,
+int sentinel::logging::build_string(char *out, size_t size, uint64_t unix_time_ms,
                           const char *file, int line, const char *function,
                           const char *level, const char *fmt, va_list args) {
     // Get basename of file (strip path)
@@ -131,7 +131,7 @@ int logging::build_string(char *out, size_t size, uint64_t unix_time_ms,
 ///
 /// \brief      Check if a year is a leap year.
 ///
-static bool logging::is_leap_year(int year) {
+static bool sentinel::logging::is_leap_year(int year) {
     return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
 }
 
@@ -144,8 +144,8 @@ static bool logging::is_leap_year(int year) {
 /// Lightweight alternative to gmtime_r() that doesn't require heavy libc
 /// functions.
 ///
-static logging::datetime
-logging::unix_seconds_to_datetime(int64_t unix_seconds) {
+static sentinel::logging::datetime
+sentinel::logging::unix_seconds_to_datetime(int64_t unix_seconds) {
     auto dt = datetime{};
 
     // Handle time of day first (simpler math)

@@ -1,5 +1,5 @@
 ///
-/// \file    utilities.hpp
+/// \file    sentinel_utilities.hpp
 /// \brief   Common utilities and constants
 ///
 /// \details This header provides shared utilities, constants, and helper
@@ -10,12 +10,12 @@
 /// \version 1.0 - Initial utilities and constants implementation
 ///
 
-#ifndef UTILITIES_HPP
-#define UTILITIES_HPP
+#ifndef SENTINEL_UTILITIES_HPP
+#define SENTINEL_UTILITIES_HPP
 
 #include <type_traits>
 
-namespace util {
+namespace sentinel::util {
 
 /// \name Template Utilities
 /// \{
@@ -41,7 +41,7 @@ namespace util {
 ///     process_data(used_param);
 ///
 ///     // Suppress warning for unused parameter
-///     util::unused(unused_param);
+///     sentinel::util::unused(unused_param);
 /// }
 /// \endcode
 ///
@@ -105,7 +105,7 @@ enum class endianess {
 template <typename E>
 constexpr std::underlying_type_t<E> to_underlying(E e) noexcept {
     static_assert(std::is_enum<E>::value,
-                  "util::to_underlying requires an enum type");
+                  "sentinel::util::to_underlying requires an enum type");
     return static_cast<std::underlying_type_t<E>>(e);
 }
 
@@ -128,6 +128,6 @@ static constexpr bool is_byte_enum_v =
 
 /// \}
 
-} // namespace util
+} // namespace sentinel::util
 
-#endif /* UTILITIES_HPP */
+#endif /* SENTINEL_UTILITIES_HPP */

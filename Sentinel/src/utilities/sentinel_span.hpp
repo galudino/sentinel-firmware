@@ -1,5 +1,5 @@
 ///
-/// \file    span.hpp
+/// \file    sentinel_span.hpp
 /// \brief   Lightweight non-owning view over contiguous sequences
 ///
 /// \details This header provides a C++11-compatible span implementation that
@@ -13,14 +13,16 @@
 /// \version 1.0 - Span container implementation
 ///
 
-#ifndef SPAN_HPP
-#define SPAN_HPP
+#ifndef SENTINEL_SPAN_HPP
+#define SENTINEL_SPAN_HPP
 
 #include <array>
 #include <cassert>
 #include <cstddef>
 #include <iterator>
 #include <type_traits>
+
+namespace sentinel {
 
 ///
 /// \brief Non-owning view over a contiguous sequence of elements
@@ -380,4 +382,6 @@ constexpr span<const T> make_cspan(const T *data, size_t size) noexcept {
     return span<const T>(data, size);
 }
 
-#endif // SPAN_HPP
+} // namespace sentinel
+
+#endif // SENTINEL_SPAN_HPP

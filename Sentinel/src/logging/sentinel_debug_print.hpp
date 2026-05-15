@@ -1,13 +1,13 @@
 ///
-/// \file       debug_print.hpp
+/// \file       sentinel_debug_print.hpp
 /// \brief      Debug Print Utilities - Header
 ///
 /// \author     galudino
 /// \date       2026-02-19
 ///
 
-#ifndef DEBUG_PRINT_HPP
-#define DEBUG_PRINT_HPP
+#ifndef SENTINEL_DEBUG_PRINT_HPP
+#define SENTINEL_DEBUG_PRINT_HPP
 
 /// Debug output stream enable/disable
 /// Set to 0 to compile out all debug output
@@ -22,7 +22,7 @@
 #include <cstdarg>
 #include <cstddef>
 
-namespace logging {
+namespace sentinel::logging {
 
 class ring_buffer {
 public:
@@ -131,32 +131,32 @@ void enqueue_log_for_debug_stream(const char *file, int line,
                                   const char *function, const char *level,
                                   const char *fmt, ...);
 
-} // namespace logging
+} // namespace sentinel::logging
 
 #if BLE_DEBUG_ENABLE
 
 /// Debug printf macro - outputs to BLE debug stream
-#define bleprintf(fmt, ...) logging::bleprint_format(fmt, ##__VA_ARGS__)
+#define bleprintf(fmt, ...) sentinel::logging::bleprint_format(fmt, ##__VA_ARGS__)
 
 /// Log debug level message
 #define logd(fmt, ...)                                                         \
-    logging::enqueue_log_for_debug_stream(__FILE__, __LINE__, __func__,        \
-                                          "debug", fmt, ##__VA_ARGS__)
+    sentinel::logging::enqueue_log_for_debug_stream(                           \
+        __FILE__, __LINE__, __func__, "debug", fmt, ##__VA_ARGS__)
 
 /// Log info level message
 #define logi(fmt, ...)                                                         \
-    logging::enqueue_log_for_debug_stream(__FILE__, __LINE__, __func__,        \
-                                          "info", fmt, ##__VA_ARGS__)
+    sentinel::logging::enqueue_log_for_debug_stream(                           \
+        __FILE__, __LINE__, __func__, "info", fmt, ##__VA_ARGS__)
 
 /// Log warning level message
 #define logw(fmt, ...)                                                         \
-    logging::enqueue_log_for_debug_stream(__FILE__, __LINE__, __func__,        \
-                                          "warn", fmt, ##__VA_ARGS__)
+    sentinel::logging::enqueue_log_for_debug_stream(                           \
+        __FILE__, __LINE__, __func__, "warn", fmt, ##__VA_ARGS__)
 
 /// Log error level message
 #define loge(fmt, ...)                                                         \
-    logging::enqueue_log_for_debug_stream(__FILE__, __LINE__, __func__,        \
-                                          "error", fmt, ##__VA_ARGS__)
+    sentinel::logging::enqueue_log_for_debug_stream(                           \
+        __FILE__, __LINE__, __func__, "error", fmt, ##__VA_ARGS__)
 
 #else
 
@@ -179,4 +179,4 @@ void enqueue_log_for_debug_stream(const char *file, int line,
 
 #endif
 
-#endif /* DEBUG_PRINT_HPP */
+#endif /* SENTINEL_DEBUG_PRINT_HPP */

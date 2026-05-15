@@ -1,5 +1,5 @@
 ///
-/// \file    firmware_version.hpp
+/// \file    sentinel_firmware_version.hpp
 /// \brief   Compile-time firmware version management
 ///
 /// \details This header provides a constexpr-based firmware version class that
@@ -25,13 +25,15 @@
 /// \version 1.0 - Initial firmware version management implementation
 ///
 
-#ifndef FIRMWARE_VERSION
-#define FIRMWARE_VERSION
+#ifndef SENTINEL_FIRMWARE_VERSION_HPP
+#define SENTINEL_FIRMWARE_VERSION_HPP
 
-#include "utilities.hpp"
+#include "sentinel_utilities.hpp"
 
 #include <array>
 #include <cstdint>
+
+namespace sentinel {
 
 ///
 /// \brief Compile-time firmware version class
@@ -228,4 +230,6 @@ constexpr auto current_firmware_version = firmware_version();
 
 /// \}
 
-#endif /* FIRMWARE_VERSION */
+} // namespace sentinel
+
+#endif /* SENTINEL_FIRMWARE_VERSION_HPP */

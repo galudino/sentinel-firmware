@@ -43,18 +43,18 @@ extern "C" {
 #include "battery_service_task.hpp"
 
 ///< Tests
-#include "test_bme280_i2c.hpp"
+#include "sentinel_test_bme280_i2c.hpp"
 
 ///< Utilities
-#include "firmware_version.hpp"
-#include "utilities.hpp"
+#include "sentinel_firmware_version.hpp"
+#include "sentinel_utilities.hpp"
 
 ///< Drivers
 #include "bme280_i2c.hpp"
 #include "led_pwm.hpp"
 
 ///< Device Configurator Resources
-#include "resource.hpp"
+#include "sentinel_resource.hpp"
 
 ///< Bluetooth LE
 #include "ble_context.hpp"
@@ -142,7 +142,7 @@ static inline void initialize() {
     cyhal_wdt_free(&wdt_obj);
 
     // Initialize resources.
-    resource::peripheral_initialize();
+    sentinel::resource::peripheral_initialize();
 
     // Initialize Bluetooth LE stack and services
     // Register callback and configuration with stack.
@@ -156,10 +156,11 @@ static inline void initialize() {
 
     cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                "sentinel-firmware ==============================\r\n");
-    cy_log_msg(
-        CYLF_DEF, CY_LOG_INFO, "Application version: %d.%d.%d.%d\n",
-        current_firmware_version.major(), current_firmware_version.minor(),
-        current_firmware_version.patch(), current_firmware_version.build());
+    cy_log_msg(CYLF_DEF, CY_LOG_INFO, "Application version: %d.%d.%d.%d\n",
+               sentinel::current_firmware_version.major(),
+               sentinel::current_firmware_version.minor(),
+               sentinel::current_firmware_version.patch(),
+               sentinel::current_firmware_version.build());
     cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                "================================================\n\n");
 }
@@ -173,8 +174,8 @@ static inline void initialize() {
 /// \return Application exit status (never returns in normal operation)
 ///
 int main(int argc, const char *argv[]) {
-    util::unused(argc);
-    util::unused(argv);
+    sentinel::util::unused(argc);
+    sentinel::util::unused(argv);
 
     initialize();
     create_tasks();
