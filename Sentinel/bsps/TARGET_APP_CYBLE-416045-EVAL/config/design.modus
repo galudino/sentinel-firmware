@@ -69,18 +69,6 @@
                         <Alias value="CYBSP_J6_4"/>
                     </Aliases>
                 </Block>
-                <Block location="ioss[0].port[6].pin[4]">
-                    <Aliases>
-                        <Alias value="CYBSP_I2C_SCL"/>
-                        <Alias value="CYBSP_D15"/>
-                    </Aliases>
-                </Block>
-                <Block location="ioss[0].port[6].pin[5]">
-                    <Aliases>
-                        <Alias value="CYBSP_I2C_SDA"/>
-                        <Alias value="CYBSP_D14"/>
-                    </Aliases>
-                </Block>
                 <Block location="ioss[0].port[7].pin[1]">
                     <Aliases>
                         <Alias value="CYBSP_J2_6"/>
@@ -240,6 +228,48 @@
                     </Parameters>
                 </Personality>
                 <Personality template="pin" version="3.0">
+                    <Block location="ioss[0].port[6].pin[4]" locked="true">
+                        <Aliases>
+                            <Alias value="CYBSP_I2C_SCL"/>
+                            <Alias value="CYBSP_D15"/>
+                        </Aliases>
+                    </Block>
+                    <Parameters>
+                        <Param id="DriveModes" value="CY_GPIO_DM_OD_DRIVESLOW"/>
+                        <Param id="driveStrength" value="CY_GPIO_DRIVE_1_2"/>
+                        <Param id="driveStrengthTrim" value="CY_GPIO_DRIVE_STRENGTH_DEFAULT"/>
+                        <Param id="inFlash" value="true"/>
+                        <Param id="initialState" value="1"/>
+                        <Param id="isrTrigger" value="CY_GPIO_INTR_DISABLE"/>
+                        <Param id="nonSec" value="1"/>
+                        <Param id="pullUpRes" value="CY_GPIO_PULLUP_RES_DISABLE"/>
+                        <Param id="sioOutputBuffer" value="true"/>
+                        <Param id="slewRate" value="CY_GPIO_SLEW_FAST"/>
+                        <Param id="vtrip" value="CY_GPIO_VTRIP_CMOS"/>
+                    </Parameters>
+                </Personality>
+                <Personality template="pin" version="3.0">
+                    <Block location="ioss[0].port[6].pin[5]" locked="true">
+                        <Aliases>
+                            <Alias value="CYBSP_I2C_SDA"/>
+                            <Alias value="CYBSP_D14"/>
+                        </Aliases>
+                    </Block>
+                    <Parameters>
+                        <Param id="DriveModes" value="CY_GPIO_DM_OD_DRIVESLOW"/>
+                        <Param id="driveStrength" value="CY_GPIO_DRIVE_1_2"/>
+                        <Param id="driveStrengthTrim" value="CY_GPIO_DRIVE_STRENGTH_DEFAULT"/>
+                        <Param id="inFlash" value="true"/>
+                        <Param id="initialState" value="1"/>
+                        <Param id="isrTrigger" value="CY_GPIO_INTR_DISABLE"/>
+                        <Param id="nonSec" value="1"/>
+                        <Param id="pullUpRes" value="CY_GPIO_PULLUP_RES_DISABLE"/>
+                        <Param id="sioOutputBuffer" value="true"/>
+                        <Param id="slewRate" value="CY_GPIO_SLEW_FAST"/>
+                        <Param id="vtrip" value="CY_GPIO_VTRIP_CMOS"/>
+                    </Parameters>
+                </Personality>
+                <Personality template="pin" version="3.0">
                     <Block location="ioss[0].port[6].pin[6]" locked="true">
                         <Aliases>
                             <Alias value="SWDIO"/>
@@ -362,7 +392,7 @@
                     </Block>
                     <Parameters>
                         <Param id="fracDivider" value="0"/>
-                        <Param id="intDivider" value="4"/>
+                        <Param id="intDivider" value="32"/>
                         <Param id="startOnReset" value="true"/>
                     </Parameters>
                 </Personality>
@@ -400,6 +430,29 @@
                         <Param id="fracDivider" value="0"/>
                         <Param id="intDivider" value="1"/>
                         <Param id="startOnReset" value="true"/>
+                    </Parameters>
+                </Personality>
+                <Personality template="i2c" version="4.0">
+                    <Block location="scb[6]" locked="true">
+                        <Aliases>
+                            <Alias value="CYBSP_I2C"/>
+                        </Aliases>
+                    </Block>
+                    <Parameters>
+                        <Param id="AcceptAddress" value="false"/>
+                        <Param id="AcceptGeneralCall" value="false"/>
+                        <Param id="DataRate" value="100"/>
+                        <Param id="EnableRxFifo" value="true"/>
+                        <Param id="EnableTxFifo" value="true"/>
+                        <Param id="EnableWakeup" value="false"/>
+                        <Param id="ManualDataRateCtrl" value="false"/>
+                        <Param id="ManualDigitalFilter" value="true"/>
+                        <Param id="ManualHighPhaseDutyCycle" value="9"/>
+                        <Param id="ManualLowPhaseDutyCycle" value="16"/>
+                        <Param id="ModeUser" value="CY_SCB_I2C_MASTER"/>
+                        <Param id="SlaveAddress" value="8"/>
+                        <Param id="SlaveAddressMask" value="254"/>
+                        <Param id="inFlash" value="true"/>
                     </Parameters>
                 </Personality>
                 <Personality template="sysclocks" version="3.0">
@@ -651,6 +704,14 @@
                     <Port name="srss[0].clock[0].wco[0].wco_out[0]"/>
                 </Net>
                 <Net>
+                    <Port name="ioss[0].port[6].pin[4].digital_inout[0]"/>
+                    <Port name="scb[6].i2c_scl[0]"/>
+                </Net>
+                <Net>
+                    <Port name="ioss[0].port[6].pin[5].digital_inout[0]"/>
+                    <Port name="scb[6].i2c_sda[0]"/>
+                </Net>
+                <Net>
                     <Port name="ioss[0].port[9].pin[4].digital_out[0]"/>
                     <Port name="tcpwm[1].cnt[0].line[0]"/>
                 </Net>
@@ -661,6 +722,10 @@
                 <Net>
                     <Port name="ioss[0].port[9].pin[6].digital_out[0]"/>
                     <Port name="tcpwm[1].cnt[1].line[0]"/>
+                </Net>
+                <Net>
+                    <Port name="peri[0].div_8[1].clk[0]"/>
+                    <Port name="scb[6].clock[0]"/>
                 </Net>
                 <Net>
                     <Port name="peri[0].div_8[2].clk[0]"/>

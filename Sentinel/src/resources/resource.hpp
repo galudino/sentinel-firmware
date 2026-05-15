@@ -29,6 +29,8 @@ inline cyhal_pwm_t led1;
 inline cyhal_pwm_t led2;
 inline cyhal_pwm_t led3;
 
+inline cyhal_i2c_t cybsp_i2c;
+
 ///
 /// \brief Initialize peripheral resources from Device Configurator.
 ///
@@ -36,12 +38,16 @@ inline void peripheral_initialize() noexcept {
     cyhal_pwm_init_cfg(&led1, &LED1_PWM_hal_config);
     cyhal_pwm_init_cfg(&led2, &LED2_PWM_hal_config);
     cyhal_pwm_init_cfg(&led3, &LED3_PWM_hal_config);
+
+    cyhal_i2c_init_cfg(&cybsp_i2c, &CYBSP_I2C_hal_config);
 }
 
 ///
 /// \brief Release peripheral resources from Device Configurator.
 ///
 inline void peripheral_deinitialize() noexcept {
+    cyhal_i2c_free(&cybsp_i2c);
+
     cyhal_pwm_free(&led3);
     cyhal_pwm_free(&led2);
     cyhal_pwm_free(&led1);
