@@ -15,7 +15,7 @@
 
 #include <type_traits>
 
-namespace sentinel::util {
+namespace sentinel {
 
 /// \name Template Utilities
 /// \{
@@ -41,7 +41,7 @@ namespace sentinel::util {
 ///     process_data(used_param);
 ///
 ///     // Suppress warning for unused parameter
-///     sentinel::util::unused(unused_param);
+///     sentinel::unused(unused_param);
 /// }
 /// \endcode
 ///
@@ -105,7 +105,7 @@ enum class endianess {
 template <typename E>
 constexpr std::underlying_type_t<E> to_underlying(E e) noexcept {
     static_assert(std::is_enum<E>::value,
-                  "sentinel::util::to_underlying requires an enum type");
+                  "sentinel::to_underlying requires an enum type");
     return static_cast<std::underlying_type_t<E>>(e);
 }
 
@@ -128,6 +128,6 @@ static constexpr bool is_byte_enum_v =
 
 /// \}
 
-} // namespace sentinel::util
+} // namespace sentinel
 
 #endif /* SENTINEL_UTILITIES_HPP */

@@ -352,7 +352,7 @@ wiced_bt_dev_status_t ble_context::stack_management_callback(
 
     case wiced_bt_management_evt_e::BTM_ENCRYPTION_STATUS_EVT:
         encryption_status = &event_data->encryption_status;
-        sentinel::util::unused(encryption_status);
+        sentinel::unused(encryption_status);
         result = wiced_result_t::WICED_BT_SUCCESS;
         break;
 

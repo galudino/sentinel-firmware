@@ -174,8 +174,8 @@ static inline void initialize() {
 /// \return Application exit status (never returns in normal operation)
 ///
 int main(int argc, const char *argv[]) {
-    sentinel::util::unused(argc);
-    sentinel::util::unused(argv);
+    sentinel::unused(argc);
+    sentinel::unused(argv);
 
     initialize();
     create_tasks();

@@ -67,7 +67,7 @@ BaseType_t battery_service_task_create(void) {
 }
 
 void battery_service_task(void *task_parameter) {
-    sentinel::util::unused(task_parameter);
+    sentinel::unused(task_parameter);
 
     // Initialize the HAL timer used to count seconds
     auto result = cyhal_timer_init(&battery_service_timer, NC, nullptr);
@@ -137,8 +137,8 @@ void battery_service_task(void *task_parameter) {
 
 static void battery_service_timer_callback(void *callback_argument,
                                            cyhal_timer_event_t timer_event) {
-    sentinel::util::unused(callback_argument);
-    sentinel::util::unused(timer_event);
+    sentinel::unused(callback_argument);
+    sentinel::unused(timer_event);
 
     auto xHigherPriorityTaskWoken = BaseType_t{};
     xHigherPriorityTaskWoken = pdFALSE;

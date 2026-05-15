@@ -58,7 +58,7 @@ inline int8_t write(uint8_t reg_addr, const uint8_t *tx, uint32_t tx_size,
 }
 
 inline void delay_us(uint32_t period, void *intf_ptr) {
-    sentinel::util::unused(intf_ptr);
+    sentinel::unused(intf_ptr);
     cyhal_system_delay_us(period);
 }
 

@@ -106,7 +106,7 @@ wiced_bt_gatt_status_t ble_gatt_db_set_value(uint16_t attr_handle,
         break; // handled the matching handle; exit the loop
     }
 
-    return sentinel::util::to_underlying(status);
+    return sentinel::to_underlying(status);
 }
 
 gatt_db_lookup_table_t *ble_gatt_db_find_by_handle(uint16_t handle) {
@@ -300,7 +300,7 @@ wiced_bt_gatt_status_t ble_gatt_request_read_by_type_handler(
 
     auto used = 0;
 
-    sentinel::util::unused(last_handle);
+    sentinel::unused(last_handle);
 
     if (response == nullptr) {
         return wiced_bt_gatt_status_e::WICED_BT_GATT_INSUF_RESOURCE;
