@@ -1,12 +1,12 @@
 ///
-/// \file    ble_context.cpp
+/// \file    sentinel_ble_context.cpp
 /// \brief   Bluetooth LE common implementation
 ///
 /// \details This file implements common Bluetooth LE functionality shared
 ///          between OTA and non-OTA builds.
 ///
 /// \author  galudino
-/// \date    2025
+/// \date    2021-2024
 /// \version 1.0 - BLE module common implementation
 ///
 
@@ -47,21 +47,26 @@ extern "C" {
 }
 #pragma GCC diagnostic pop
 
-#include "battery_service_task.hpp"
-#include "ble_context.hpp"
-#include "ble_gatt.hpp"
-#include "led_pwm.hpp"
+#include "sentinel_ble_context.hpp"
+#include "sentinel_ble_gatt.hpp"
 #include "sentinel_cyhal_pwm_signal.hpp"
+#include "led_pwm.hpp"
 #include "sentinel_pwm_signal.hpp"
 #include "sentinel_resource.hpp"
+#include "sentinel_task_battery_service.hpp"
 #include "sentinel_utilities.hpp"
 
 #include <algorithm>
 #include <cstring>
 
+using sentinel::ble_context;
+
 using Signal = sentinel::cyhal_pwm_signal;
 
-static auto led_pwm_block = Signal(&sentinel::resource::led3);
+static auto led3_pwm_block =
+    Signal(&sentinel::resource::led3);
+
+namespace sentinel {
 
 ///
 /// \brief Initialize and start BLE advertising
@@ -76,6 +81,8 @@ static auto led_pwm_block = Signal(&sentinel::resource::led3);
 ///         assertions.
 ///
 static wiced_bt_gatt_status_t ble_start_advertising();
+
+} // namespace sentinel
 
 wiced_result_t ble_context::stack_initialize() noexcept {
     default_value_initialize();
@@ -129,7 +136,7 @@ wiced_bt_gatt_status_t ble_context::connection_event_handler(
 }
 
 cy_rslt_t ble_context::update_advertising_led() noexcept {
-    using FrontLED = led_pwm<Signal>;
+    using FrontLED = sentinel::led_pwm<Signal>;
     using DutyCycle = FrontLED::duty_cycle;
 
     auto duty_cycle = DutyCycle::off;
@@ -149,7 +156,7 @@ cy_rslt_t ble_context::update_advertising_led() noexcept {
         break;
     }
 
-    auto front_led = FrontLED(led_pwm_block);
+    auto front_led = FrontLED(led3_pwm_block);
     auto result = cy_rslt_t{};
 
     result = front_led.stop();
@@ -352,7 +359,7 @@ wiced_bt_dev_status_t ble_context::stack_management_callback(
 
     case wiced_bt_management_evt_e::BTM_ENCRYPTION_STATUS_EVT:
         encryption_status = &event_data->encryption_status;
-        sentinel::unused(encryption_status);
+        unused(encryption_status);
         result = wiced_result_t::WICED_BT_SUCCESS;
         break;
 
@@ -382,7 +389,7 @@ wiced_bt_dev_status_t ble_context::stack_management_callback(
     return result;
 }
 
-static wiced_bt_gatt_status_t ble_start_advertising() {
+static wiced_bt_gatt_status_t sentinel::ble_start_advertising() {
     auto gatt_status = wiced_bt_gatt_status_t{};
     auto wiced_result = wiced_result_t::WICED_BT_ERROR;
 
@@ -390,7 +397,7 @@ static wiced_bt_gatt_status_t ble_start_advertising() {
     wiced_bt_ble_set_raw_advertisement_data(CY_BT_ADV_PACKET_DATA_SIZE,
                                             cy_bt_adv_packet_data);
 
-    gatt_status = wiced_bt_gatt_register(ble_gatt_event_callback);
+    gatt_status = wiced_bt_gatt_register(sentinel::ble_gatt_event_callback);
     gatt_status =
         wiced_bt_gatt_db_init(gatt_database, gatt_database_len, nullptr);
 

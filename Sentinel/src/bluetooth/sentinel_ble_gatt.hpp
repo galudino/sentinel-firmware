@@ -1,5 +1,5 @@
 ///
-/// \file    ble_gatt.hpp
+/// \file    sentinel_ble_gatt.hpp
 /// \brief   Bluetooth LE public interface for GATT operations
 ///
 /// \details This header provides the public interface for Bluetooth LE
@@ -7,12 +7,12 @@
 ///          handling.
 ///
 /// \author  galudino
-/// \date    2025
+/// \date    2021-2024
 /// \version 1.0 - BLE module interface
 ///
 
-#ifndef BLE_GATT_HPP
-#define BLE_GATT_HPP
+#ifndef SENTINEL_BLE_GATT_HPP
+#define SENTINEL_BLE_GATT_HPP
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
@@ -24,6 +24,8 @@ extern "C" {
 #include "wiced_bt_gatt.h"
 }
 #pragma GCC diagnostic pop
+
+namespace sentinel {
 
 ///
 /// \brief Set value in GATT database
@@ -43,7 +45,8 @@ extern "C" {
 ///         WICED_BT_GATT_ERROR if attribute data pointer is NULL
 ///
 wiced_bt_gatt_status_t ble_gatt_db_set_value(uint16_t attr_handle,
-                                             uint8_t *value, uint16_t length);
+                                             uint8_t *value,
+                                             uint16_t length) noexcept;
 
 ///
 /// \brief Find GATT attribute by handle
@@ -74,7 +77,7 @@ gatt_db_lookup_table_t *ble_gatt_db_find_by_handle(uint16_t handle);
 ///
 wiced_bt_gatt_status_t
 ble_gatt_event_callback(wiced_bt_gatt_evt_t event,
-                        wiced_bt_gatt_event_data_t *event_data);
+                        wiced_bt_gatt_event_data_t *event_data) noexcept;
 
 ///
 /// \brief GATT server request event handler
@@ -94,7 +97,7 @@ ble_gatt_event_callback(wiced_bt_gatt_evt_t event,
 ///
 wiced_bt_gatt_status_t
 ble_gatt_event_handler(wiced_bt_gatt_event_data_t *event_data,
-                       uint16_t *error_handle);
+                       uint16_t *error_handle) noexcept;
 
 ///
 /// \brief Handle GATT read request
@@ -119,7 +122,7 @@ ble_gatt_event_handler(wiced_bt_gatt_event_data_t *event_data,
 wiced_bt_gatt_status_t ble_gatt_request_read_handler(
     uint16_t connection_id, wiced_bt_gatt_opcode_t opcode,
     wiced_bt_gatt_read_t *read_request, uint16_t length_requested,
-    uint16_t *error_handle);
+    uint16_t *error_handle) noexcept;
 
 ///
 /// \brief Handle GATT read by type request
@@ -144,7 +147,7 @@ wiced_bt_gatt_status_t ble_gatt_request_read_handler(
 wiced_bt_gatt_status_t ble_gatt_request_read_by_type_handler(
     uint16_t connection_id, wiced_bt_gatt_opcode_t opcode,
     wiced_bt_gatt_read_by_type_t *read_request, uint16_t length_requested,
-    uint16_t *error_handle);
+    uint16_t *error_handle) noexcept;
 
 ///
 /// \brief Handle GATT read multiple request
@@ -171,7 +174,7 @@ wiced_bt_gatt_status_t ble_gatt_request_read_by_type_handler(
 wiced_bt_gatt_status_t ble_gatt_request_read_multi_handler(
     uint16_t connection_id, wiced_bt_gatt_opcode_t opcode,
     wiced_bt_gatt_read_multiple_req_t *read_multiple_request,
-    uint16_t length_requested, uint16_t *error_handle);
+    uint16_t length_requested, uint16_t *error_handle) noexcept;
 
 ///
 /// \brief Handle GATT write request
@@ -191,6 +194,8 @@ wiced_bt_gatt_status_t ble_gatt_request_read_multi_handler(
 ///
 wiced_bt_gatt_status_t
 ble_gatt_command_write_handler(wiced_bt_gatt_event_data_t *event_data,
-                               uint16_t *error_handle);
+                               uint16_t *error_handle) noexcept;
 
-#endif /* BLE_GATT_HPP */
+} // namespace sentinel
+
+#endif /* SENTINEL_BLE_GATT_HPP */

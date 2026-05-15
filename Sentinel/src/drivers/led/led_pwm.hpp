@@ -18,8 +18,12 @@
 #include "sentinel_pwm_signal.hpp"
 #include "sentinel_utilities.hpp"
 
+namespace sentinel {
+
 template <typename PWMImplementation>
 class led_pwm;
+
+} // namespace sentinel
 
 ///
 /// \brief LED controller using PWM signal
@@ -33,7 +37,7 @@ class led_pwm;
 ///                           pwm_signal
 ///
 template <typename PWMImplementation>
-class led_pwm : sentinel::pwm_signal<PWMImplementation> {
+class sentinel::led_pwm : sentinel::pwm_signal<PWMImplementation> {
 public:
     // Require PWM signal implementation (compile-time check)
     static_assert(std::is_base_of<sentinel::pwm_signal<PWMImplementation>,

@@ -40,7 +40,8 @@ extern "C" {
 #pragma GCC diagnostic pop
 
 ///< Tasks
-#include "battery_service_task.hpp"
+#include "sentinel_task_battery_service.hpp"
+#include "sentinel_task_debug_stream.hpp"
 
 ///< Tests
 #include "sentinel_test_bme280_i2c.hpp"
@@ -57,7 +58,7 @@ extern "C" {
 #include "sentinel_resource.hpp"
 
 ///< Bluetooth LE
-#include "ble_context.hpp"
+#include "sentinel_ble_context.hpp"
 
 ///
 /// \brief Create application tasks
@@ -71,7 +72,7 @@ static inline void create_tasks() {
         cy_log_msg(CYLF_DEF, CY_LOG_ERR, "BME280 test task creation failed\n");
     }
 
-    rtos_result = battery_service_task_create();
+    rtos_result = sentinel::task::battery_service::task_create();
 
     if (rtos_result != pdPASS) {
         cy_log_msg(CYLF_DEF, CY_LOG_ERR, "BAS task creation failed\n");
@@ -144,9 +145,14 @@ static inline void initialize() {
     // Initialize resources.
     sentinel::resource::peripheral_initialize();
 
+    // Start the BLE debug output stream task. Must be running before any
+    // task tries to send log messages over BLE notifications.
+    auto debug_stream_result = sentinel::task::debug_stream::task_create();
+    configASSERT(debug_stream_result == pdPASS);
+
     // Initialize Bluetooth LE stack and services
     // Register callback and configuration with stack.
-    auto wiced_result = ble_context_object.stack_initialize();
+    auto wiced_result = sentinel::ble_context_object.stack_initialize();
 
     if (wiced_result != wiced_result_t::WICED_BT_SUCCESS) {
         cy_log_msg(CYLF_DEF, CY_LOG_ERR,

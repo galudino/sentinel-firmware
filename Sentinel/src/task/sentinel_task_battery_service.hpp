@@ -1,5 +1,5 @@
 ///
-/// \file    battery_service_task.hpp
+/// \file    sentinel_task_battery_service.hpp
 /// \brief   Battery Service Task public interface
 ///
 /// \details This header provides the public interface for the Battery Service
@@ -7,12 +7,12 @@
 ///          notifications.
 ///
 /// \author  galudino
-/// \date    2025
+/// \date    2021-2024
 /// \version 1.0 - Battery service task interface
 ///
 
-#ifndef BATTERY_SERVICE_TASK_HPP
-#define BATTERY_SERVICE_TASK_HPP
+#ifndef SENTINEL_TASK_BATTERY_SERVICE_HPP
+#define SENTINEL_TASK_BATTERY_SERVICE_HPP
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
@@ -20,6 +20,8 @@ extern "C" {
 #include <task.h>
 }
 #pragma GCC diagnostic pop
+
+namespace sentinel::task::battery_service {
 
 ///
 /// \brief Create and start the battery service task
@@ -29,7 +31,7 @@ extern "C" {
 ///
 /// \return BaseType_t pdPASS if task created successfully, pdFAIL otherwise
 ///
-BaseType_t battery_service_task_create(void);
+BaseType_t task_create(void);
 
 ///
 /// \brief Battery service task that updates and sends battery level
@@ -42,11 +44,13 @@ BaseType_t battery_service_task_create(void);
 ///
 /// \return void
 ///
-void battery_service_task(void *task_parameter);
+void task_function(void *task_parameter);
 
 ///
 /// \brief FreeRTOS task handle for battery service task
 ///
-inline TaskHandle_t battery_service_task_handle;
+inline TaskHandle_t task_handle;
 
-#endif /* BATTERY_SERVICE_TASK_HPP */
+} // namespace sentinel::task::battery_service
+
+#endif /* SENTINEL_TASK_BATTERY_SERVICE_HPP */

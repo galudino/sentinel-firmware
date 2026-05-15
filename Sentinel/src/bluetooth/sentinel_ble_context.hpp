@@ -1,17 +1,17 @@
 ///
-/// \file    ble_context.hpp
+/// \file    sentinel_ble_context.hpp
 /// \brief   Bluetooth LE public interface
 ///
 /// \details This header provides the public interface for Bluetooth LE
 ///          functionality including initialization and stack management.
 ///
 /// \author  galudino
-/// \date    2025
+/// \date    2021-2024
 /// \version 1.0 - BLE module interface
 ///
 
-#ifndef BLE_CONTEXT_HPP
-#define BLE_CONTEXT_HPP
+#ifndef SENTINEL_BLE_CONTEXT_HPP
+#define SENTINEL_BLE_CONTEXT_HPP
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
@@ -27,6 +27,8 @@ extern "C" {
 #pragma GCC diagnostic pop
 
 #include <array>
+
+namespace sentinel {
 
 ///
 /// \brief Application context structure for BLE/OTA operations
@@ -161,6 +163,20 @@ public:
     ///
     void ota_agent_confirmation_handler() noexcept;
 
+    ///
+    /// \brief Get the current negotiated MTU value
+    ///
+    /// \return uint16_t Current MTU value
+    ///
+    uint16_t mtu() const noexcept { return m_mtu; }
+
+    ///
+    /// \brief Set the current negotiated MTU value
+    ///
+    /// \param mtu New MTU value to set
+    ///
+    void set_mtu(uint16_t mtu) noexcept { m_mtu = mtu; }
+
 private:
     ///
     /// \brief Advertising and connection state enumeration
@@ -201,6 +217,8 @@ private:
     cy_ota_network_params_t
         m_ota_network_params; ///< OTA network configuration parameters
 
+    uint16_t m_mtu; ///< Negotiated MTU value for BLE notifications (default 23, updated on connection)
+
     ///
     /// \brief Initialize BLE context with default values
     ///
@@ -215,6 +233,8 @@ private:
         m_connection_id = 0;
         m_connection_parameters = {};
         m_connection_state = state::disconnected_not_advertising;
+
+        m_mtu = 23; // Default MTU before negotiation
     }
 
     void ota_value_initialize() noexcept {
@@ -278,4 +298,6 @@ private:
 ///
 inline auto ble_context_object = ble_context{};
 
-#endif /* BLE_CONTEXT_HPP */
+} // namespace sentinel
+
+#endif /* SENTINEL_BLE_CONTEXT_HPP */
