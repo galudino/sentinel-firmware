@@ -50,16 +50,16 @@ extern "C" {
 #include "battery_service_task.hpp"
 #include "ble_context.hpp"
 #include "ble_gatt.hpp"
-#include "cyhal_pwm_signal.hpp"
 #include "led_pwm.hpp"
-#include "pwm_signal.hpp"
+#include "sentinel_cyhal_pwm_signal.hpp"
+#include "sentinel_pwm_signal.hpp"
 #include "sentinel_resource.hpp"
 #include "sentinel_utilities.hpp"
 
 #include <algorithm>
 #include <cstring>
 
-using Signal = cyhal_pwm_signal;
+using Signal = sentinel::cyhal_pwm_signal;
 
 static auto led_pwm_block = Signal(&sentinel::resource::led3);
 

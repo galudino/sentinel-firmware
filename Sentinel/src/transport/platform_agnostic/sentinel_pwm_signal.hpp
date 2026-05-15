@@ -1,5 +1,5 @@
 ///
-/// \file    pwm_signal.hpp
+/// \file    sentinel_pwm_signal.hpp
 /// \brief   Platform-agnostic PWM signal interface using CRTP
 ///
 /// \details This header provides a platform-independent interface for PWM
@@ -10,12 +10,16 @@
 ///          duty at runtime.
 ///
 /// \author  galudino
-/// \date    2025
+/// \date    2021–2024
 /// \version 1.1 - Unified result types, clamped duty, clarified semantics
 ///
 
-#ifndef PWM_SIGNAL_HPP
-#define PWM_SIGNAL_HPP
+#ifndef SENTINEL_PWM_SIGNAL_HPP
+#define SENTINEL_PWM_SIGNAL_HPP
+
+#include <cstdint>
+
+namespace sentinel {
 
 /// \ingroup transport
 /// \brief Platform-agnostic PWM façade (CRTP)
@@ -117,4 +121,6 @@ private:
     }
 };
 
-#endif /* PWM_SIGNAL_HPP */
+} // namespace sentinel
+
+#endif /* SENTINEL_PWM_SIGNAL_HPP */

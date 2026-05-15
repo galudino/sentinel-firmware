@@ -15,7 +15,7 @@
 #ifndef LED_PWM_HPP
 #define LED_PWM_HPP
 
-#include "pwm_signal.hpp"
+#include "sentinel_pwm_signal.hpp"
 #include "sentinel_utilities.hpp"
 
 template <typename PWMImplementation>
@@ -33,13 +33,13 @@ class led_pwm;
 ///                           pwm_signal
 ///
 template <typename PWMImplementation>
-class led_pwm : pwm_signal<PWMImplementation> {
+class led_pwm : sentinel::pwm_signal<PWMImplementation> {
 public:
     // Require PWM signal implementation (compile-time check)
-    static_assert(std::is_base_of<pwm_signal<PWMImplementation>,
+    static_assert(std::is_base_of<sentinel::pwm_signal<PWMImplementation>,
                                   PWMImplementation>::value,
                   "PWMImplementation must derive from "
-                  "pwm_signal<PWMImplementation>");
+                  "sentinel::pwm_signal<PWMImplementation>");
 
     ///
     /// \brief Predefined LED duty cycle states

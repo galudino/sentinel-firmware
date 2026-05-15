@@ -1,8 +1,8 @@
 ///
-/// \file    cyhal_pwm_signal.hpp
+/// \file    sentinel_cyhal_pwm_signal.hpp
 /// \brief   CYHAL (Cypress HAL) PWM signal implementation
 ///
-/// \details Implements the \ref pwm_signal façade over a pre-initialized
+/// \details Implements the \ref sentinel::pwm_signal façade over a pre-initialized
 ///          CYHAL PWM object. Supports active-high/active-low outputs by
 ///          inverting the hardware duty cycle as needed. Includes convenience
 ///          helpers for perceptual brightness and timed fades.
@@ -10,7 +10,7 @@
 /// \example
 /// \code
 /// Construct from a pre-initialized CYHAL PWM object
-/// cyhal_pwm_signal backlight(&front_yellow_led_object,
+/// sentinel::cyhal_pwm_signal backlight(&front_yellow_led_object,
 /// /*active_low=*/true);
 ///
 /// // Program 1 kHz, 50% logical duty (inverted in HW if active_low)
@@ -28,7 +28,7 @@
 ///
 /// \example
 /// \code
-/// cyhal_pwm_signal backlight(&pwm_obj, /*active_low=*/true);
+/// sentinel::cyhal_pwm_signal backlight(&pwm_obj, /*active_low=*/true);
 ///
 /// Set perceptual brightness to 30% with gamma 2.0
 /// backlight.set_brightness_0_1(0.30f, 2.0f);
@@ -41,12 +41,12 @@
 /// \endcode
 ///
 /// \author  galudino
-/// \date    2025
+/// \date    2021–2024
 /// \version 1.2 - Added set_frequency, set_brightness_0_1, fade_to
 ///
 
-#ifndef CYHAL_PWM_SIGNAL_HPP
-#define CYHAL_PWM_SIGNAL_HPP
+#ifndef SENTINEL_CYHAL_PWM_SIGNAL_HPP
+#define SENTINEL_CYHAL_PWM_SIGNAL_HPP
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
@@ -57,9 +57,12 @@ extern "C" {
 }
 #pragma GCC diagnostic pop
 
-#include "pwm_signal.hpp"
+#include "sentinel_pwm_signal.hpp"
 
 #include <cmath> // powf, roundf
+#include <cstdint>
+
+namespace sentinel {
 
 /// \ingroup transport
 /// \brief CYHAL-based PWM signal implementation
@@ -302,4 +305,6 @@ private:
     uint32_t m_last_freq{0}; ///< Last configured frequency in Hz
 };
 
-#endif /* CYHAL_PWM_SIGNAL_HPP */
+} // namespace sentinel
+
+#endif /* SENTINEL_CYHAL_PWM_SIGNAL_HPP */
