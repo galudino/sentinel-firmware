@@ -50,7 +50,7 @@ extern "C" {
 #include "sentinel_ble_context.hpp"
 #include "sentinel_ble_gatt.hpp"
 #include "sentinel_cyhal_pwm_signal.hpp"
-#include "led_pwm.hpp"
+#include "sentinel_led_pwm.hpp"
 #include "sentinel_pwm_signal.hpp"
 #include "sentinel_resource.hpp"
 #include "sentinel_task_battery_service.hpp"
@@ -63,8 +63,7 @@ using sentinel::ble_context;
 
 using Signal = sentinel::cyhal_pwm_signal;
 
-static auto led3_pwm_block =
-    Signal(&sentinel::resource::led3);
+static auto led3_pwm_block = Signal(&sentinel::resource::led3);
 
 namespace sentinel {
 

@@ -12,7 +12,7 @@
 /// - Best-effort (drop-on-full) semantics
 ///
 /// \author     galudino
-/// \date       2026-01-30
+/// \date       2026-05-15
 ///
 
 #ifndef SENTINEL_TASK_DEBUG_STREAM_HPP

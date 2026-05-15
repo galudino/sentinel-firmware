@@ -49,9 +49,9 @@ extern "C" {
 
 #include "sentinel_ble_context.hpp"
 #include "sentinel_ble_gatt.hpp"
-#include "sentinel_task_debug_stream.hpp"
-#include "led_pwm.hpp"
+#include "sentinel_led_pwm.hpp"
 #include "sentinel_task_battery_service.hpp"
+#include "sentinel_task_debug_stream.hpp"
 #include "sentinel_utilities.hpp"
 
 #include <algorithm>
@@ -59,9 +59,9 @@ extern "C" {
 
 using sentinel::ble_context;
 
-wiced_bt_gatt_status_t sentinel::ble_gatt_db_set_value(uint16_t attr_handle,
-                                                  uint8_t *value,
-                                                  uint16_t length) noexcept {
+wiced_bt_gatt_status_t
+sentinel::ble_gatt_db_set_value(uint16_t attr_handle, uint8_t *value,
+                                uint16_t length) noexcept {
     auto status = wiced_bt_gatt_status_e::WICED_BT_GATT_INVALID_HANDLE;
 
     // Input guards (choose the status that matches your stack’s expectations)
@@ -126,9 +126,9 @@ gatt_db_lookup_table_t *sentinel::ble_gatt_db_find_by_handle(uint16_t handle) {
                : nullptr;
 }
 
-wiced_bt_gatt_status_t
-sentinel::ble_gatt_event_callback(wiced_bt_gatt_evt_t event,
-                             wiced_bt_gatt_event_data_t *event_data) noexcept {
+wiced_bt_gatt_status_t sentinel::ble_gatt_event_callback(
+    wiced_bt_gatt_evt_t event,
+    wiced_bt_gatt_event_data_t *event_data) noexcept {
     auto status = wiced_bt_gatt_status_t{};
     auto *attr_request = &event_data->attribute_request;
     auto error_handle = uint16_t{};
@@ -185,7 +185,7 @@ sentinel::ble_gatt_event_callback(wiced_bt_gatt_evt_t event,
 
 wiced_bt_gatt_status_t
 sentinel::ble_gatt_event_handler(wiced_bt_gatt_event_data_t *event_data,
-                            uint16_t *error_handle) noexcept {
+                                 uint16_t *error_handle) noexcept {
     auto status = wiced_bt_gatt_status_t{};
     auto *attr_request = &event_data->attribute_request;
 
@@ -216,7 +216,8 @@ sentinel::ble_gatt_event_handler(wiced_bt_gatt_event_data_t *event_data,
     case wiced_bt_gatt_opcode_e::GATT_REQ_WRITE:
     case wiced_bt_gatt_opcode_e::GATT_CMD_WRITE:
     case wiced_bt_gatt_opcode_e::GATT_CMD_SIGNED_WRITE:
-        status = sentinel::ble_gatt_command_write_handler(event_data, error_handle);
+        status =
+            sentinel::ble_gatt_command_write_handler(event_data, error_handle);
 
         if ((attr_request->opcode == wiced_bt_gatt_opcode_e::GATT_REQ_WRITE) &&
             (status == wiced_bt_gatt_status_e::WICED_BT_GATT_SUCCESS)) {
@@ -242,8 +243,8 @@ sentinel::ble_gatt_event_handler(wiced_bt_gatt_event_data_t *event_data,
         auto local_mtu = wiced_bt_cfg_settings.p_ble_cfg->ble_max_rx_pdu_size;
         auto remote_mtu = attr_request->data.remote_mtu;
 
-        status = wiced_bt_gatt_server_send_mtu_rsp(
-            attr_request->conn_id, remote_mtu, local_mtu);
+        status = wiced_bt_gatt_server_send_mtu_rsp(attr_request->conn_id,
+                                                   remote_mtu, local_mtu);
 
         // Negotiated MTU is the minimum of local and remote
         auto negotiated_mtu = static_cast<uint16_t>(
@@ -417,7 +418,7 @@ wiced_bt_gatt_status_t sentinel::ble_gatt_request_read_multi_handler(
 
 wiced_bt_gatt_status_t
 sentinel::ble_gatt_command_write_handler(wiced_bt_gatt_event_data_t *event_data,
-                                    uint16_t *error_handle) noexcept {
+                                         uint16_t *error_handle) noexcept {
     auto *write_request = &event_data->attribute_request.data.write_req;
 
     *error_handle = write_request->handle;

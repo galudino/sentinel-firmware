@@ -1,3 +1,18 @@
+///
+/// \file    sentinel_gatt_battery.hpp
+/// \brief   Bluetooth LE public interface for characteristic values in the
+/// battery service
+///
+/// \details This header provides the public interface for accessing and
+/// updating
+///          the characteristic values in the battery service, specifically the
+///          battery level.
+///
+/// \author  galudino
+/// \date    2026-05-15
+/// \version 1.0
+///
+
 #ifndef SENTINEL_GATT_BATTERY_HPP
 #define SENTINEL_GATT_BATTERY_HPP
 

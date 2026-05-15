@@ -6,7 +6,8 @@
 ///          These functions provide a template structure for adding driver
 ///          tests in testbench builds.
 ///
-/// \date    2024
+/// \author  galudino
+/// \date    2026-05-15
 /// \version 1.0 - Test template implementation
 ///
 

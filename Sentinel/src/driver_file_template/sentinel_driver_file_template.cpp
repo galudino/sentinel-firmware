@@ -6,7 +6,8 @@
 ///          device driver functionality. Add member function implementations
 ///          and file-private helper functions as needed.
 ///
-/// \date    2024
+/// \author  galudino
+/// \date    2026-05-15
 /// \version 1.0 - Driver template implementation
 ///
 

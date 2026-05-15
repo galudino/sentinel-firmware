@@ -6,7 +6,7 @@
 /// messages over BLE notifications to a connected iOS client application.
 ///
 /// \author     galudino
-/// \date       2026-01-30
+/// \date       2026-05-15
 ///
 
 #pragma GCC diagnostic push

@@ -6,7 +6,8 @@
 ///          device drivers. It includes standard includes and class structure
 ///          for peripheral drivers.
 ///
-/// \date    2024
+/// \author  galudino
+/// \date    2026-05-15
 /// \version 1.0 - Driver template
 ///
 

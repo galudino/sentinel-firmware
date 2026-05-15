@@ -7,7 +7,7 @@
 ///          the FreeRTOS scheduler.
 ///
 /// \author  galudino
-/// \date    2025
+/// \date    2026-05-15
 /// \version 1.0 - Simplified main with modular architecture
 ///
 
@@ -43,16 +43,12 @@ extern "C" {
 #include "sentinel_task_battery_service.hpp"
 #include "sentinel_task_debug_stream.hpp"
 
-///< Tests
-#include "sentinel_test_bme280_i2c.hpp"
-
 ///< Utilities
 #include "sentinel_firmware_version.hpp"
 #include "sentinel_utilities.hpp"
 
 ///< Drivers
-#include "bme280_i2c.hpp"
-#include "led_pwm.hpp"
+#include "sentinel_led_pwm.hpp"
 
 ///< Device Configurator Resources
 #include "sentinel_resource.hpp"
@@ -60,22 +56,25 @@ extern "C" {
 ///< Bluetooth LE
 #include "sentinel_ble_context.hpp"
 
+namespace sentinel::app {
+
 ///
 /// \brief Create application tasks
 ///
 static inline void create_tasks() {
     BaseType_t rtos_result{};
 
-    rtos_result = sentinel::test::bme280_i2c::task_create();
+    rtos_result = test::bme280_i2c::task_create();
 
     if (rtos_result != pdPASS) {
         cy_log_msg(CYLF_DEF, CY_LOG_ERR, "BME280 test task creation failed\n");
     }
 
-    rtos_result = sentinel::task::battery_service::task_create();
+    rtos_result = task::battery_service::task_create();
 
     if (rtos_result != pdPASS) {
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR, "BAS task creation failed\n");
+        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+                   "Battery service task creation failed\n");
     }
 }
 
@@ -143,33 +142,34 @@ static inline void initialize() {
     cyhal_wdt_free(&wdt_obj);
 
     // Initialize resources.
-    sentinel::resource::peripheral_initialize();
+    resource::peripheral_initialize();
 
     // Start the BLE debug output stream task. Must be running before any
     // task tries to send log messages over BLE notifications.
-    auto debug_stream_result = sentinel::task::debug_stream::task_create();
+    auto debug_stream_result = task::debug_stream::task_create();
     configASSERT(debug_stream_result == pdPASS);
 
     // Initialize Bluetooth LE stack and services
     // Register callback and configuration with stack.
-    auto wiced_result = sentinel::ble_context_object.stack_initialize();
+    auto wiced_result = ble_context_object.stack_initialize();
 
     if (wiced_result != wiced_result_t::WICED_BT_SUCCESS) {
         cy_log_msg(CYLF_DEF, CY_LOG_ERR,
-                   "Bluetooth Stack Initialization failed!! \r\n");
+                   "*** Bluetooth stack initialization failed! ***\r\n");
         CY_ASSERT(false);
     }
 
     cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                "sentinel-firmware ==============================\r\n");
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO, "Application version: %d.%d.%d.%d\n",
-               sentinel::current_firmware_version.major(),
-               sentinel::current_firmware_version.minor(),
-               sentinel::current_firmware_version.patch(),
-               sentinel::current_firmware_version.build());
+    cy_log_msg(
+        CYLF_DEF, CY_LOG_INFO, "Application version: %d.%d.%d.%d\n",
+        current_firmware_version.major(), current_firmware_version.minor(),
+        current_firmware_version.patch(), current_firmware_version.build());
     cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                "================================================\n\n");
 }
+
+} // namespace sentinel::app
 
 ///
 /// \brief Application entry point
@@ -183,8 +183,8 @@ int main(int argc, const char *argv[]) {
     sentinel::unused(argc);
     sentinel::unused(argv);
 
-    initialize();
-    create_tasks();
+    sentinel::app::initialize();
+    sentinel::app::create_tasks();
 
     // Start the FreeRTOS scheduler.
     vTaskStartScheduler();

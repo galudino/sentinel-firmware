@@ -43,7 +43,7 @@
 /// uint32_t current_rpm = rpm_calc.rpm();
 /// \endcode
 ///
-/// \date    2024-2025
+/// \date    2026-05-15
 /// \version 1.0 - Initial PSoC6 tachometer driver
 ///
 

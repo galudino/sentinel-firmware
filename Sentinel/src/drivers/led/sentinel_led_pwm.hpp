@@ -1,5 +1,5 @@
 ///
-/// \file    led_pwm.hpp
+/// \file    sentinel_led_pwm.hpp
 /// \brief   LED control wrapper for PWM-driven LEDs
 ///
 /// \details This header provides a wrapper around PWM signal implementations
@@ -8,12 +8,12 @@
 ///          status indication such as Bluetooth advertising states.
 ///
 /// \author  galudino
-/// \date    2025
+/// \date    2026-05-15
 /// \version 1.0 - LED module interface
 ///
 
-#ifndef LED_PWM_HPP
-#define LED_PWM_HPP
+#ifndef SENTINEL_LED_PWM_HPP
+#define SENTINEL_LED_PWM_HPP
 
 #include "sentinel_pwm_signal.hpp"
 #include "sentinel_utilities.hpp"
@@ -103,4 +103,4 @@ private:
     PWMImplementation &m_pwm; ///< Reference to underlying PWM implementation
 };
 
-#endif /* LED_PWM_HPP */
+#endif /* SENTINEL_LED_PWM_HPP */

@@ -13,7 +13,7 @@
 /// - Buffer-safe operations with size checking
 ///
 /// \author     galudino
-/// \date       2026-01-31
+/// \date       2026-05-15
 ///
 
 #ifndef SENTINEL_FORMAT_STRING_HPP

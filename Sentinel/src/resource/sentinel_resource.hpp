@@ -7,7 +7,7 @@
 ///          All resources are defined inline for application-wide access.
 ///
 /// \author  galudino
-/// \date    2025
+/// \date    2026-05-15
 /// \version 1.0 - Peripheral resources
 ///
 

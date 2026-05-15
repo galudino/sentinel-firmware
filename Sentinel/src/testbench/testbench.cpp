@@ -1,13 +1,14 @@
 ///
 /// \file    testbench.cpp
-/// \brief   Main application entry point
+/// \brief   Testbench application entry point
 ///
 /// \details This file contains only the main() function which initializes the
 ///          system hardware, OTA functionality, Bluetooth stack, and starts
-///          the FreeRTOS scheduler.
+///          the FreeRTOS scheduler. Test tasks are created here to validate IC
+///          functionality.
 ///
 /// \author  galudino
-/// \date    2025
+/// \date    2026-05-15
 /// \version 1.0 - Simplified main with modular architecture
 ///
 
@@ -51,8 +52,7 @@ extern "C" {
 #include "sentinel_utilities.hpp"
 
 ///< Drivers
-#include "bme280_i2c.hpp"
-#include "led_pwm.hpp"
+#include "sentinel_led_pwm.hpp"
 
 ///< Device Configurator Resources
 #include "sentinel_resource.hpp"
@@ -60,22 +60,32 @@ extern "C" {
 ///< Bluetooth LE
 #include "sentinel_ble_context.hpp"
 
+namespace sentinel::testbench {
+
+///
+/// \brief Create test tasks
+///
+static inline void create_tests() {
+    BaseType_t rtos_result{};
+
+    rtos_result = test::bme280_i2c::task_create();
+
+    if (rtos_result != pdPASS) {
+        cy_log_msg(CYLF_DEF, CY_LOG_ERR, "BME280 test task creation failed\n");
+    }
+}
+
 ///
 /// \brief Create application tasks
 ///
 static inline void create_tasks() {
     BaseType_t rtos_result{};
 
-    rtos_result = sentinel::test::bme280_i2c::task_create();
-
-    if (rtos_result != pdPASS) {
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR, "BME280 test task creation failed\n");
-    }
-
     rtos_result = sentinel::task::battery_service::task_create();
 
     if (rtos_result != pdPASS) {
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR, "BAS task creation failed\n");
+        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+                   "Battery service task creation failed\n");
     }
 }
 
@@ -115,21 +125,21 @@ static inline void initialize() {
 #endif
 
 #ifdef TEST_REVERT
-    cy_log_msg(
-        CYLF_DEF, CY_LOG_INFO,
-        "======================TESTING REVERT==========================\r\n");
-    cy_log_msg(
-        CYLF_DEF, CY_LOG_INFO,
-        "===============================================================\r\n");
-    cy_log_msg(
-        CYLF_DEF, CY_LOG_INFO,
-        "===============================================================\r\n");
-    cy_log_msg(
-        CYLF_DEF, CY_LOG_INFO,
-        "=========================== Rebooting !!!======================\r\n");
-    cy_log_msg(
-        CYLF_DEF, CY_LOG_INFO,
-        "===============================================================\r\n");
+    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
+               "======================TESTING "
+               "REVERT==========================\r\n");
+    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
+               "==========================================================="
+               "====\r\n");
+    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
+               "==========================================================="
+               "====\r\n");
+    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
+               "=========================== Rebooting "
+               "!!!======================\r\n");
+    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
+               "==========================================================="
+               "====\r\n");
     NVIC_SystemReset();
 #else
     // Validate the update so we do not revert on reboot.
@@ -143,16 +153,16 @@ static inline void initialize() {
     cyhal_wdt_free(&wdt_obj);
 
     // Initialize resources.
-    sentinel::resource::peripheral_initialize();
+    resource::peripheral_initialize();
 
     // Start the BLE debug output stream task. Must be running before any
     // task tries to send log messages over BLE notifications.
-    auto debug_stream_result = sentinel::task::debug_stream::task_create();
+    auto debug_stream_result = task::debug_stream::task_create();
     configASSERT(debug_stream_result == pdPASS);
 
     // Initialize Bluetooth LE stack and services
     // Register callback and configuration with stack.
-    auto wiced_result = sentinel::ble_context_object.stack_initialize();
+    auto wiced_result = ble_context_object.stack_initialize();
 
     if (wiced_result != wiced_result_t::WICED_BT_SUCCESS) {
         cy_log_msg(CYLF_DEF, CY_LOG_ERR,
@@ -161,15 +171,15 @@ static inline void initialize() {
     }
 
     cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-               "sentinel-firmware ==============================\r\n");
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO, "Application version: %d.%d.%d.%d\n",
-               sentinel::current_firmware_version.major(),
-               sentinel::current_firmware_version.minor(),
-               sentinel::current_firmware_version.patch(),
-               sentinel::current_firmware_version.build());
+               "sentinel-firmware testbench ====================\r\n");
+    cy_log_msg(
+        CYLF_DEF, CY_LOG_INFO, "Application version: %d.%d.%d.%d\n",
+        current_firmware_version.major(), current_firmware_version.minor(),
+        current_firmware_version.patch(), current_firmware_version.build());
     cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                "================================================\n\n");
 }
+} // namespace sentinel::testbench
 
 ///
 /// \brief Application entry point
@@ -183,8 +193,9 @@ int main(int argc, const char *argv[]) {
     sentinel::unused(argc);
     sentinel::unused(argv);
 
-    initialize();
-    create_tasks();
+    sentinel::testbench::initialize();
+    sentinel::testbench::create_tasks();
+    sentinel::testbench::create_tests();
 
     // Start the FreeRTOS scheduler.
     vTaskStartScheduler();

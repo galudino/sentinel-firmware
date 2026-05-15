@@ -33,7 +33,7 @@
 /// sentinel::tachometer_psoc6 tach_source(handler, BLOWER_TACH_PIN, &counter);
 /// \endcode
 ///
-/// \date    2024-2025
+/// \date    2026-05-15
 /// \version 1.0 - Initial tachometer interface
 ///
 

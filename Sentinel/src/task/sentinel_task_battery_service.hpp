@@ -7,7 +7,7 @@
 ///          notifications.
 ///
 /// \author  galudino
-/// \date    2021-2024
+/// \date    2026-05-15
 /// \version 1.0 - Battery service task interface
 ///
 

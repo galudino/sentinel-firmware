@@ -9,7 +9,7 @@
 /// in embedded newlib and can cause startup issues.
 ///
 /// \author     galudino
-/// \date       2026-01-31
+/// \date       2026-05-15
 ///
 
 #include "sentinel_format_string.hpp"
@@ -48,8 +48,10 @@ static datetime unix_seconds_to_datetime(int64_t unix_seconds);
 // Public API Implementation
 //==============================================================================
 
-int sentinel::logging::format_unix_timestamp_ms(int64_t unix_time_ms, char *out_buf,
-                                      size_t out_buf_size, bool local_time) {
+int sentinel::logging::format_unix_timestamp_ms(int64_t unix_time_ms,
+                                                char *out_buf,
+                                                size_t out_buf_size,
+                                                bool local_time) {
     static_cast<void>(local_time); // UTC only for simplicity
 
     int64_t seconds = unix_time_ms / 1000;
@@ -65,9 +67,11 @@ int sentinel::logging::format_unix_timestamp_ms(int64_t unix_time_ms, char *out_
     return length;
 }
 
-int sentinel::logging::build_string(char *out, size_t size, uint64_t unix_time_ms,
-                          const char *file, int line, const char *function,
-                          const char *level, const char *fmt, va_list args) {
+int sentinel::logging::build_string(char *out, size_t size,
+                                    uint64_t unix_time_ms, const char *file,
+                                    int line, const char *function,
+                                    const char *level, const char *fmt,
+                                    va_list args) {
     // Get basename of file (strip path)
     const char *basename = file;
     for (auto *p = file; *p; p++) {

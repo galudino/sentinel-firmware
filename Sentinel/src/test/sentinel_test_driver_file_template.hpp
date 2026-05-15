@@ -6,7 +6,8 @@
 ///          driver validation. These functions are intended for use in
 ///          testbench builds to verify driver functionality.
 ///
-/// \date    2024
+/// \author  galudino
+/// \date    2026-05-15
 /// \version 1.0 - Test template
 ///
 

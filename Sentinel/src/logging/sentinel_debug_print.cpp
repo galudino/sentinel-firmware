@@ -3,7 +3,7 @@
 /// \brief      Debug Print Utilities - Implementation
 ///
 /// \author     galudino
-/// \date       2026-02-19
+/// \date       2026-05-15
 ///
 
 #pragma GCC diagnostic push
@@ -57,9 +57,10 @@ void sentinel::logging::blevprint_format(const char *fmt, va_list args) {
     }
 }
 
-void sentinel::logging::enqueue_log_for_debug_stream(
-    const char *file, int line, const char *function, const char *level,
-    const char *fmt, ...) {
+void sentinel::logging::enqueue_log_for_debug_stream(const char *file, int line,
+                                                     const char *function,
+                                                     const char *level,
+                                                     const char *fmt, ...) {
     // Use critical section to protect the static g_log_buffer
     taskENTER_CRITICAL();
 

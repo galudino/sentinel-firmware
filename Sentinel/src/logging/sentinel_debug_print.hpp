@@ -3,7 +3,7 @@
 /// \brief      Debug Print Utilities - Header
 ///
 /// \author     galudino
-/// \date       2026-02-19
+/// \date       2026-05-15
 ///
 
 #ifndef SENTINEL_DEBUG_PRINT_HPP
@@ -13,11 +13,12 @@
 /// Set to 0 to compile out all debug output
 #define BLE_DEBUG_ENABLE 1
 
-/// *** IMPORTANT: NEVER use %f, %e, %g (float format specifiers) in ***
+/// *** IMPORTANT: NEVER use %f, %e, %g (float format specifiers) in    ***
 /// *** logi/logw/loge/logd calls! vsnprintf float-to-string conversion ***
 /// *** uses 500-1500+ bytes of stack on ARM Cortex-M newlib, which     ***
 /// *** overflows tasks with 200-300 word stacks and corrupts memory.   ***
-/// *** Use integer casts instead: (int)floatVal or (int)(floatVal*N)   ***
+/// *** Use integer casts instead: static_cast<int>(float_val)          ***
+/// *** or static_cast<int>(float_val * N)                              ***
 
 #include <cstdarg>
 #include <cstddef>
@@ -136,7 +137,8 @@ void enqueue_log_for_debug_stream(const char *file, int line,
 #if BLE_DEBUG_ENABLE
 
 /// Debug printf macro - outputs to BLE debug stream
-#define bleprintf(fmt, ...) sentinel::logging::bleprint_format(fmt, ##__VA_ARGS__)
+#define bleprintf(fmt, ...)                                                    \
+    sentinel::logging::bleprint_format(fmt, ##__VA_ARGS__)
 
 /// Log debug level message
 #define logd(fmt, ...)                                                         \

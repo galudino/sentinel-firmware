@@ -1,3 +1,15 @@
+///
+/// \file    sentinel_tach_rpm_windowed.hpp
+/// \brief   Windowed RPM calculator for tachometer readings
+///
+/// \details This header provides a class for calculating RPM over a windowed
+/// time interval, useful for measuring rotational speed from tachometer pulses.
+///
+/// \author  galudino
+/// \date    2026-05-15
+/// \version 1.0 - Initial implementation
+///
+
 #ifndef SENTINEL_TACH_RPM_WINDOWED_HPP
 #define SENTINEL_TACH_RPM_WINDOWED_HPP
 
@@ -11,7 +23,7 @@ class tach_rpm_windowed;
 }
 
 ///
-/// \brief Windowed RPM calculator (Creator-style: count pulses over time)
+/// \brief Windowed RPM calculator
 ///
 /// \details
 ///  - You call begin_window(start_tick) with a timestamp from your 1 MHz timer.
@@ -23,7 +35,8 @@ class tach_rpm_windowed;
 ///       rev / elapsed_sec → rev/s
 ///       rev/s * 60 → RPM
 ///
-class sentinel::tach_rpm_windowed : public tach_callback_crtp<tach_rpm_windowed> {
+class sentinel::tach_rpm_windowed
+    : public tach_callback_crtp<tach_rpm_windowed> {
 public:
     ///
     /// \param ticks_per_second  Timer frequency (e.g., 1'000'000 for 1 MHz)

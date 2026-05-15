@@ -1,3 +1,16 @@
+///
+/// \file    sentinel_gatt_debug.hpp
+/// \brief   Bluetooth LE public interface for characteristic values in the
+/// debug service
+///
+/// \details This header provides the public interface for accessing and
+/// updating the characteristic values in the debug service.
+///
+/// \author  galudino
+/// \date    2026-05-15
+/// \version 1.0
+///
+
 #ifndef SENTINEL_GATT_DEBUG_HPP
 #define SENTINEL_GATT_DEBUG_HPP
 
