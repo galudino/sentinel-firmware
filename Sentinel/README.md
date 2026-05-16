@@ -8,12 +8,12 @@ BLE-connected embedded telemetry and diagnostics platform built on PSoC 6, Modus
 
 ## Sensors
 
-- BME280 — temperature, humidity, pressure (ambient)
-- TMP117 — fan-load temperature
-- INA-219 — fan current / power monitor
-- NF-A4x10 — 5 V PWM fan (with tachometer feedback)
-- DS3231 — RTC for timestamps
-- W25Q128 — external flash for persistent storage
+- [I2C] BME280 — temperature, humidity, pressure (ambient)
+- [I2C] TMP117 — fan-load temperature
+- [I2C] INA-219 — fan current / power monitor
+- [PWM] NF-A4x10 — 5 V PWM fan (with tachometer feedback)
+- [I2C] DS3231 — RTC for timestamps
+- [SPI] W25Q128 — external flash for persistent storage
 
 ## Primary functions
 
@@ -46,27 +46,33 @@ BLE-connected embedded telemetry and diagnostics platform built on PSoC 6, Modus
 
 ## Bluetooth LE services & characteristics (WIP, not definitive)
 
-- **System Service**
+- **System**
   - [read/write] Serial Number
   - [read] Firmware Version
   - [write] Request bootloader mode (for OTA DFU)
-- **Sensor Service**
+- **Debug**
+  - [read/notify] Output Stream
+  - [read/write] Output Stream Notify Enable
+- **OTA FW Upgrade Service**
+  - [write/notify/indicate] OTA Upgrade Control Point
+  - [write] OTA Upgrade Data 
+- **Sensor**
   - [read/notify] Ambient Temperature, Humidity, Pressure
   - [read/write] Unix Time
-  - [read] Current fan RPM
+  - [read] Current Fan RPM
   - [read/write] User-defined min/max fan RPM
-  - [read] Fan voltage
-  - [read] Fan power
+  - [read] Fan Voltage
+  - [read] Fan Power
   - [read/write] User-defined max fan temperature threshold
-  - [read] Fan temperature
-- **System Event Log Service**
-  - [read] System event record count
-  - [read/write] System event log index
-  - [read/write] System event log block
-  - [write] Clear system event log store
-- **Snapshot Service**
-  - [read/notify] Device snapshot
-  - [read/write] Device snapshot output-stream notify-enable
+  - [read] Fan Temperature
+- **System Event Log**
+  - [read] Record Count
+  - [read/write] Log Index
+  - [read/write] Record Block
+  - [write] Clear System Event Log Store
+- **Snapshot**
+  - [read/notify] Device Snapshot
+  - [read/write] Output Stream Notify Enable
 
 ---
 
