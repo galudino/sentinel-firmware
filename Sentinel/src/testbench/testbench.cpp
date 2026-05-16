@@ -45,7 +45,7 @@ extern "C" {
 #include "sentinel_task_debug_stream.hpp"
 
 ///< Tests
-#include "sentinel_test_bme280_i2c.hpp"
+#include "sentinel_test_bme280.hpp"
 
 ///< Utilities
 #include "sentinel_firmware_version.hpp"
@@ -68,7 +68,7 @@ namespace sentinel::testbench {
 static inline void create_tests() {
     BaseType_t rtos_result{};
 
-    rtos_result = test::bme280_i2c::task_create();
+    rtos_result = test::bme280::task_create();
 
     if (rtos_result != pdPASS) {
         cy_log_msg(CYLF_DEF, CY_LOG_ERR, "BME280 test task creation failed\n");

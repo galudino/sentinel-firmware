@@ -14,8 +14,8 @@
 ///          in a single monolithic base.
 ///
 /// \author  galudino
-/// \date    2021-2024
-/// \version 1.1 - Split façade per protocol tag (I2C/SPI)
+/// \date    2021-2026
+/// \version 1.2 - SPI façade gains delay_us for Bosch-style sensor drivers
 ///
 
 #ifndef SENTINEL_BYTE_TRANSPORT_HPP
@@ -564,13 +564,26 @@ public:
     // ---------------------------------------------------------------------
 
     ///
-    /// \brief Delay
+    /// \brief Delay execution
     ///
-    /// \param milliseconds Delay in milliseconds
+    /// \param milliseconds Delay duration in milliseconds
     /// \return Implementation-specific status/result code
     ///
     auto delay(uint32_t milliseconds) noexcept {
         return impl().delay(milliseconds);
+    }
+
+    ///
+    /// \brief Delay execution (microseconds)
+    ///
+    /// \details Required for Bosch Sensortec drivers whose delay callback
+    ///          signature is expressed in microseconds.
+    ///
+    /// \param microseconds Delay duration in microseconds
+    /// \return Implementation-specific status/result code
+    ///
+    auto delay_us(uint32_t microseconds) noexcept {
+        return impl().delay_us(microseconds);
     }
 
 private:
