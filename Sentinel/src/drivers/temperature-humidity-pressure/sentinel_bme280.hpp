@@ -10,7 +10,8 @@
 ///
 ///          Architecture:
 ///          - Single \c sentinel::bme280<Transport> class template,
-///            parameterized over a \ref sentinel::byte_transport implementation.
+///            parameterized over a \ref sentinel::byte_transport
+///            implementation.
 ///          - Transport type is constrained at compile time to derive from
 ///            \c byte_transport<Transport, i2c_tag> or
 ///            \c byte_transport<Transport, spi_tag>; the wrapper uses
@@ -19,8 +20,19 @@
 ///          - \c sentinel::bme280_i2c<T> and \c sentinel::bme280_spi<T> are
 ///            provided as convenience aliases at the call sites.
 ///
+///          Public API design:
+///          - Operations that produce a value return \c std::optional<T>.
+///          - Operations that just act on the device return \c bool
+///            (\c true on success).
+///          - The most recent low-level Bosch error code is preserved in
+///            \ref last_error() so callers retain full diagnostic
+///            information without paying the call-site cost of
+///            \c std::variant or wide return tuples.
+///          - The "value-or-nullopt" idiom keeps the happy path compact;
+///            the forensic accessor keeps `int8_t` granularity recoverable
+///            from a debugger or log line.
+///
 ///          Default configuration (applied during construction):
-///          - Power mode: Forced (one-shot measurements)
 ///          - Pressure oversampling:    16x (\c BME280_OVERSAMPLING_16X)
 ///          - Temperature oversampling: 16x (\c BME280_OVERSAMPLING_16X)
 ///          - Humidity oversampling:    16x (\c BME280_OVERSAMPLING_16X)
@@ -32,9 +44,15 @@
 ///          - Temperature: °C  (degrees Celsius)
 ///          - Humidity:    %RH (relative humidity, 0–100)
 ///
+///          Thread safety:
+///          - An instance is single-task-owned by convention; the cached
+///            \c bme280_dev and \c last_error byte are not protected from
+///            concurrent access. Wrap externally if you share a driver
+///            across FreeRTOS tasks.
+///
 /// \author  galudino
 /// \date    2026-05-15
-/// \version 1.0 - Transport-agnostic Bosch BME280 driver
+/// \version 1.1 - optional/bool public API + last_error() accessor
 ///
 
 #ifndef SENTINEL_BME280_HPP
@@ -53,6 +71,7 @@ extern "C" {
 #include "sentinel_utilities.hpp"
 
 #include <cstdint>
+#include <optional>
 #include <type_traits>
 
 namespace sentinel {
@@ -94,12 +113,12 @@ using bme280_spi = bme280<SPITransport>;
 /// \brief BME280 temperature/pressure/humidity sensor driver class
 ///
 /// \details Provides a high-level C++ interface to the Bosch BME280 combined
-///          environmental sensor. The class wraps every public function in
-///          the Bosch \c bme280.h C API as a member function with matching
-///          semantics, and adds two convenience helpers:
-///          - \ref read_chip_id "read_chip_id()"
-///          - \ref read_temperature_pressure_humidity
-///                 "read_temperature_pressure_humidity()"
+///          environmental sensor. Each public member maps to a Bosch
+///          \c bme280_* function but adapts the return shape to idiomatic
+///          C++17: \c std::optional<T> for value-producing reads, \c bool
+///          for setters and actions, and an instance-scoped
+///          \ref last_error() accessor for the raw \c int8_t Bosch error
+///          code from the most recent operation.
 ///
 ///          Transport selection happens at compile time. The class derives
 ///          its protocol behavior from the tag of the supplied
@@ -165,12 +184,10 @@ public:
     ///                       \c BME280_I2C_ADDR_PRIM (0x76). Ignored when
     ///                       \c Transport is an SPI transport.
     ///
-    /// \note Construction is silent on failure: if any of \c bme280_init,
-    ///       \c soft_reset, or the initial \c set_sensor_settings call
-    ///       returns a non-zero result code, construction proceeds but
-    ///       subsequent member calls will reflect the sensor's unconfigured
-    ///       state. Callers wishing to react to initialization failures
-    ///       should follow construction with a \ref read_chip_id call.
+    /// \note Construction is silent on failure. To check whether the part
+    ///       came up cleanly, call \ref last_error() immediately after
+    ///       construction (it will be \c BME280_OK on a successful init) or
+    ///       follow with a \ref read_chip_id call.
     ///
     explicit bme280(Transport &bus,
                     uint16_t device_address = BME280_I2C_ADDR_PRIM) noexcept
@@ -184,24 +201,22 @@ public:
             m_device.intf = BME280_SPI_INTF;
         }
 
-        m_device.read     = Transport::bosch_read;
-        m_device.write    = Transport::bosch_write;
+        m_device.read = Transport::bosch_read;
+        m_device.write = Transport::bosch_write;
         m_device.delay_us = Transport::bosch_delay;
         m_device.intf_ptr = &bus;
 
-        // Initialize sensor (loads calibration coefficients into m_device).
-        auto result = init();
-        if (result != BME280_OK) {
+        // Each helper below sets m_last_error; the constructor short-circuits
+        // on the first failure so the user can inspect last_error() to learn
+        // which step did not complete.
+        if (!_init()) {
+            return;
+        }
+        if (!soft_reset()) {
             return;
         }
 
-        // Bring the part to a known state before applying defaults.
-        result = soft_reset();
-        if (result != BME280_OK) {
-            return;
-        }
-
-        configure_sensor();
+        _configure_sensor();
     }
 
     /// Non-copyable: holds a non-owning reference and a mutable Bosch device
@@ -215,6 +230,26 @@ public:
     bme280 &operator=(bme280 &&) noexcept = default;
 
     // =====================================================================
+    // Forensic accessor
+    // =====================================================================
+
+    ///
+    /// \brief Return the raw Bosch error code from the most recent operation
+    ///
+    /// \details Updated by every member function that issues bus traffic.
+    ///          On a successful operation this reads \c BME280_OK (0); on
+    ///          failure it reads the exact \c int8_t code the Bosch C driver
+    ///          returned (\c BME280_E_COMM_FAIL, \c BME280_E_NULL_PTR,
+    ///          \c BME280_E_INVALID_LEN, ...). Pair this with \c logi /
+    ///          \c loge / \c cy_log_msg to surface the underlying reason a
+    ///          \c std::optional read came back \c std::nullopt.
+    ///
+    /// \return Most recent Bosch result code, or \c BME280_OK if no
+    ///         operation has been attempted yet.
+    ///
+    int8_t last_error() const noexcept { return m_last_error; }
+
+    // =====================================================================
     // Addressing (I²C-only convenience)
     // =====================================================================
 
@@ -224,78 +259,92 @@ public:
     /// \param address New 7-bit I²C address — typically
     ///                \c BME280_I2C_ADDR_PRIM (0x76) or
     ///                \c BME280_I2C_ADDR_SEC (0x77).
-    /// \return Implementation-specific status code from the underlying
-    ///         transport. For SPI transports this is a no-op that returns
-    ///         \c CY_RSLT_SUCCESS.
+    /// \return \c true on success. For SPI transports this is a no-op that
+    ///         returns \c true.
     ///
     /// \details The BME280 supports two factory I²C addresses, selected by
     ///          the SDO pin (GND → primary, VDDIO → secondary). Use this to
     ///          retarget when multiple BME280s share a bus.
     ///
-    auto set_target_address(uint16_t address) noexcept {
+    /// \note This is a transport-level operation; it does not modify
+    ///       \ref last_error().
+    ///
+    bool set_target_address(uint16_t address) noexcept {
         if constexpr (is_i2c) {
-            return m_bus.set_target_address(address);
+            return m_bus.set_target_address(address) == CY_RSLT_SUCCESS;
         } else {
             sentinel::unused(address);
-            return CY_RSLT_SUCCESS;
+            return true;
         }
     }
 
     // =====================================================================
-    // Bosch C API — 1:1 member function wrappers
+    // Register access (low-level escape hatch)
     // =====================================================================
 
     ///
     /// \brief Write data to sensor registers
     ///
     /// \details Wrapper for \c bme280_set_regs(). Performs a multi-byte
-    ///          register write, intended for advanced configuration paths
-    ///          that the higher-level wrappers in this class do not cover.
+    ///          scatter register write where the \c i-th byte of
+    ///          \p reg_data is written to the register address at
+    ///          \c reg_addr[i] (Bosch's intentionally unusual signature).
     ///
     /// \param[in] reg_addr Pointer to register addresses to write
     /// \param[in] reg_data Pointer to data buffer
     /// \param      len     Number of bytes to write
-    /// \return \c BME280_OK (0) on success, error code otherwise
+    /// \return \c true on success; on failure, \c last_error() carries the
+    ///         Bosch error code.
     ///
-    int8_t set_regs(uint8_t *reg_addr, const uint8_t *reg_data,
-                    uint32_t len) const noexcept {
-        return bme280_set_regs(reg_addr, reg_data, len, &m_device);
+    bool set_regs(uint8_t *reg_addr, const uint8_t *reg_data,
+                  uint32_t len) const noexcept {
+        m_last_error = bme280_set_regs(reg_addr, reg_data, len, &m_device);
+        return m_last_error == BME280_OK;
     }
 
     ///
     /// \brief Read data from sensor registers
     ///
     /// \details Wrapper for \c bme280_get_regs(). Performs a multi-byte
-    ///          register read.
+    ///          register read into a caller-supplied buffer.
     ///
     /// \param      reg_addr  Starting register address
     /// \param[out] reg_data  Pointer to buffer for read data
     /// \param      len       Number of bytes to read
-    /// \return \c BME280_OK (0) on success, error code otherwise
+    /// \return \c true on success; on failure, \c last_error() carries the
+    ///         Bosch error code.
     ///
-    int8_t get_regs(uint8_t reg_addr, uint8_t *reg_data,
-                    uint32_t len) const noexcept {
-        return bme280_get_regs(reg_addr, reg_data, len, &m_device);
+    bool get_regs(uint8_t reg_addr, uint8_t *reg_data,
+                  uint32_t len) const noexcept {
+        m_last_error = bme280_get_regs(reg_addr, reg_data, len, &m_device);
+        return m_last_error == BME280_OK;
     }
+
+    // =====================================================================
+    // Sensor settings
+    // =====================================================================
 
     ///
     /// \brief Apply sensor configuration parameters
     ///
-    /// \details Wrapper for \c bme280_set_sensor_settings(). \p desired_settings
-    ///          is a bitmask of \c BME280_SEL_* flags selecting which fields
-    ///          of \p settings should actually be written to the device.
+    /// \details Wrapper for \c bme280_set_sensor_settings(). \p
+    ///          desired_settings is a bitmask of \c BME280_SEL_* flags
+    ///          selecting which fields of \p settings should actually be
+    ///          written to the device.
     ///
     /// \param desired_settings Bitmask of \c BME280_SEL_OSR_PRESS,
     ///                         \c BME280_SEL_OSR_TEMP, \c BME280_SEL_OSR_HUM,
     ///                         \c BME280_SEL_FILTER, \c BME280_SEL_STANDBY,
     ///                         or \c BME280_SEL_ALL_SETTINGS.
     /// \param settings         Configuration to apply.
-    /// \return \c BME280_OK (0) on success, error code otherwise
+    /// \return \c true on success; on failure, \c last_error() carries the
+    ///         Bosch error code.
     ///
-    int8_t set_sensor_settings(uint8_t desired_settings,
-                               const bme280_settings &settings) const noexcept {
-        return bme280_set_sensor_settings(desired_settings, &settings,
-                                          &m_device);
+    bool set_sensor_settings(uint8_t desired_settings,
+                             const bme280_settings &settings) const noexcept {
+        m_last_error =
+            bme280_set_sensor_settings(desired_settings, &settings, &m_device);
+        return m_last_error == BME280_OK;
     }
 
     ///
@@ -303,12 +352,21 @@ public:
     ///
     /// \details Wrapper for \c bme280_get_sensor_settings().
     ///
-    /// \param[out] settings Reference to receive the current configuration.
-    /// \return \c BME280_OK (0) on success, error code otherwise
+    /// \return Current sensor configuration on success;
+    ///         \c std::nullopt on failure (consult \ref last_error()).
     ///
-    int8_t get_sensor_settings(bme280_settings &settings) const noexcept {
-        return bme280_get_sensor_settings(&settings, &m_device);
+    std::optional<bme280_settings> sensor_settings() const noexcept {
+        auto settings = bme280_settings{};
+        m_last_error = bme280_get_sensor_settings(&settings, &m_device);
+        if (m_last_error != BME280_OK) {
+            return std::nullopt;
+        }
+        return settings;
     }
+
+    // =====================================================================
+    // Power mode
+    // =====================================================================
 
     ///
     /// \brief Set sensor power mode
@@ -319,10 +377,12 @@ public:
     ///                    - \c BME280_POWERMODE_SLEEP  (0)
     ///                    - \c BME280_POWERMODE_FORCED (1) — one-shot
     ///                    - \c BME280_POWERMODE_NORMAL (3) — continuous
-    /// \return \c BME280_OK (0) on success, error code otherwise
+    /// \return \c true on success; on failure, \c last_error() carries the
+    ///         Bosch error code.
     ///
-    int8_t set_sensor_mode(uint8_t sensor_mode) const noexcept {
-        return bme280_set_sensor_mode(sensor_mode, &m_device);
+    bool set_sensor_mode(uint8_t sensor_mode) const noexcept {
+        m_last_error = bme280_set_sensor_mode(sensor_mode, &m_device);
+        return m_last_error == BME280_OK;
     }
 
     ///
@@ -330,15 +390,22 @@ public:
     ///
     /// \details Wrapper for \c bme280_get_sensor_mode().
     ///
-    /// \param[out] sensor_mode Reference to receive the current power mode
-    ///                         (\c BME280_POWERMODE_SLEEP,
-    ///                          \c BME280_POWERMODE_FORCED, or
-    ///                          \c BME280_POWERMODE_NORMAL).
-    /// \return \c BME280_OK (0) on success, error code otherwise
+    /// \return Current power mode (\c BME280_POWERMODE_SLEEP,
+    ///         \c BME280_POWERMODE_FORCED, or \c BME280_POWERMODE_NORMAL)
+    ///         on success; \c std::nullopt on failure.
     ///
-    int8_t get_sensor_mode(uint8_t &sensor_mode) const noexcept {
-        return bme280_get_sensor_mode(&sensor_mode, &m_device);
+    std::optional<uint8_t> sensor_mode() const noexcept {
+        auto mode = uint8_t{};
+        m_last_error = bme280_get_sensor_mode(&mode, &m_device);
+        if (m_last_error != BME280_OK) {
+            return std::nullopt;
+        }
+        return mode;
     }
+
+    // =====================================================================
+    // System
+    // =====================================================================
 
     ///
     /// \brief Perform sensor soft reset
@@ -348,11 +415,17 @@ public:
     ///          power-on configuration. Calibration coefficients are
     ///          preserved in this driver's cached \c bme280_dev.
     ///
-    /// \return \c BME280_OK (0) on success, error code otherwise
+    /// \return \c true on success; on failure, \c last_error() carries the
+    ///         Bosch error code.
     ///
-    int8_t soft_reset() const noexcept {
-        return bme280_soft_reset(&m_device);
+    bool soft_reset() const noexcept {
+        m_last_error = bme280_soft_reset(&m_device);
+        return m_last_error == BME280_OK;
     }
+
+    // =====================================================================
+    // Sensor data
+    // =====================================================================
 
     ///
     /// \brief Read compensated sensor data
@@ -367,12 +440,16 @@ public:
     ///                    - \c BME280_TEMP  (0x02)
     ///                    - \c BME280_HUM   (0x04)
     ///                    - \c BME280_ALL   (0x07)
-    /// \param[out] data   Reference to receive compensated measurements.
-    /// \return \c BME280_OK (0) on success, error code otherwise
+    /// \return Compensated measurements on success; \c std::nullopt on
+    ///         failure.
     ///
-    int8_t get_sensor_data(uint8_t sensor_comp,
-                           bme280_data &data) const noexcept {
-        return bme280_get_sensor_data(sensor_comp, &data, &m_device);
+    std::optional<bme280_data> sensor_data(uint8_t sensor_comp) const noexcept {
+        auto data = bme280_data{};
+        m_last_error = bme280_get_sensor_data(sensor_comp, &data, &m_device);
+        if (m_last_error != BME280_OK) {
+            return std::nullopt;
+        }
+        return data;
     }
 
     ///
@@ -388,14 +465,19 @@ public:
     ///                         (\c BME280_PRESS, \c BME280_TEMP, \c BME280_HUM,
     ///                          or \c BME280_ALL).
     /// \param[in]  uncomp_data Raw sensor readings.
-    /// \param[out] comp_data   Reference to receive compensated results.
-    /// \return \c BME280_OK (0) on success, error code otherwise
+    /// \return Compensated measurements on success; \c std::nullopt on
+    ///         failure.
     ///
-    int8_t compensate_data(uint8_t sensor_comp,
-                           const bme280_uncomp_data &uncomp_data,
-                           bme280_data &comp_data) const noexcept {
-        return bme280_compensate_data(sensor_comp, &uncomp_data, &comp_data,
-                                      &m_device.calib_data);
+    std::optional<bme280_data>
+    compensate_data(uint8_t sensor_comp,
+                    const bme280_uncomp_data &uncomp_data) const noexcept {
+        auto comp_data = bme280_data{};
+        m_last_error = bme280_compensate_data(sensor_comp, &uncomp_data,
+                                              &comp_data, &m_device.calib_data);
+        if (m_last_error != BME280_OK) {
+            return std::nullopt;
+        }
+        return comp_data;
     }
 
     ///
@@ -407,16 +489,18 @@ public:
     ///          oversampling levels stored in \p settings. Useful in
     ///          forced-mode workflows to size the post-trigger wait.
     ///
-    /// \param[out] max_delay Reference to receive the delay in microseconds.
-    /// \param      settings  Oversampling configuration to query.
-    /// \return \c BME280_OK (0) on success, error code otherwise
+    /// \param settings Oversampling configuration to query.
+    /// \return Required delay in microseconds on success; \c std::nullopt
+    ///         on failure.
     ///
-    /// \note This is a \c static helper because the underlying Bosch
-    ///       function does not touch the device handle.
-    ///
-    static int8_t cal_meas_delay(uint32_t &max_delay,
-                                 const bme280_settings &settings) noexcept {
-        return bme280_cal_meas_delay(&max_delay, &settings);
+    std::optional<uint32_t>
+    cal_meas_delay(const bme280_settings &settings) const noexcept {
+        auto delay = uint32_t{};
+        m_last_error = bme280_cal_meas_delay(&delay, &settings);
+        if (m_last_error != BME280_OK) {
+            return std::nullopt;
+        }
+        return delay;
     }
 
     // =====================================================================
@@ -427,15 +511,18 @@ public:
     /// \brief Read the BME280 chip identifier
     ///
     /// \details Convenience wrapper that reads register \c 0xD0
-    ///          (\c BME280_REG_CHIP_ID) into \p id. A working BME280 always
-    ///          returns \c 0x60 (\c BME280_CHIP_ID); use this as a presence
-    ///          and bus-sanity check after construction.
+    ///          (\c BME280_REG_CHIP_ID). A working BME280 always returns
+    ///          \c 0x60 (\c BME280_CHIP_ID); use this as a presence and
+    ///          bus-sanity check after construction.
     ///
-    /// \param[out] id Reference to receive the chip ID byte.
-    /// \return \c BME280_OK (0) on success, error code otherwise
+    /// \return Chip ID byte on success; \c std::nullopt on failure.
     ///
-    int8_t read_chip_id(uint8_t &id) const noexcept {
-        return get_regs(BME280_REG_CHIP_ID, &id, sizeof(uint8_t));
+    std::optional<uint8_t> read_chip_id() const noexcept {
+        auto id = uint8_t{};
+        if (!get_regs(BME280_REG_CHIP_ID, &id, sizeof(id))) {
+            return std::nullopt;
+        }
+        return id;
     }
 
     ///
@@ -449,64 +536,62 @@ public:
     ///          3. Reads and compensates all three channels via
     ///             \c bme280_get_sensor_data() with \c BME280_ALL.
     ///
-    ///          On success, \p output_data holds the compensated readings
-    ///          in the units selected by the Bosch driver's compile-time
-    ///          option:
+    ///          On success, the returned value holds the compensated
+    ///          readings in the units selected by the Bosch driver's
+    ///          compile-time option:
     ///          - \c BME280_DOUBLE_ENABLE (default): Pa, °C, %RH as
     ///            \c double values.
     ///          - 32-bit fixed-point fallback: pressure in Pa as
     ///            \c uint32_t, temperature in 1/100 °C as \c int32_t,
     ///            humidity in Q22.10 as \c uint32_t.
     ///
-    /// \param[out] output_data Reference to receive compensated readings.
-    /// \return \c BME280_OK (0) on success, error code otherwise
+    /// \return Compensated T/P/H sample on success; \c std::nullopt on
+    ///         failure.
     ///
     /// \note Each call triggers a fresh measurement, so the minimum sensible
     ///       interval between calls is the delay returned by
     ///       \c bme280_cal_meas_delay() (~10 ms at the default 16x
     ///       oversampling configuration).
     ///
-    int8_t read_temperature_pressure_humidity(
-        bme280_data &output_data) const noexcept {
-
-        // Trigger a single measurement.
-        auto result = set_sensor_mode(BME280_POWERMODE_FORCED);
-        if (result != BME280_OK) {
-            return result;
+    std::optional<bme280_data> read_sensor_data() const noexcept {
+        if (!set_sensor_mode(BME280_POWERMODE_FORCED)) {
+            return std::nullopt;
         }
 
-        // Wait at least the worst-case conversion time, derived from the
-        // currently-programmed oversampling settings rather than a hard-
-        // coded constant.
-        auto settings = bme280_settings{};
-        result = get_sensor_settings(settings);
-        if (result != BME280_OK) {
-            return result;
+        auto settings = sensor_settings();
+        if (!settings) {
+            return std::nullopt;
         }
 
-        auto delay_us_amount = uint32_t{};
-        result = cal_meas_delay(delay_us_amount, settings);
-        if (result != BME280_OK) {
-            return result;
+        auto delay_microseconds = cal_meas_delay(*settings);
+        if (!delay_microseconds) {
+            return std::nullopt;
         }
 
-        m_bus.delay_us(delay_us_amount);
+        m_bus.delay_us(*delay_microseconds);
 
-        // Read and compensate all three channels.
-        return get_sensor_data(BME280_ALL, output_data);
+        return sensor_data(BME280_ALL);
     }
 
 private:
+    // =====================================================================
+    // Internal helpers
+    // =====================================================================
+
     ///
     /// \brief Initialize the underlying Bosch device handle
-    ///
-    /// \return \c BME280_OK (0) on success, error code otherwise
     ///
     /// \details Thin wrapper for \c bme280_init(). Performs the initial
     ///          chip-ID handshake and reads factory calibration into
     ///          \c m_device.calib_data.
     ///
-    int8_t init() noexcept { return bme280_init(&m_device); }
+    /// \return \c true on success; on failure, \c last_error() carries the
+    ///         Bosch error code.
+    ///
+    bool _init() noexcept {
+        m_last_error = bme280_init(&m_device);
+        return m_last_error == BME280_OK;
+    }
 
     ///
     /// \brief Apply this driver's default sensor configuration
@@ -515,9 +600,10 @@ private:
     ///          described in the file header. Called once at the end of
     ///          construction.
     ///
-    /// \return \c BME280_OK (0) on success, error code otherwise
+    /// \return \c true on success; on failure, \c last_error() carries the
+    ///         Bosch error code.
     ///
-    int8_t configure_sensor() noexcept {
+    bool _configure_sensor() noexcept {
         auto settings = bme280_settings{};
 
         // Maximum oversampling on all three channels for highest precision.
@@ -526,7 +612,7 @@ private:
         settings.osr_h = BME280_OVERSAMPLING_16X;
 
         // Aggressive IIR filtering smooths out short-term noise without
-        // disabling responsiveness.
+        // killing responsiveness.
         settings.filter = BME280_FILTER_COEFF_16;
 
         // Standby is only consulted in normal mode; pick the shortest value.
@@ -539,11 +625,14 @@ private:
         return set_sensor_settings(settings_sel, settings);
     }
 
-    Transport &m_bus;             ///< Non-owning reference to the transport.
+    Transport &m_bus;              ///< Non-owning reference to the transport.
     mutable bme280_dev m_device{}; ///< Bosch BME280 device handle (mutable
                                    ///< because all Bosch C functions take a
                                    ///< non-const \c bme280_dev*, even on
                                    ///< logically read-only operations).
+    mutable int8_t m_last_error{BME280_OK}; ///< Raw error code from the
+                                            ///< most recent Bosch call;
+                                            ///< exposed by \ref last_error().
 };
 
 #endif /* SENTINEL_BME280_HPP */
