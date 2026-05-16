@@ -2,8 +2,168 @@
 
 BLE-connected embedded telemetry and diagnostics platform built on PSoC 6, ModusToolbox, and FreeRTOS with persistent logging, real-time "device_snapshot" telemetry, and OTA-ready architecture.
 
+## Sensors
+
+- BME280 (temperature, humidity, pressure)
+- W25Q128 (flash memory)
+- DS3231 RTC (for keeping timestamps)
+- NF-A4x10 5V PWM fan
+- INA-219 Current/Power monitor (for measuring fan current and power consumption)
+- TMP117 (fan temperature)
+
+### Primary functions
+- Thermally-controlled fan
+  - The firmware will control the NF-A4x10 fan.
+    - Minimum RPM is set by the user. 
+    - If the fan's temperature goes above a set threshold, the fan will automatically increase RPM to cool its load.
+  - Fan load temperature is measured by the TMP117. 
+  - Fan current/power is measured by the INA-219.
+- Environment readings
+    - The BME280 reads ambient temperature, humidity, and pressure. 
+- OTA DFU
+  - Using MCUBoot (CM0+)
+- Persistent data storage
+    - The W25Q128 will store persistent data, such as:
+      - serial number (user-configurable)
+      - event log (collection of system event records)
+      - recent snapshot history (collection of periodic device snapshots)
+      - system preferences
+- System Event Log (system_event_record[])
+  - discrete events
+  - state transitions
+  - warnings
+  - diagnostics
+  - examples (not definitive):
+    - firmware_update_event
+    - configuration_change_event
+    - thermal_event
+    - power_event
+    - connectivity_event
+- Snapshot History
+    - Periodic device snapshots
+      - Stored in flash and captured at a user-defined interval
+      - Can also be captured to a client application via BLE characteristic
+- Bluetooth low energy services/characteristics (not definitive, TBA)
+  - System Service
+    - [read/write] Serial Number
+    - [read] Firmware Version
+    - [write] Request bootloader mode (for OTA DFU)
+  - Sensor Service
+    - [read/notify] Ambient Temperature, Humidity, Pressure
+    - [read/write] Unix Time
+    - [read] Current fan RPM
+    - [read/write] User-defined min/max fan RPM
+    - [read] Fan voltage
+    - [read] Fan power
+    - [read/write] User-defined max fan temperature threshold 
+    - [read] Fan temperature
+  - System Event Log Service
+    - [read] System Event Record Count
+    - [read/write] System Event Log Index
+    - [read/write] System Event Log Block
+    - [write] Clear System Event Log Store
+  - Snapshot Service
+    - [read/notify] Device Snapshot
+    - [read/write] Device Snapshot Output Stream Notify Enable
+
+### WIP System Event Record definition
+
+Still trying to figure out how to best handle this.
+
+```cpp
+struct system_event_record {
+    uint32_t unix_time;
+
+    uint8_t _padding0[3];
+
+    enum event_type : uint8_t {
+        firmware_update_attempted,
+        firmware_update_successful,
+        firmware_update_failed,
+        fan_rpm_threshold_change,
+        fan_rpm_min_threshold_met,
+        fan_rpm_max_threshold_exceeded,
+        fan_temperature_threshold_change,
+        fan_temperature_min_threshold_met,
+        fan_temperature_max_threshold_exceeded,
+        fan_power_consumption_exceeded,
+        ble_stack_initialized,
+        ble_stack_deinitialized,
+        ble_peripheral_connected,
+        ble_peripheral_disconnected
+    } event_type;
+
+    uint8_t data[28];
+}; // 36 bytes
+
+struct firmware_update_event_record {
+    uint32_t unix_time; // 0 + 4 = 4
+    uint8_t _padding0[3]; // 4 + 3 = 7
+    uint8_t event_type; // 7 + 2 = 9
+    firmware_version version; // 9 + 24 = 32
+    uint8_t _padding1[4]; // 32 + 4 = 36
+}; // 36 bytes
+
+If one firmware_update_event_record follows another,
+and the first is firmware_update_attempted, and the next is firmware_update_successful,
+you can check the version fields to see what the start/end version was.
+
+struct fan_rpm_threshold_change_record {
+    uint32_t unix_time;
+    uint8_t _padding0[3];
+    uint8_t event_type;
+    uint16_t old_min_fan_rpm;
+    uint16_t new_min_fan_rpm;
+    uint16_t old_max_fan_rpm;
+    uint16_t new_max_fan_rpm;
+    uint8_t _padding2[20];    
+}; // 36 bytes
+
+struct fan_rpm_threshold_record {
+    uint32_t unix_time;
+    uint8_t _padding0[3];
+    uint8_t event_type;
+    uint16_t current_fan_rpm;
+    uint16_t fan_threshold_min_rpm;
+    uint16_t fan_threshold_max_rpm;
+    uint8_t _padding1[22];
+}; // 36 bytes
+
+// same for fan_temperature_threshold_change_record
+// same for fan_temperature_threshold_record
+// same for fan_power_consumption_record
+/// etc. etc.
+
+```
+
+### WIP Device Snapshot definition
+```cpp
+struct device_snapshot {
+    firmware_version fw_version;
+    uint32_t serial_number;
+
+    uint32_t unix_time;
+    
+    uint16_t ambient_temperature;
+    uint16_t ambient_humidity;
+    uint16_t ambient_pressure;
+    
+    uint16_t fan_threshold_min_rpm;
+    uint16_t fan_threshold_max_rpm;
+    uint16_t fan_current_rpm;
+    uint16_t fan_voltage;
+    uint16_t fan_power;
+    uint16_t fan_temperature_threshold;
+    uint16_t fan_temperature;
+};
+```
+This is more or less what I'm going for. Fields/names may change,
+but a device snapshot represents the state of the system at an instant (denoted by unix_time, read by the RTC).
+
 # NOTE
 This repository is WIP, and based off https://github.com/galudino/mtb-bluetooth-le-battery-server.
+
+Everything below is (mostly) from the repo above.
 
 # Bluetooth&reg; LE Battery Server with OTA update (C++ Implementation)
 
@@ -77,7 +237,7 @@ This will:
 Open the generated workspace file in VSCode:
 
 -   File → Open Workspace from File...
--   Select `Sentinel.code-workspace`
+-   Select `sentinel-firmware.code-workspace`
 
 ---
 
