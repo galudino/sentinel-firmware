@@ -8,28 +8,33 @@ BLE-connected embedded telemetry and diagnostics platform built on PSoC 6, Modus
 
 ## Sensors
 
+Phase I:
 - [I2C] BME280 — temperature, humidity, pressure (ambient)
-- [I2C] TMP117 — fan-load temperature
-- [I2C] INA-219 — fan current / power monitor
-- [PWM] NF-A4x10 — 5 V PWM fan (with tachometer feedback)
 - [I2C] DS3231 — RTC for timestamps
 - [SPI] W25Q128 — external flash for persistent storage
 
+Phase II:
+- [I2C] TMP117 — fan-load temperature
+- [I2C] INA-219 — fan current / power monitor
+- [PWM] NF-A4x10 — 5 V PWM fan (with tachometer feedback)
+- [SPI] Motor?
+
+Phase III:
+- [SPI] Display?
+
 ## Primary functions
 
-- **Thermally-controlled fan**
-  - Firmware drives the NF-A4x10 PWM fan.
-    - Minimum RPM is user-configurable.
-    - If fan-load temperature rises above a configured threshold, RPM is increased automatically.
-  - Fan-load temperature is measured by the TMP117.
-  - Fan current and power are measured by the INA-219.
+Phase I:
+
 - **Environment readings**
   - The BME280 reports ambient temperature, humidity, and pressure.
 - **OTA firmware update (DFU)**
   - MCUboot bootloader on the CM0+ core; the updatable application runs on the CM4 core.
+  - Firmware update files are stored on the cloud, downloaded to the client application device, and transmitted via BLE.
 - **Persistent data storage** on the W25Q128:
   - Serial number (user-configurable)
-  - Event log (collection of `system_event_record`)
+  - Firmware version
+  - System Event Log (collection of `system_event_record`)
   - Recent snapshot history (collection of periodic `device_snapshot`)
   - System preferences
 - **System event log** (`system_event_record[]`)
@@ -40,12 +45,29 @@ BLE-connected embedded telemetry and diagnostics platform built on PSoC 6, Modus
     - `thermal_event`
     - `power_event`
     - `connectivity_event`
-- **Snapshot history**
-  - Periodic device snapshots stored in flash at a user-defined interval.
-  - Also exposed live to a client over a BLE characteristic.
+  - Entire system event log can be captured over a BLE characteristic
+- **Live Telemetry**
+  - Capture live 'device snapshots' -- instantaneous device state/sensor readings to client application (via BLE)
+- **Telemetry History**
+  - Periodic device snapshots are stored in flash at a user-defined interval.
+  - Entire device snapshot history can be captured over a BLE characteristic.
+
+Phase II:
+- **Thermally-controlled fan**
+  - Firmware drives the NF-A4x10 PWM fan.
+    - Minimum RPM is user-configurable.
+    - If fan-load temperature rises above a configured threshold, RPM is increased automatically.
+  - Fan-load temperature is measured by the TMP117.
+  - Fan current and power are measured by the INA-219.
+- Motor?
+
+- Phase III:
+  - Display for sensor values
+  - Cycle through on-screen values with a button
 
 ## Bluetooth LE services & characteristics (WIP, not definitive)
 
+### Phase I
 - **System**
   - [read/write] Serial Number
   - [read] Firmware Version
@@ -59,20 +81,33 @@ BLE-connected embedded telemetry and diagnostics platform built on PSoC 6, Modus
 - **Sensor**
   - [read/notify] Ambient Temperature, Humidity, Pressure
   - [read/write] Unix Time
-  - [read] Current Fan RPM
-  - [read/write] User-defined min/max fan RPM
-  - [read] Fan Voltage
-  - [read] Fan Power
-  - [read/write] User-defined max fan temperature threshold
-  - [read] Fan Temperature
+  - [read/notify] RTC operating temperature
 - **System Event Log**
   - [read] Record Count
   - [read/write] Log Index
-  - [read/write] Record Block
-  - [write] Clear System Event Log Store
-- **Snapshot**
-  - [read/notify] Device Snapshot
-  - [read/write] Output Stream Notify Enable
+  - [read] Record Block
+  - [read/write] Clear System Event Log Store
+- **Live Telemetry**
+  - [read/notify] Current Device Snapshot
+  - [read/write] Snapshot Notify Enable
+- **Telemetry History**
+  - [read] History Record Count
+  - [read/write] History Index
+  - [read] History Record Block
+  - [read/write] Clear History Store 
+
+### Phase II
+- **Fan/Thermal Load**
+    - [read] Current Fan RPM
+    - [read/write] User-defined min/max fan RPM
+    - [read] Fan Voltage
+    - [read] Fan Power
+    - [read] TMP117 temperature reading
+    - [read/write] User-defined max TMP117 temperature threshold
+    - [read] Current Motor RPM
+    - [read/write] User-defined min/max motor RPM
+    - [read] Motor Voltage
+    - [read] Motor Power
 
 ---
 
