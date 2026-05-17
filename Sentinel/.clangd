@@ -1,6 +1,19 @@
 # https://clangd.llvm.org/config.html
 CompileFlags:
-  Add: [-std=c++17]
+  Add:
+    - -std=c++17
+    # Silence clangd's "pragma diagnostic pop could not pop" false positive
+    # on the `#pragma GCC diagnostic push/pop` blocks around `extern "C"`
+    # vendor headers. GCC handles those correctly; clangd does not always
+    # track them across the language-linkage boundary.
+    - -Wno-unknown-pragmas
+
+# Run the background index continuously so newly-added headers (which have
+# no entry in compile_commands.json of their own) pick up inferred flags
+# from the .cpp files that include them as soon as those .cpp files index.
+Index:
+  Background: Build
+  StandardLibrary: Yes
 
 Completion:
   HeaderInsertion: Never
@@ -18,8 +31,9 @@ InlayHints:
 # ClangTidy diagnostics: https://clang.llvm.org/extra/clang-tidy/checks/list.html
 Diagnostics:
   Suppress:
-    - unused-includes       # too aggressive, generates many spurious warnings.
-    - pp_file_not_found     # mitigate Eclipse/clangd limitation, don't report spurious errors
+    - unused-includes            # too aggressive, generates many spurious warnings.
+    - pp_file_not_found          # mitigate Eclipse/clangd limitation, don't report spurious errors
     - -Wimplicit-function-declaration
+    - unknown_pragma_disable     # belt-and-suspenders: same pop-without-push false positive as -Wno-unknown-pragmas
 #    - '*'
 

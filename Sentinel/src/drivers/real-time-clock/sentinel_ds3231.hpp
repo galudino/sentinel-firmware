@@ -101,10 +101,10 @@ class ds3231;
 ///
 template <typename Transport>
 class sentinel::ds3231 {
-    static_assert(std::is_base_of_v<byte_transport<Transport, i2c_tag>,
-                                    Transport>,
-                  "Transport must derive from "
-                  "sentinel::byte_transport<Transport, i2c_tag>");
+    static_assert(
+        std::is_base_of_v<byte_transport<Transport, i2c_tag>, Transport>,
+        "Transport must derive from "
+        "sentinel::byte_transport<Transport, i2c_tag>");
 
 public:
     // =====================================================================
@@ -120,13 +120,13 @@ public:
     ///          this codebase.
     ///
     enum class err : int8_t {
-        ok                = 0,  ///< Most recent operation succeeded.
+        ok = 0,                 ///< Most recent operation succeeded.
         transport_failure = -1, ///< Underlying I²C transport returned a
                                 ///< non-success code.
-        invalid_argument  = -2, ///< Input failed range validation (e.g.,
+        invalid_argument = -2,  ///< Input failed range validation (e.g.,
                                 ///< month outside 1–12, hour > 23, year
                                 ///< outside 2000–2199, etc.).
-        busy_timeout      = -3, ///< Reserved for future use — the BSY
+        busy_timeout = -3,      ///< Reserved for future use — the BSY
                                 ///< flag did not clear within a polling
                                 ///< budget.
     };
@@ -154,27 +154,27 @@ public:
     ///          the datasheet at a glance.
     ///
     enum class register_address : uint8_t {
-        seconds         = 0x00, ///< Seconds (BCD 00–59).
-        minutes         = 0x01, ///< Minutes (BCD 00–59).
-        hours           = 0x02, ///< Hours (BCD); bit 6 selects 12/24-hour
+        seconds = 0x00,         ///< Seconds (BCD 00–59).
+        minutes = 0x01,         ///< Minutes (BCD 00–59).
+        hours = 0x02,           ///< Hours (BCD); bit 6 selects 12/24-hour
                                 ///< mode. This driver forces 24-hour mode.
-        day_of_week     = 0x03, ///< Day of week (1–7, user-defined).
-        date            = 0x04, ///< Date of month (BCD 01–31).
-        month_century   = 0x05, ///< Month (BCD 01–12) in bits 4:0; century
+        day_of_week = 0x03,     ///< Day of week (1–7, user-defined).
+        date = 0x04,            ///< Date of month (BCD 01–31).
+        month_century = 0x05,   ///< Month (BCD 01–12) in bits 4:0; century
                                 ///< flag in bit 7 (0 → 2000s, 1 → 2100s).
-        year            = 0x06, ///< Year within century (BCD 00–99).
-        alarm1_seconds  = 0x07, ///< Alarm 1 seconds + A1M1 match bit.
-        alarm1_minutes  = 0x08, ///< Alarm 1 minutes + A1M2 match bit.
-        alarm1_hours    = 0x09, ///< Alarm 1 hours + A1M3 match bit.
+        year = 0x06,            ///< Year within century (BCD 00–99).
+        alarm1_seconds = 0x07,  ///< Alarm 1 seconds + A1M1 match bit.
+        alarm1_minutes = 0x08,  ///< Alarm 1 minutes + A1M2 match bit.
+        alarm1_hours = 0x09,    ///< Alarm 1 hours + A1M3 match bit.
         alarm1_day_date = 0x0A, ///< Alarm 1 day/date + A1M4 + DY/DT.
-        alarm2_minutes  = 0x0B, ///< Alarm 2 minutes + A2M2 match bit.
-        alarm2_hours    = 0x0C, ///< Alarm 2 hours + A2M3 match bit.
+        alarm2_minutes = 0x0B,  ///< Alarm 2 minutes + A2M2 match bit.
+        alarm2_hours = 0x0C,    ///< Alarm 2 hours + A2M3 match bit.
         alarm2_day_date = 0x0D, ///< Alarm 2 day/date + A2M4 + DY/DT.
-        control         = 0x0E, ///< Control register (see
+        control = 0x0E,         ///< Control register (see
                                 ///< \ref control_register).
-        status          = 0x0F, ///< Status register (see
+        status = 0x0F,          ///< Status register (see
                                 ///< \ref status_register).
-        aging_offset    = 0x10, ///< Signed 8-bit oscillator aging offset.
+        aging_offset = 0x10,    ///< Signed 8-bit oscillator aging offset.
         temperature_msb = 0x11, ///< Temperature integer part (signed 8-bit).
         temperature_lsb = 0x12, ///< Temperature fractional part
                                 ///< (bits 7:6, 0.25 °C resolution).
@@ -186,38 +186,38 @@ public:
     /// \details Bit name conventions follow the DS3231 datasheet exactly.
     ///
     struct control_register {
-        static constexpr uint8_t EOSC_BIT  = 7; ///< Enable Oscillator: when
+        static constexpr uint8_t EOSC_BIT = 7;  ///< Enable Oscillator: when
                                                 ///< \c 1, oscillator stops
                                                 ///< while running on VBAT.
                                                 ///< \b Note: inverted sense.
         static constexpr uint8_t BBSQW_BIT = 6; ///< Battery-Backed Square
                                                 ///< Wave Enable.
-        static constexpr uint8_t CONV_BIT  = 5; ///< Convert Temperature
+        static constexpr uint8_t CONV_BIT = 5;  ///< Convert Temperature
                                                 ///< (one-shot, self-clearing).
-        static constexpr uint8_t RS2_BIT   = 4; ///< Rate Select 2 (with
+        static constexpr uint8_t RS2_BIT = 4;   ///< Rate Select 2 (with
                                                 ///< RS1, selects SQW freq).
-        static constexpr uint8_t RS1_BIT   = 3; ///< Rate Select 1.
+        static constexpr uint8_t RS1_BIT = 3;   ///< Rate Select 1.
         static constexpr uint8_t INTCN_BIT = 2; ///< Interrupt Control:
                                                 ///< \c 1 → INT mode,
                                                 ///< \c 0 → SQW mode.
-        static constexpr uint8_t A2IE_BIT  = 1; ///< Alarm 2 Interrupt Enable.
-        static constexpr uint8_t A1IE_BIT  = 0; ///< Alarm 1 Interrupt Enable.
+        static constexpr uint8_t A2IE_BIT = 1;  ///< Alarm 2 Interrupt Enable.
+        static constexpr uint8_t A1IE_BIT = 0;  ///< Alarm 1 Interrupt Enable.
     };
 
     ///
     /// \brief Status register (\c 0x0F) bit positions
     ///
     struct status_register {
-        static constexpr uint8_t OSF_BIT     = 7; ///< Oscillator Stop Flag
+        static constexpr uint8_t OSF_BIT = 7;     ///< Oscillator Stop Flag
                                                   ///< (set on power-up; user
                                                   ///< clears after setting
                                                   ///< time).
         static constexpr uint8_t EN32KHZ_BIT = 3; ///< 32 kHz Output Enable.
-        static constexpr uint8_t BSY_BIT     = 2; ///< Busy (TCXO functions
+        static constexpr uint8_t BSY_BIT = 2;     ///< Busy (TCXO functions
                                                   ///< or temp conversion in
                                                   ///< progress).
-        static constexpr uint8_t A2F_BIT     = 1; ///< Alarm 2 triggered flag.
-        static constexpr uint8_t A1F_BIT     = 0; ///< Alarm 1 triggered flag.
+        static constexpr uint8_t A2F_BIT = 1;     ///< Alarm 2 triggered flag.
+        static constexpr uint8_t A1F_BIT = 0;     ///< Alarm 1 triggered flag.
     };
 
     ///
@@ -227,7 +227,7 @@ public:
     ///          selected on the INT/SQW pin.
     ///
     enum class square_wave_freq : uint8_t {
-        hz_1      = 0b00, ///<   1 Hz.
+        hz_1 = 0b00,      ///<   1 Hz.
         khz_1_024 = 0b01, ///< 1.024 kHz.
         khz_4_096 = 0b10, ///< 4.096 kHz.
         khz_8_192 = 0b11, ///< 8.192 kHz.
@@ -238,7 +238,7 @@ public:
     ///
     enum class int_sqw_mode : uint8_t {
         square_wave = 0, ///< Pin outputs the configured square wave.
-        interrupt   = 1, ///< Pin is asserted low when an enabled alarm fires.
+        interrupt = 1,   ///< Pin is asserted low when an enabled alarm fires.
     };
 
     ///
@@ -249,13 +249,13 @@ public:
     ///          field is interoperable with conventional date arithmetic.
     ///
     enum class day_of_week : uint8_t {
-        monday    = 1,
-        tuesday   = 2,
+        monday = 1,
+        tuesday = 2,
         wednesday = 3,
-        thursday  = 4,
-        friday    = 5,
-        saturday  = 6,
-        sunday    = 7,
+        thursday = 4,
+        friday = 5,
+        saturday = 6,
+        sunday = 7,
     };
 
     ///
@@ -304,13 +304,13 @@ public:
     ///          epoch (2000-01-01 00:00:00, a Saturday).
     ///
     struct datetime {
-        uint16_t year;        ///< Four-digit year, 2000–2199.
-        uint8_t  month;       ///< Month, 1–12.
-        uint8_t  date;        ///< Date of month, 1–31.
-        uint8_t  day_of_week; ///< ISO 8601 day-of-week, 1=Mon … 7=Sun.
-        uint8_t  hour;        ///< Hour, 0–23 (24-hour clock).
-        uint8_t  minute;      ///< Minute, 0–59.
-        uint8_t  second;      ///< Second, 0–59.
+        uint16_t year;       ///< Four-digit year, 2000–2199.
+        uint8_t month;       ///< Month, 1–12.
+        uint8_t date;        ///< Date of month, 1–31.
+        uint8_t day_of_week; ///< ISO 8601 day-of-week, 1=Mon … 7=Sun.
+        uint8_t hour;        ///< Hour, 0–23 (24-hour clock).
+        uint8_t minute;      ///< Minute, 0–59.
+        uint8_t second;      ///< Second, 0–59.
 
         ///
         /// \brief Default-construct as 2000-01-01 00:00:00 (Saturday)
@@ -332,13 +332,34 @@ public:
         ///         (including leap-year handling for February).
         ///
         bool is_valid() const noexcept {
-            if (year < 2000 || year > 2199) return false;
-            if (month < 1 || month > 12) return false;
-            if (date < 1 || date > 31) return false;
-            if (day_of_week < 1 || day_of_week > 7) return false;
-            if (hour > 23) return false;
-            if (minute > 59) return false;
-            if (second > 59) return false;
+            if (year < 2000 || year > 2199) {
+                return false;
+            }
+
+            if (month < 1 || month > 12) {
+                return false;
+            }
+
+            if (date < 1 || date > 31) {
+                return false;
+            }
+
+            if (day_of_week < 1 || day_of_week > 7) {
+                return false;
+            }
+
+            if (hour > 23) {
+                return false;
+            }
+
+            if (minute > 59) {
+                return false;
+            }
+
+            if (second > 59) {
+                return false;
+            }
+
             return date <= days_in_month(year, month);
         }
 
@@ -355,21 +376,24 @@ public:
         ///
         static std::optional<uint32_t>
         to_unix_time(const datetime &dt) noexcept {
-            if (!dt.is_valid()) return std::nullopt;
+            if (!dt.is_valid()) {
+                return std::nullopt;
+            }
 
             auto days = uint32_t{0};
             for (auto y = uint16_t{1970}; y < dt.year; ++y) {
                 days += is_leap_year(y) ? 366 : 365;
             }
+
             for (auto m = uint8_t{1}; m < dt.month; ++m) {
                 days += days_in_month(dt.year, m);
             }
+
             days += static_cast<uint32_t>(dt.date - 1);
 
-            return days * 86400u
-                 + static_cast<uint32_t>(dt.hour)   * 3600u
-                 + static_cast<uint32_t>(dt.minute) * 60u
-                 + static_cast<uint32_t>(dt.second);
+            return days * 86400u + static_cast<uint32_t>(dt.hour) * 3600u +
+                   static_cast<uint32_t>(dt.minute) * 60u +
+                   static_cast<uint32_t>(dt.second);
         }
 
         ///
@@ -391,13 +415,15 @@ public:
             // uint32_t maxes out 2106-02-07 06:28:15 UTC, which is well
             // inside the DS3231 range; no upper bound check needed.
             static constexpr auto unix_year_2000 = uint32_t{946684800};
-            if (unix_time < unix_year_2000) return std::nullopt;
+            if (unix_time < unix_year_2000) {
+                return std::nullopt;
+            }
 
-            auto days            = unix_time / 86400u;
-            auto seconds_in_day  = unix_time % 86400u;
+            auto days = unix_time / 86400u;
+            auto seconds_in_day = unix_time % 86400u;
 
             auto out = datetime{};
-            out.hour   = static_cast<uint8_t>(seconds_in_day / 3600u);
+            out.hour = static_cast<uint8_t>(seconds_in_day / 3600u);
             out.minute = static_cast<uint8_t>((seconds_in_day % 3600u) / 60u);
             out.second = static_cast<uint8_t>(seconds_in_day % 60u);
 
@@ -406,9 +432,13 @@ public:
 
             auto year = uint16_t{1970};
             while (true) {
-                auto in_year = is_leap_year(year) ? uint32_t{366}
-                                                  : uint32_t{365};
-                if (days < in_year) break;
+                auto in_year =
+                    is_leap_year(year) ? uint32_t{366} : uint32_t{365};
+
+                if (days < in_year) {
+                    break;
+                }
+
                 days -= in_year;
                 ++year;
             }
@@ -416,14 +446,19 @@ public:
 
             auto month = uint8_t{1};
             while (month <= 12) {
-                auto in_month = static_cast<uint32_t>(days_in_month(year,
-                                                                    month));
-                if (days < in_month) break;
+                auto in_month =
+                    static_cast<uint32_t>(days_in_month(year, month));
+
+                if (days < in_month) {
+                    break;
+                }
+
                 days -= in_month;
                 ++month;
             }
+
             out.month = month;
-            out.date  = static_cast<uint8_t>(days + 1);
+            out.date = static_cast<uint8_t>(days + 1);
 
             return out;
         }
@@ -438,22 +473,29 @@ public:
         ///
         /// \brief Number of days in a given month, with leap-year handling.
         ///
-        static constexpr uint8_t
-        days_in_month(uint16_t year, uint8_t month) noexcept {
+        static constexpr uint8_t days_in_month(uint16_t year,
+                                               uint8_t month) noexcept {
             constexpr auto table = std::array<uint8_t, 12>{
                 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-            if (month < 1 || month > 12) return 0;
-            if (month == 2 && is_leap_year(year)) return 29;
+            if (month < 1 || month > 12) {
+                return 0;
+            }
+
+            if (month == 2 && is_leap_year(year)) {
+                return 29;
+            }
+
             return table[month - 1];
         }
 
         friend bool operator==(const datetime &a, const datetime &b) noexcept {
-            return a.year == b.year && a.month == b.month && a.date == b.date
-                && a.hour == b.hour && a.minute == b.minute
-                && a.second == b.second;
+            return a.year == b.year && a.month == b.month && a.date == b.date &&
+                   a.hour == b.hour && a.minute == b.minute &&
+                   a.second == b.second;
             // day_of_week intentionally excluded: it is derivable from
             // year/month/date and not all callers populate it correctly.
         }
+
         friend bool operator!=(const datetime &a, const datetime &b) noexcept {
             return !(a == b);
         }
@@ -464,9 +506,9 @@ public:
     ///
     struct alarm1_setting {
         alarm1_match_mode match_mode = alarm1_match_mode::once_per_second;
-        uint8_t second      = 0; ///< 0–59 (ignored for \c once_per_second).
-        uint8_t minute      = 0; ///< 0–59.
-        uint8_t hour        = 0; ///< 0–23 (24-hour clock).
+        uint8_t second = 0;      ///< 0–59 (ignored for \c once_per_second).
+        uint8_t minute = 0;      ///< 0–59.
+        uint8_t hour = 0;        ///< 0–23 (24-hour clock).
         uint8_t day_or_date = 1; ///< Day-of-week (1–7) if the match mode is
                                  ///< \c day_of_week_hours_minutes_seconds,
                                  ///< otherwise date-of-month (1–31).
@@ -477,8 +519,8 @@ public:
     ///
     struct alarm2_setting {
         alarm2_match_mode match_mode = alarm2_match_mode::once_per_minute;
-        uint8_t minute      = 0; ///< 0–59 (ignored for \c once_per_minute).
-        uint8_t hour        = 0; ///< 0–23 (24-hour clock).
+        uint8_t minute = 0;      ///< 0–59 (ignored for \c once_per_minute).
+        uint8_t hour = 0;        ///< 0–23 (24-hour clock).
         uint8_t day_or_date = 1; ///< Day-of-week (1–7) if the match mode is
                                  ///< \c day_of_week_hours_minutes,
                                  ///< otherwise date-of-month (1–31).
@@ -495,7 +537,8 @@ public:
     ///          has no chip-ID register to probe and the part runs the
     ///          oscillator continuously from VCC or VBAT regardless of
     ///          host involvement. To verify the part is responding after
-    ///          construction, read \ref status or call \ref oscillator_stop_flag.
+    ///          construction, read \ref status or call \ref
+    ///          oscillator_stop_flag.
     ///
     /// \param bus            Reference to the I²C transport. Must outlive
     ///                       this driver instance.
@@ -507,8 +550,8 @@ public:
     ///                       address-select pin.
     ///
     explicit ds3231(Transport &bus,
-                    uint16_t device_address = static_cast<uint16_t>(
-                        slave_address::primary)) noexcept
+                    uint16_t device_address =
+                        static_cast<uint16_t>(slave_address::primary)) noexcept
         : m_bus(bus) {
         m_bus.set_target_address(device_address);
     }
@@ -550,21 +593,22 @@ public:
     ///
     std::optional<datetime> time() const noexcept {
         auto buf = std::array<uint8_t, 7>{};
-        if (!read_registers(register_address::seconds, buf.data(), buf.size())) {
+        if (!read_registers(register_address::seconds, buf.data(),
+                            buf.size())) {
             return std::nullopt;
         }
 
-        auto dt    = datetime{};
-        dt.second  = bcd_to_binary(buf[0] & 0x7F);
-        dt.minute  = bcd_to_binary(buf[1] & 0x7F);
-        dt.hour    = decode_hours(buf[2]);
+        auto dt = datetime{};
+        dt.second = bcd_to_binary(buf[0] & 0x7F);
+        dt.minute = bcd_to_binary(buf[1] & 0x7F);
+        dt.hour = decode_hours(buf[2]);
         dt.day_of_week = static_cast<uint8_t>(buf[3] & 0x07);
-        dt.date    = bcd_to_binary(buf[4] & 0x3F);
+        dt.date = bcd_to_binary(buf[4] & 0x3F);
 
         auto month_bcd = static_cast<uint8_t>(buf[5] & 0x1F);
-        auto century   = static_cast<uint16_t>((buf[5] & 0x80) ? 2100 : 2000);
-        dt.month       = bcd_to_binary(month_bcd);
-        dt.year        = century + bcd_to_binary(buf[6]);
+        auto century = static_cast<uint16_t>((buf[5] & 0x80) ? 2100 : 2000);
+        dt.month = bcd_to_binary(month_bcd);
+        dt.year = century + bcd_to_binary(buf[6]);
 
         m_last_error = err::ok;
         return dt;
@@ -603,8 +647,7 @@ public:
         buf[4] = binary_to_bcd(dt.date);
 
         auto month_bcd = binary_to_bcd(dt.month);
-        auto century_bit =
-            static_cast<uint8_t>(dt.year >= 2100 ? 0x80 : 0x00);
+        auto century_bit = static_cast<uint8_t>(dt.year >= 2100 ? 0x80 : 0x00);
         buf[5] = static_cast<uint8_t>(month_bcd | century_bit);
         buf[6] = binary_to_bcd(
             static_cast<uint8_t>(dt.year - (dt.year >= 2100 ? 2100 : 2000)));
@@ -623,7 +666,11 @@ public:
     ///
     std::optional<uint32_t> unix_time() const noexcept {
         auto dt = time();
-        if (!dt) return std::nullopt;
+
+        if (!dt) {
+            return std::nullopt;
+        }
+
         return datetime::to_unix_time(*dt);
     }
 
@@ -637,10 +684,12 @@ public:
     ///
     bool set_unix_time(uint32_t unix_seconds) noexcept {
         auto dt = datetime::from_unix_time(unix_seconds);
+
         if (!dt) {
             m_last_error = err::invalid_argument;
             return false;
         }
+
         return set_time(*dt);
     }
 
@@ -663,11 +712,13 @@ public:
     ///
     std::optional<int16_t> temperature_centi_c() const noexcept {
         auto buf = std::array<uint8_t, 2>{};
+
         if (!read_registers(register_address::temperature_msb, buf.data(),
                             buf.size())) {
             return std::nullopt;
         }
-        auto integer  = static_cast<int16_t>(static_cast<int8_t>(buf[0]));
+
+        auto integer = static_cast<int16_t>(static_cast<int8_t>(buf[0]));
         auto fraction = static_cast<int16_t>((buf[1] >> 6) & 0x03); // 0..3
         return static_cast<int16_t>(integer * 100 + fraction * 25);
     }
@@ -687,16 +738,24 @@ public:
     ///
     bool start_temperature_conversion() noexcept {
         auto current_status = read_register(register_address::status);
-        if (!current_status) return false;
+
+        if (!current_status) {
+            return false;
+        }
+
         if (*current_status & (1u << status_register::BSY_BIT)) {
             m_last_error = err::busy_timeout;
             return false;
         }
 
         auto current_control = read_register(register_address::control);
-        if (!current_control) return false;
+        if (!current_control) {
+            return false;
+        }
+
         auto new_control = static_cast<uint8_t>(
             *current_control | (1u << control_register::CONV_BIT));
+
         return write_register(register_address::control, new_control);
     }
 
@@ -709,7 +768,10 @@ public:
     ///
     std::optional<bool> is_temperature_conversion_busy() const noexcept {
         auto s = read_register(register_address::status);
-        if (!s) return std::nullopt;
+        if (!s) {
+            return std::nullopt;
+        }
+
         return (*s & (1u << status_register::BSY_BIT)) != 0;
     }
 
@@ -785,12 +847,16 @@ public:
     ///
     bool set_square_wave_freq(square_wave_freq f) noexcept {
         auto ctrl = read_register(register_address::control);
-        if (!ctrl) return false;
-        auto v = static_cast<uint8_t>(*ctrl
-                & ~((1u << control_register::RS2_BIT)
-                  | (1u << control_register::RS1_BIT)));
+        if (!ctrl) {
+            return false;
+        }
+
+        auto v =
+            static_cast<uint8_t>(*ctrl & ~((1u << control_register::RS2_BIT) |
+                                           (1u << control_register::RS1_BIT)));
         v = static_cast<uint8_t>(
             v | (static_cast<uint8_t>(f) << control_register::RS1_BIT));
+
         return write_register(register_address::control, v);
     }
 
@@ -819,7 +885,10 @@ public:
     ///
     std::optional<bool> oscillator_stop_flag() const noexcept {
         auto s = read_register(register_address::status);
-        if (!s) return std::nullopt;
+        if (!s) {
+            return std::nullopt;
+        }
+
         return (*s & (1u << status_register::OSF_BIT)) != 0;
     }
 
@@ -835,7 +904,10 @@ public:
     ///
     std::optional<bool> alarm1_triggered() const noexcept {
         auto s = read_register(register_address::status);
-        if (!s) return std::nullopt;
+        if (!s) {
+            return std::nullopt;
+        }
+
         return (*s & (1u << status_register::A1F_BIT)) != 0;
     }
 
@@ -851,7 +923,10 @@ public:
     ///
     std::optional<bool> alarm2_triggered() const noexcept {
         auto s = read_register(register_address::status);
-        if (!s) return std::nullopt;
+        if (!s) {
+            return std::nullopt;
+        }
+
         return (*s & (1u << status_register::A2F_BIT)) != 0;
     }
 
@@ -874,7 +949,10 @@ public:
     ///
     std::optional<bool> is_32khz_output_enabled() const noexcept {
         auto s = read_register(register_address::status);
-        if (!s) return std::nullopt;
+        if (!s) {
+            return std::nullopt;
+        }
+
         return (*s & (1u << status_register::EN32KHZ_BIT)) != 0;
     }
 
@@ -900,14 +978,15 @@ public:
             m_last_error = err::invalid_argument;
             return false;
         }
-        if (alarm.match_mode
-                == alarm1_match_mode::day_of_week_hours_minutes_seconds) {
+
+        if (alarm.match_mode ==
+            alarm1_match_mode::day_of_week_hours_minutes_seconds) {
             if (alarm.day_or_date < 1 || alarm.day_or_date > 7) {
                 m_last_error = err::invalid_argument;
                 return false;
             }
-        } else if (alarm.match_mode
-                       == alarm1_match_mode::date_hours_minutes_seconds) {
+        } else if (alarm.match_mode ==
+                   alarm1_match_mode::date_hours_minutes_seconds) {
             if (alarm.day_or_date < 1 || alarm.day_or_date > 31) {
                 m_last_error = err::invalid_argument;
                 return false;
@@ -915,17 +994,17 @@ public:
         }
 
         auto flags = alarm1_match_flags(alarm.match_mode);
-        auto buf   = std::array<uint8_t, 4>{};
-        buf[0] = static_cast<uint8_t>(
-            (flags.m1 ? 0x80 : 0x00) | binary_to_bcd(alarm.second));
-        buf[1] = static_cast<uint8_t>(
-            (flags.m2 ? 0x80 : 0x00) | binary_to_bcd(alarm.minute));
-        buf[2] = static_cast<uint8_t>(
-            (flags.m3 ? 0x80 : 0x00) | binary_to_bcd(alarm.hour));
-        buf[3] = static_cast<uint8_t>(
-              (flags.m4 ? 0x80 : 0x00)
-            | (flags.day_not_date ? 0x40 : 0x00)
-            | binary_to_bcd(alarm.day_or_date));
+        auto buf = std::array<uint8_t, 4>{};
+
+        buf[0] = static_cast<uint8_t>((flags.m1 ? 0x80 : 0x00) |
+                                      binary_to_bcd(alarm.second));
+        buf[1] = static_cast<uint8_t>((flags.m2 ? 0x80 : 0x00) |
+                                      binary_to_bcd(alarm.minute));
+        buf[2] = static_cast<uint8_t>((flags.m3 ? 0x80 : 0x00) |
+                                      binary_to_bcd(alarm.hour));
+        buf[3] = static_cast<uint8_t>((flags.m4 ? 0x80 : 0x00) |
+                                      (flags.day_not_date ? 0x40 : 0x00) |
+                                      binary_to_bcd(alarm.day_or_date));
 
         return write_registers(register_address::alarm1_seconds, buf.data(),
                                buf.size());
@@ -948,12 +1027,13 @@ public:
         auto dy = (buf[3] & 0x40) != 0;
 
         auto out = alarm1_setting{};
-        out.match_mode  = alarm1_mode_from_flags(m1, m2, m3, m4, dy);
-        out.second      = bcd_to_binary(buf[0] & 0x7F);
-        out.minute      = bcd_to_binary(buf[1] & 0x7F);
-        out.hour        = decode_hours(buf[2]);
-        out.day_or_date = bcd_to_binary(
-            static_cast<uint8_t>(buf[3] & (dy ? 0x0F : 0x3F)));
+        out.match_mode = alarm1_mode_from_flags(m1, m2, m3, m4, dy);
+        out.second = bcd_to_binary(buf[0] & 0x7F);
+        out.minute = bcd_to_binary(buf[1] & 0x7F);
+        out.hour = decode_hours(buf[2]);
+        out.day_or_date =
+            bcd_to_binary(static_cast<uint8_t>(buf[3] & (dy ? 0x0F : 0x3F)));
+
         return out;
     }
 
@@ -965,6 +1045,7 @@ public:
             m_last_error = err::invalid_argument;
             return false;
         }
+
         if (alarm.match_mode == alarm2_match_mode::day_of_week_hours_minutes) {
             if (alarm.day_or_date < 1 || alarm.day_or_date > 7) {
                 m_last_error = err::invalid_argument;
@@ -978,15 +1059,15 @@ public:
         }
 
         auto flags = alarm2_match_flags(alarm.match_mode);
-        auto buf   = std::array<uint8_t, 3>{};
-        buf[0] = static_cast<uint8_t>(
-            (flags.m2 ? 0x80 : 0x00) | binary_to_bcd(alarm.minute));
-        buf[1] = static_cast<uint8_t>(
-            (flags.m3 ? 0x80 : 0x00) | binary_to_bcd(alarm.hour));
-        buf[2] = static_cast<uint8_t>(
-              (flags.m4 ? 0x80 : 0x00)
-            | (flags.day_not_date ? 0x40 : 0x00)
-            | binary_to_bcd(alarm.day_or_date));
+        auto buf = std::array<uint8_t, 3>{};
+
+        buf[0] = static_cast<uint8_t>((flags.m2 ? 0x80 : 0x00) |
+                                      binary_to_bcd(alarm.minute));
+        buf[1] = static_cast<uint8_t>((flags.m3 ? 0x80 : 0x00) |
+                                      binary_to_bcd(alarm.hour));
+        buf[2] = static_cast<uint8_t>((flags.m4 ? 0x80 : 0x00) |
+                                      (flags.day_not_date ? 0x40 : 0x00) |
+                                      binary_to_bcd(alarm.day_or_date));
 
         return write_registers(register_address::alarm2_minutes, buf.data(),
                                buf.size());
@@ -1008,11 +1089,13 @@ public:
         auto dy = (buf[2] & 0x40) != 0;
 
         auto out = alarm2_setting{};
-        out.match_mode  = alarm2_mode_from_flags(m2, m3, m4, dy);
-        out.minute      = bcd_to_binary(buf[0] & 0x7F);
-        out.hour        = decode_hours(buf[1]);
-        out.day_or_date = bcd_to_binary(
-            static_cast<uint8_t>(buf[2] & (dy ? 0x0F : 0x3F)));
+
+        out.match_mode = alarm2_mode_from_flags(m2, m3, m4, dy);
+        out.minute = bcd_to_binary(buf[0] & 0x7F);
+        out.hour = decode_hours(buf[1]);
+        out.day_or_date =
+            bcd_to_binary(static_cast<uint8_t>(buf[2] & (dy ? 0x0F : 0x3F)));
+
         return out;
     }
 
@@ -1031,7 +1114,8 @@ public:
     ///
     std::optional<int8_t> aging_offset() const noexcept {
         auto v = read_register(register_address::aging_offset);
-        if (!v) return std::nullopt;
+        if (!v)
+            return std::nullopt;
         return static_cast<int8_t>(*v);
     }
 
@@ -1054,10 +1138,11 @@ public:
     ///
     /// \brief Read a single named register.
     ///
-    std::optional<uint8_t>
-    read_register(register_address reg) const noexcept {
+    std::optional<uint8_t> read_register(register_address reg) const noexcept {
         auto v = uint8_t{};
-        if (!read_register(reg, v)) return std::nullopt;
+        if (!read_register(reg, v)) {
+            return std::nullopt;
+        }
         return v;
     }
 
@@ -1071,13 +1156,14 @@ public:
     ///
     bool write_register(register_address reg, uint8_t value) noexcept {
         m_last_error = err::ok;
-        auto buf = std::array<uint8_t, 2>{
-            static_cast<uint8_t>(reg), value};
+        auto buf = std::array<uint8_t, 2>{static_cast<uint8_t>(reg), value};
         auto status_code = m_bus.write(buf.data(), buf.size(), 0, true);
+
         if (status_code != CY_RSLT_SUCCESS) {
             m_last_error = err::transport_failure;
             return false;
         }
+
         return true;
     }
 
@@ -1087,13 +1173,11 @@ private:
     // =====================================================================
 
     static constexpr uint8_t bcd_to_binary(uint8_t bcd) noexcept {
-        return static_cast<uint8_t>(
-            ((bcd >> 4) & 0x0F) * 10 + (bcd & 0x0F));
+        return static_cast<uint8_t>(((bcd >> 4) & 0x0F) * 10 + (bcd & 0x0F));
     }
 
     static constexpr uint8_t binary_to_bcd(uint8_t binary) noexcept {
-        return static_cast<uint8_t>(
-            ((binary / 10) << 4) | (binary % 10));
+        return static_cast<uint8_t>(((binary / 10) << 4) | (binary % 10));
     }
 
     ///
@@ -1108,9 +1192,13 @@ private:
     static constexpr uint8_t decode_hours(uint8_t reg) noexcept {
         if (reg & 0x40) {
             // 12-hour mode: bit 5 is PM, bits 4:0 carry the hour in BCD.
-            auto pm    = (reg & 0x20) != 0;
-            auto hour  = bcd_to_binary(static_cast<uint8_t>(reg & 0x1F));
-            if (hour == 12) hour = 0; // 12 AM == 00; 12 PM == 12.
+            auto pm = (reg & 0x20) != 0;
+            auto hour = bcd_to_binary(static_cast<uint8_t>(reg & 0x1F));
+
+            if (hour == 12) {
+                hour = 0; // 12 AM == 00; 12 PM == 12.
+            }
+
             return pm ? static_cast<uint8_t>(hour + 12) : hour;
         }
         return bcd_to_binary(static_cast<uint8_t>(reg & 0x3F));
@@ -1131,18 +1219,18 @@ private:
     static constexpr match_flags
     alarm1_match_flags(alarm1_match_mode m) noexcept {
         switch (m) {
-            case alarm1_match_mode::once_per_second:
-                return {true, true, true, true, false};
-            case alarm1_match_mode::seconds:
-                return {false, true, true, true, false};
-            case alarm1_match_mode::minutes_seconds:
-                return {false, false, true, true, false};
-            case alarm1_match_mode::hours_minutes_seconds:
-                return {false, false, false, true, false};
-            case alarm1_match_mode::date_hours_minutes_seconds:
-                return {false, false, false, false, false};
-            case alarm1_match_mode::day_of_week_hours_minutes_seconds:
-                return {false, false, false, false, true};
+        case alarm1_match_mode::once_per_second:
+            return {true, true, true, true, false};
+        case alarm1_match_mode::seconds:
+            return {false, true, true, true, false};
+        case alarm1_match_mode::minutes_seconds:
+            return {false, false, true, true, false};
+        case alarm1_match_mode::hours_minutes_seconds:
+            return {false, false, false, true, false};
+        case alarm1_match_mode::date_hours_minutes_seconds:
+            return {false, false, false, false, false};
+        case alarm1_match_mode::day_of_week_hours_minutes_seconds:
+            return {false, false, false, false, true};
         }
         return {true, true, true, true, false};
     }
@@ -1151,16 +1239,16 @@ private:
     alarm2_match_flags(alarm2_match_mode m) noexcept {
         // Alarm 2 has no seconds field; m1 is unused.
         switch (m) {
-            case alarm2_match_mode::once_per_minute:
-                return {false, true, true, true, false};
-            case alarm2_match_mode::minutes:
-                return {false, false, true, true, false};
-            case alarm2_match_mode::hours_minutes:
-                return {false, false, false, true, false};
-            case alarm2_match_mode::date_hours_minutes:
-                return {false, false, false, false, false};
-            case alarm2_match_mode::day_of_week_hours_minutes:
-                return {false, false, false, false, true};
+        case alarm2_match_mode::once_per_minute:
+            return {false, true, true, true, false};
+        case alarm2_match_mode::minutes:
+            return {false, false, true, true, false};
+        case alarm2_match_mode::hours_minutes:
+            return {false, false, false, true, false};
+        case alarm2_match_mode::date_hours_minutes:
+            return {false, false, false, false, false};
+        case alarm2_match_mode::day_of_week_hours_minutes:
+            return {false, false, false, false, true};
         }
         return {false, true, true, true, false};
     }
@@ -1168,9 +1256,12 @@ private:
     static constexpr alarm1_match_mode
     alarm1_mode_from_flags(bool m1, bool m2, bool m3, bool m4,
                            bool day_not_date) noexcept {
-        if (m1 && m2 && m3 && m4)   return alarm1_match_mode::once_per_second;
-        if (!m1 && m2 && m3 && m4)  return alarm1_match_mode::seconds;
-        if (!m1 && !m2 && m3 && m4) return alarm1_match_mode::minutes_seconds;
+        if (m1 && m2 && m3 && m4)
+            return alarm1_match_mode::once_per_second;
+        if (!m1 && m2 && m3 && m4)
+            return alarm1_match_mode::seconds;
+        if (!m1 && !m2 && m3 && m4)
+            return alarm1_match_mode::minutes_seconds;
         if (!m1 && !m2 && !m3 && m4)
             return alarm1_match_mode::hours_minutes_seconds;
         if (day_not_date)
@@ -1181,9 +1272,12 @@ private:
     static constexpr alarm2_match_mode
     alarm2_mode_from_flags(bool m2, bool m3, bool m4,
                            bool day_not_date) noexcept {
-        if (m2 && m3 && m4)   return alarm2_match_mode::once_per_minute;
-        if (!m2 && m3 && m4)  return alarm2_match_mode::minutes;
-        if (!m2 && !m3 && m4) return alarm2_match_mode::hours_minutes;
+        if (m2 && m3 && m4)
+            return alarm2_match_mode::once_per_minute;
+        if (!m2 && m3 && m4)
+            return alarm2_match_mode::minutes;
+        if (!m2 && !m3 && m4)
+            return alarm2_match_mode::hours_minutes;
         if (day_not_date)
             return alarm2_match_mode::day_of_week_hours_minutes;
         return alarm2_match_mode::date_hours_minutes;
@@ -1195,19 +1289,33 @@ private:
 
     bool modify_control_bit(uint8_t bit_position, bool set) noexcept {
         auto current = read_register(register_address::control);
-        if (!current) return false;
+        if (!current) {
+            return false;
+        }
+
         auto v = *current;
-        if (set) v = static_cast<uint8_t>(v |  (1u << bit_position));
-        else     v = static_cast<uint8_t>(v & ~(1u << bit_position));
+        if (set) {
+            v = static_cast<uint8_t>(v | (1u << bit_position));
+        } else {
+            v = static_cast<uint8_t>(v & ~(1u << bit_position));
+        }
+
         return write_register(register_address::control, v);
     }
 
     bool modify_status_bit(uint8_t bit_position, bool set) noexcept {
         auto current = read_register(register_address::status);
-        if (!current) return false;
+        if (!current) {
+            return false;
+        }
+
         auto v = *current;
-        if (set) v = static_cast<uint8_t>(v |  (1u << bit_position));
-        else     v = static_cast<uint8_t>(v & ~(1u << bit_position));
+        if (set) {
+            v = static_cast<uint8_t>(v | (1u << bit_position));
+        } else {
+            v = static_cast<uint8_t>(v & ~(1u << bit_position));
+        }
+
         return write_register(register_address::status, v);
     }
 
@@ -1221,11 +1329,11 @@ private:
 
     bool read_registers(register_address reg, uint8_t *out,
                         size_t count) const noexcept {
-        m_last_error      = err::ok;
-        auto reg_byte     = static_cast<uint8_t>(reg);
-        auto status_code  = m_bus.write_read(&reg_byte, sizeof(reg_byte),
-                                             out, count,
-                                             0, 0, false, true);
+        m_last_error = err::ok;
+        auto reg_byte = static_cast<uint8_t>(reg);
+        auto status_code = m_bus.write_read(&reg_byte, sizeof(reg_byte), out,
+                                            count, 0, 0, false, true);
+
         if (status_code != CY_RSLT_SUCCESS) {
             m_last_error = err::transport_failure;
             return false;
@@ -1249,12 +1357,12 @@ private:
         }
 
         auto buf = std::array<uint8_t, MAX_CONTIGUOUS_BYTES>{};
-        buf[0]   = static_cast<uint8_t>(reg);
+        buf[0] = static_cast<uint8_t>(reg);
         for (auto i = size_t{0}; i < count; ++i) {
             buf[i + 1] = data[i];
         }
 
-        m_last_error     = err::ok;
+        m_last_error = err::ok;
         auto status_code = m_bus.write(buf.data(), count + 1, 0, true);
         if (status_code != CY_RSLT_SUCCESS) {
             m_last_error = err::transport_failure;

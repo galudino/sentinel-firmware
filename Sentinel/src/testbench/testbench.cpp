@@ -46,6 +46,7 @@ extern "C" {
 
 ///< Tests
 #include "sentinel_test_bme280.hpp"
+#include "sentinel_test_ds3231.hpp"
 
 ///< Utilities
 #include "sentinel_firmware_version.hpp"
@@ -68,10 +69,23 @@ namespace sentinel::testbench {
 static inline void create_tests() {
     BaseType_t rtos_result{};
 
+    // NOTE: To exercise a single chip's tests in isolation, comment out
+    // the task_create() calls for the others below. A unified test-
+    // selection menu over the retarget-io UART is planned but not yet
+    // wired up.
+
+    /*
     rtos_result = test::bme280::task_create();
 
     if (rtos_result != pdPASS) {
         cy_log_msg(CYLF_DEF, CY_LOG_ERR, "BME280 test task creation failed\n");
+    }
+    */
+
+    rtos_result = test::ds3231::task_create();
+
+    if (rtos_result != pdPASS) {
+        cy_log_msg(CYLF_DEF, CY_LOG_ERR, "DS3231 test task creation failed\n");
     }
 }
 
