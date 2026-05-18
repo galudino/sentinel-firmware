@@ -44,7 +44,7 @@ extern "C" {
 #pragma GCC diagnostic pop
 
 #include "sentinel_build_time.hpp"
-#include "sentinel_cyhal_i2c_transport.hpp"
+#include "sentinel_cyhal_i2c_bus_transport.hpp"
 #include "sentinel_debug_print.hpp"
 #include "sentinel_ds3231.hpp"
 #include "sentinel_resource.hpp"
@@ -58,24 +58,23 @@ extern "C" {
 namespace {
 
 ///
-/// \brief Bus instance used by every DS3231 test.
+/// \brief Bus-arbitrated transport instance used by every DS3231 test.
 ///
-/// \details Constructed once at translation-unit scope so each test can
-///          do \c sentinel::ds3231<...> \c rtc(ds3231_bus); without
-///          re-wiring CYHAL handles. Storage lives in BSS until
-///          \c peripheral_initialize() populates
-///          \c sentinel::resource::cybsp_i2c, so the transport itself is
-///          inert until the testbench has finished hardware init. Uses
-///          the DS3231 primary address (0x68); shares the underlying
-///          CYHAL I²C peripheral with the BME280 test, which targets
-///          0x76 — each test's transport instance carries its own
-///          target-address member.
+/// \details Routes through \c sentinel::resource::cybsp_i2c_bus (the
+///          FreeRTOS bus-arbiter task) so this test's transactions
+///          serialize cleanly with any other tasks sharing the same
+///          physical I²C bus — notably the BME280 test, which targets
+///          0x76 on the same SCB. Each transport instance carries its
+///          own target-address member, so the arbiter routes requests
+///          to the correct slave automatically. Storage lives in BSS
+///          until \c peripheral_initialize() spawns the arbiter; the
+///          transport itself is inert until then.
 ///
-sentinel::cyhal_i2c_transport
-    ds3231_bus(&sentinel::resource::cybsp_i2c,
-               static_cast<uint16_t>(
-                   sentinel::ds3231<
-                       sentinel::cyhal_i2c_transport>::slave_address::primary));
+sentinel::cyhal_i2c_bus_transport ds3231_bus(
+    sentinel::resource::cybsp_i2c_bus,
+    static_cast<uint16_t>(
+        sentinel::ds3231<
+            sentinel::cyhal_i2c_bus_transport>::slave_address::primary));
 
 ///
 /// \brief Yield long enough for the BLE debug ring buffer to drain.
@@ -126,7 +125,7 @@ inline const char *day_name(uint8_t iso_dow) noexcept {
 ///        by every test, to keep the long template name out of every
 ///        function body.
 ///
-using ds3231_t = sentinel::ds3231<sentinel::cyhal_i2c_transport>;
+using ds3231_t = sentinel::ds3231<sentinel::cyhal_i2c_bus_transport>;
 
 } // namespace
 

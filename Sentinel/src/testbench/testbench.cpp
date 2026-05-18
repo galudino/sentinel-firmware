@@ -74,13 +74,11 @@ static inline void create_tests() {
     // selection menu over the retarget-io UART is planned but not yet
     // wired up.
 
-    /*
     rtos_result = test::bme280::task_create();
 
     if (rtos_result != pdPASS) {
         cy_log_msg(CYLF_DEF, CY_LOG_ERR, "BME280 test task creation failed\n");
     }
-    */
 
     rtos_result = test::ds3231::task_create();
 

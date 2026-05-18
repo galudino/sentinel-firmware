@@ -48,7 +48,7 @@ extern "C" {
 #pragma GCC diagnostic pop
 
 #include "sentinel_bme280.hpp"
-#include "sentinel_cyhal_i2c_transport.hpp"
+#include "sentinel_cyhal_i2c_bus_transport.hpp"
 #include "sentinel_debug_print.hpp"
 #include "sentinel_resource.hpp"
 #include "sentinel_test_bme280.hpp"
@@ -60,17 +60,18 @@ extern "C" {
 namespace {
 
 ///
-/// \brief Bus instance used by every BME280 test
+/// \brief Bus-arbitrated transport instance used by every BME280 test.
 ///
-/// \details Constructed once at translation-unit scope so each individual
-///          test can simply do \c sentinel::bme280<...> \c sensor(bme280_bus);
-///          without re-wiring CYHAL handles. Storage lives in BSS until
-///          \c peripheral_initialize() populates
-///          \c sentinel::resource::cybsp_i2c, so the transport itself is
-///          inert until the testbench has finished hardware init.
+/// \details Routes through \c sentinel::resource::cybsp_i2c_bus (the
+///          FreeRTOS bus-arbiter task) so this test's transactions
+///          serialize cleanly with any other tasks sharing the same
+///          physical I²C bus — notably the DS3231 test. Storage lives in
+///          BSS until \c peripheral_initialize() spawns the arbiter; the
+///          transport itself is inert until the testbench has finished
+///          hardware init.
 ///
-sentinel::cyhal_i2c_transport bme280_bus(&sentinel::resource::cybsp_i2c,
-                                         BME280_I2C_ADDR_PRIM);
+sentinel::cyhal_i2c_bus_transport
+    bme280_bus(sentinel::resource::cybsp_i2c_bus, BME280_I2C_ADDR_PRIM);
 
 ///
 /// \brief Yield long enough for the BLE debug ring buffer to drain
@@ -136,7 +137,7 @@ void sentinel::test::bme280::all() {
 // ============================================================================
 
 void sentinel::test::bme280::chip_id_read() {
-    auto sensor = sentinel::bme280_i2c<sentinel::cyhal_i2c_transport>(
+    auto sensor = sentinel::bme280_i2c<sentinel::cyhal_i2c_bus_transport>(
         bme280_bus, BME280_I2C_ADDR_PRIM);
     logi("BME280 chip_id_read: sensor init OK", "");
     yield_for_debug_drain(200);
@@ -172,7 +173,7 @@ void sentinel::test::bme280::chip_id_read() {
 // ============================================================================
 
 void sentinel::test::bme280::soft_reset() {
-    auto sensor = sentinel::bme280_i2c<sentinel::cyhal_i2c_transport>(
+    auto sensor = sentinel::bme280_i2c<sentinel::cyhal_i2c_bus_transport>(
         bme280_bus, BME280_I2C_ADDR_PRIM);
     logi("soft_reset: sensor init OK", "");
     yield_for_debug_drain(200);
@@ -212,7 +213,7 @@ void sentinel::test::bme280::soft_reset() {
 // ============================================================================
 
 void sentinel::test::bme280::settings_round_trip() {
-    auto sensor = sentinel::bme280_i2c<sentinel::cyhal_i2c_transport>(
+    auto sensor = sentinel::bme280_i2c<sentinel::cyhal_i2c_bus_transport>(
         bme280_bus, BME280_I2C_ADDR_PRIM);
     logi("settings_round_trip: sensor init OK", "");
     yield_for_debug_drain(200);
@@ -292,7 +293,7 @@ void sentinel::test::bme280::settings_round_trip() {
 // ============================================================================
 
 void sentinel::test::bme280::sensor_mode_transitions() {
-    auto sensor = sentinel::bme280_i2c<sentinel::cyhal_i2c_transport>(
+    auto sensor = sentinel::bme280_i2c<sentinel::cyhal_i2c_bus_transport>(
         bme280_bus, BME280_I2C_ADDR_PRIM);
     logi("sensor_mode_transitions: sensor init OK", "");
     yield_for_debug_drain(200);
@@ -370,7 +371,7 @@ void sentinel::test::bme280::sensor_mode_transitions() {
 // ============================================================================
 
 [[noreturn]] void sentinel::test::bme280::continuous_read() {
-    auto sensor = sentinel::bme280_i2c<sentinel::cyhal_i2c_transport>(
+    auto sensor = sentinel::bme280_i2c<sentinel::cyhal_i2c_bus_transport>(
         bme280_bus, BME280_I2C_ADDR_PRIM);
     logi("continuous_read: sensor init OK", "");
     cy_log_msg(CYLF_DEF, CY_LOG_INFO,
