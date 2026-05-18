@@ -15,7 +15,7 @@
 ///
 /// \author  galudino
 /// \date    2026-05-15
-/// \version 1.1 - Added bus-arbiter task singletons alongside CYHAL handles
+/// \version 1.2 - Added CYBSP_SPI handle and cybsp_spi_bus arbiter singleton
 ///
 
 #ifndef SENTINEL_RESOURCE_HPP
@@ -31,6 +31,7 @@ extern "C" {
 #pragma GCC diagnostic pop
 
 #include "sentinel_task_i2c_bus.hpp"
+#include "sentinel_task_spi_bus.hpp"
 
 namespace sentinel::resource {
 
@@ -39,6 +40,8 @@ inline cyhal_pwm_t led2;
 inline cyhal_pwm_t led3;
 
 inline cyhal_i2c_t cybsp_i2c;
+
+inline cyhal_spi_t cybsp_spi;
 
 ///
 /// \brief Bus-arbiter task singleton for \ref cybsp_i2c.
@@ -53,12 +56,24 @@ inline cyhal_i2c_t cybsp_i2c;
 inline sentinel::task::i2c_bus cybsp_i2c_bus{&cybsp_i2c, "I2C Bus"};
 
 ///
+/// \brief Bus-arbiter task singleton for \ref cybsp_spi.
+///
+/// \details One FreeRTOS task owns the underlying CYHAL SPI handle and
+///          serialises access for every requester that goes through
+///          \c sentinel::cyhal_spi_bus_transport. Construct here (file-
+///          scope inline so storage is in BSS) but call
+///          \ref cybsp_spi_bus.task_create() during system init —
+///          \ref peripheral_initialize handles that.
+///
+inline sentinel::task::spi_bus cybsp_spi_bus{&cybsp_spi, "SPI Bus"};
+
+///
 /// \brief Initialize peripheral resources from Device Configurator.
 ///
 /// \details Initializes CYHAL handles from the Device Configurator
-///          generated configurations, then spawns the bus-arbiter task
+///          generated configurations, then spawns the bus-arbiter tasks
 ///          so any subsequently-created driver/test task can begin
-///          submitting I²C requests immediately.
+///          submitting I²C or SPI requests immediately.
 ///
 inline void peripheral_initialize() noexcept {
     cyhal_pwm_init_cfg(&led1, &LED1_PWM_hal_config);
@@ -66,17 +81,23 @@ inline void peripheral_initialize() noexcept {
     cyhal_pwm_init_cfg(&led3, &LED3_PWM_hal_config);
 
     cyhal_i2c_init_cfg(&cybsp_i2c, &CYBSP_I2C_hal_config);
+    cyhal_spi_init_cfg(&cybsp_spi, &CYBSP_SPI_hal_config);
 
-    // Spawn the I²C bus-arbiter task. Failures here are unrecoverable —
-    // every driver downstream expects the arbiter to be running.
-    auto bus_rc = cybsp_i2c_bus.task_create();
-    configASSERT(bus_rc == pdPASS);
+    // Spawn the I²C and SPI bus-arbiter tasks. Failures here are
+    // unrecoverable — every driver downstream expects the arbiters to
+    // be running.
+    auto i2c_bus_rc = cybsp_i2c_bus.task_create();
+    configASSERT(i2c_bus_rc == pdPASS);
+
+    auto spi_bus_rc = cybsp_spi_bus.task_create();
+    configASSERT(spi_bus_rc == pdPASS);
 }
 
 ///
 /// \brief Release peripheral resources from Device Configurator.
 ///
 inline void peripheral_deinitialize() noexcept {
+    cyhal_spi_free(&cybsp_spi);
     cyhal_i2c_free(&cybsp_i2c);
 
     cyhal_pwm_free(&led3);
