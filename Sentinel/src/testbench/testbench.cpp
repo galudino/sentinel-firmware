@@ -47,6 +47,7 @@ extern "C" {
 ///< Tests
 #include "sentinel_test_bme280.hpp"
 #include "sentinel_test_ds3231.hpp"
+#include "sentinel_test_w25q128.hpp"
 
 ///< Utilities
 #include "sentinel_firmware_version.hpp"
@@ -84,6 +85,12 @@ static inline void create_tests() {
 
     if (rtos_result != pdPASS) {
         cy_log_msg(CYLF_DEF, CY_LOG_ERR, "DS3231 test task creation failed\n");
+    }
+
+    rtos_result = test::w25q128::task_create();
+
+    if (rtos_result != pdPASS) {
+        cy_log_msg(CYLF_DEF, CY_LOG_ERR, "W25Q128 test task creation failed\n");
     }
 }
 
