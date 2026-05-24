@@ -87,11 +87,13 @@ static inline void create_tests() {
         cy_log_msg(CYLF_DEF, CY_LOG_ERR, "DS3231 test task creation failed\n");
     }
 
+#ifdef CYBSP_SPI_HW
     rtos_result = test::w25q128::task_create();
 
     if (rtos_result != pdPASS) {
         cy_log_msg(CYLF_DEF, CY_LOG_ERR, "W25Q128 test task creation failed\n");
     }
+#endif
 }
 
 ///

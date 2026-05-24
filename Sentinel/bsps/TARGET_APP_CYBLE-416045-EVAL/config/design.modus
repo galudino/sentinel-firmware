@@ -137,8 +137,13 @@
                         <Alias value="CYBSP_D8"/>
                     </Aliases>
                 </Block>
-                <Block location="scb[1]"/>
-                <Block location="scb[8]"/>
+                <Block location="peri[0].div_8[5]"/>
+                <Block location="scb[2]">
+                    <Aliases>
+                        <Alias value="CYBSP_SPI"/>
+                    </Aliases>
+                </Block>
+                <Block location="scb[5]"/>
                 <Personality template="mxs40ble" version="1.1">
                     <Block location="bless[0]" locked="true">
                         <Aliases>
@@ -521,54 +526,6 @@
                         <Param id="startOnReset" value="true"/>
                     </Parameters>
                 </Personality>
-                <Personality template="spi" version="3.0">
-                    <Block location="scb[2]" locked="true">
-                        <Aliases>
-                            <Alias value="CYBSP_SPI"/>
-                        </Aliases>
-                    </Block>
-                    <Parameters>
-                        <Param id="ApiMode" value="HIGH_LEVEL"/>
-                        <Param id="BitsOrder" value="MSB_FIRST"/>
-                        <Param id="DataRate" value="100"/>
-                        <Param id="DeassertSelectLine" value="false"/>
-                        <Param id="DropOnParityError" value="false"/>
-                        <Param id="EnableFreeRunSclk" value="false"/>
-                        <Param id="EnableInputFilter" value="false"/>
-                        <Param id="EnableLateMisoSample" value="true"/>
-                        <Param id="EnableWakeup" value="false"/>
-                        <Param id="HoldDelay" value="false"/>
-                        <Param id="InterdataframeDelay" value="false"/>
-                        <Param id="IntrMasterSpiDone" value="false"/>
-                        <Param id="IntrRxFull" value="false"/>
-                        <Param id="IntrRxNotEmpty" value="false"/>
-                        <Param id="IntrRxOverflow" value="false"/>
-                        <Param id="IntrRxTrigger" value="false"/>
-                        <Param id="IntrRxUnderflow" value="false"/>
-                        <Param id="IntrSlaveBusError" value="false"/>
-                        <Param id="IntrTxEmpty" value="false"/>
-                        <Param id="IntrTxNotFull" value="false"/>
-                        <Param id="IntrTxOverflow" value="false"/>
-                        <Param id="IntrTxTrigger" value="false"/>
-                        <Param id="IntrTxUnderflow" value="false"/>
-                        <Param id="ModeUser" value="CY_SCB_SPI_MASTER"/>
-                        <Param id="OvsFactor" value="8"/>
-                        <Param id="Parity" value="CY_SCB_SPI_PARITY_NONE"/>
-                        <Param id="RxDataWidth" value="8"/>
-                        <Param id="RxTriggerLevel" value="63"/>
-                        <Param id="SclkModeUser" value="CY_SCB_SPI_CPHA0_CPOL0"/>
-                        <Param id="SetupDelay" value="false"/>
-                        <Param id="Ss0Polarity" value="CY_SCB_SPI_ACTIVE_LOW"/>
-                        <Param id="Ss1Polarity" value="CY_SCB_SPI_ACTIVE_LOW"/>
-                        <Param id="Ss2Polarity" value="CY_SCB_SPI_ACTIVE_LOW"/>
-                        <Param id="Ss3Polarity" value="CY_SCB_SPI_ACTIVE_LOW"/>
-                        <Param id="SubModeUser" value="CY_SCB_SPI_MOTOROLA"/>
-                        <Param id="T_DSO_INTERNAL" value="20"/>
-                        <Param id="TxDataWidth" value="8"/>
-                        <Param id="TxTriggerLevel" value="63"/>
-                        <Param id="inFlash" value="true"/>
-                    </Parameters>
-                </Personality>
                 <Personality template="i2c" version="4.0">
                     <Block location="scb[6]" locked="true">
                         <Aliases>
@@ -849,22 +806,6 @@
                     <Port name="scb[6].i2c_sda[0]"/>
                 </Net>
                 <Net>
-                    <Port name="ioss[0].port[9].pin[0].digital_inout[0]"/>
-                    <Port name="scb[2].spi_mosi[0]"/>
-                </Net>
-                <Net>
-                    <Port name="ioss[0].port[9].pin[1].digital_inout[0]"/>
-                    <Port name="scb[2].spi_miso[0]"/>
-                </Net>
-                <Net>
-                    <Port name="ioss[0].port[9].pin[2].digital_inout[0]"/>
-                    <Port name="scb[2].spi_clk[0]"/>
-                </Net>
-                <Net>
-                    <Port name="ioss[0].port[9].pin[3].digital_inout[0]"/>
-                    <Port name="scb[2].spi_select0[0]"/>
-                </Net>
-                <Net>
                     <Port name="ioss[0].port[9].pin[4].digital_out[0]"/>
                     <Port name="tcpwm[1].cnt[0].line[0]"/>
                 </Net>
@@ -875,10 +816,6 @@
                 <Net>
                     <Port name="ioss[0].port[9].pin[6].digital_out[0]"/>
                     <Port name="tcpwm[1].cnt[1].line[0]"/>
-                </Net>
-                <Net>
-                    <Port name="peri[0].div_8[0].clk[0]"/>
-                    <Port name="scb[2].clock[0]"/>
                 </Net>
                 <Net>
                     <Port name="peri[0].div_8[1].clk[0]"/>

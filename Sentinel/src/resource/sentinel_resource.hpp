@@ -81,7 +81,9 @@ inline void peripheral_initialize() noexcept {
     cyhal_pwm_init_cfg(&led3, &LED3_PWM_hal_config);
 
     cyhal_i2c_init_cfg(&cybsp_i2c, &CYBSP_I2C_hal_config);
+#ifdef CYBSP_SPI_HW
     cyhal_spi_init_cfg(&cybsp_spi, &CYBSP_SPI_hal_config);
+#endif
 
     // Spawn the I²C and SPI bus-arbiter tasks. Failures here are
     // unrecoverable — every driver downstream expects the arbiters to
@@ -89,15 +91,19 @@ inline void peripheral_initialize() noexcept {
     auto i2c_bus_rc = cybsp_i2c_bus.task_create();
     configASSERT(i2c_bus_rc == pdPASS);
 
+#ifdef CYBSP_SPI_HW
     auto spi_bus_rc = cybsp_spi_bus.task_create();
     configASSERT(spi_bus_rc == pdPASS);
+#endif
 }
 
 ///
 /// \brief Release peripheral resources from Device Configurator.
 ///
 inline void peripheral_deinitialize() noexcept {
+#ifdef CYBSP_SPI_HW
     cyhal_spi_free(&cybsp_spi);
+#endif
     cyhal_i2c_free(&cybsp_i2c);
 
     cyhal_pwm_free(&led3);
