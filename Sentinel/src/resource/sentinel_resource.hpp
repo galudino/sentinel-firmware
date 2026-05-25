@@ -26,6 +26,8 @@
 extern "C" {
 #include "cy_result.h"
 #include "cycfg_peripherals.h"
+#include "cycfg_pins.h"
+#include "cyhal_gpio.h"
 #include "cyhal_hw_types.h"
 }
 #pragma GCC diagnostic pop
@@ -66,6 +68,25 @@ inline sentinel::task::i2c_bus cybsp_i2c_bus{&cybsp_i2c, "I2C Bus"};
 ///          \ref peripheral_initialize handles that.
 ///
 inline sentinel::task::spi_bus cybsp_spi_bus{&cybsp_spi, "SPI Bus"};
+
+///
+/// \brief GPIO pin wired to the DS3231 INT/SQW output.
+///
+/// \details The DS3231 emits a 1 Hz square wave on this pin, which
+///          \ref sentinel::task::rtc_service takes as a falling-edge
+///          interrupt to refresh the firmware's notion of the current time
+///          once per second. P6[3] (Arduino header J2_4 / J6_4) is a free
+///          GPIO on the same port and VDDIO domain as the I²C bus, so it
+///          shares the DS3231's voltage domain and lands on the otherwise-
+///          idle port-6 GPIO interrupt vector.
+///
+///          The pin is owned by Device Configurator (alias \c CYBSP_RTC_SQW:
+///          input, pull-up). \c cybsp_init initializes and pin-reserves it,
+///          so the rtc_service task must NOT call \c cyhal_gpio_init on it —
+///          that would fail with an in-use error. The task only registers a
+///          callback and enables the falling-edge event.
+///
+inline constexpr cyhal_gpio_t rtc_sqw_pin = CYBSP_RTC_SQW;
 
 ///
 /// \brief Initialize peripheral resources from Device Configurator.

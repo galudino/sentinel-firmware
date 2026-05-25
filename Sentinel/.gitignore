@@ -27,6 +27,8 @@ build/
 Debug/
 Release/
 *_build/
+.ninja_log
+.ninja_deps
 
 # Eclipse IDE for ModusToolbox files. Comment those files if you want to track them
 .metadata/
