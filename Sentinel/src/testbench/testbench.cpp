@@ -43,6 +43,7 @@ extern "C" {
 ///< Tasks
 #include "sentinel_task_battery_service.hpp"
 #include "sentinel_task_debug_stream.hpp"
+#include "sentinel_task_rtc_service.hpp"
 
 ///< Tests
 #include "sentinel_test_bme280.hpp"
@@ -98,6 +99,12 @@ static inline void create_tasks() {
     if (rtos_result != pdPASS) {
         cy_log_msg(CYLF_DEF, CY_LOG_ERR,
                    "Battery service task creation failed\n");
+    }
+
+    rtos_result = sentinel::task::rtc_service::task_create();
+
+    if (rtos_result != pdPASS) {
+        cy_log_msg(CYLF_DEF, CY_LOG_ERR, "RTC service task creation failed\n");
     }
 }
 
