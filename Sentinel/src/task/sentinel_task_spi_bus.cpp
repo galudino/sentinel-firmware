@@ -55,7 +55,7 @@ BaseType_t spi_bus::task_create(UBaseType_t priority, uint16_t stack_words,
     if (rc != pdPASS) {
         vQueueDelete(m_request_queue);
         m_request_queue = nullptr;
-        m_task_handle   = nullptr;
+        m_task_handle = nullptr;
         return rc;
     }
 
@@ -128,16 +128,16 @@ void spi_bus::task_trampoline(void *arg) {
 // ============================================================================
 
 spi_response spi_bus::process(const spi_request &request) noexcept {
-    auto response      = spi_response{};
-    response.success   = false;
-    response.cy_status = CY_RSLT_TYPE_ERROR;
+    auto response = spi_response{};
+    response.success = false;
+    response.cy_status = cy_en_rslt_type_t::CY_RSLT_TYPE_ERROR;
 
     auto const has_tx = !request.tx.empty();
     auto const has_rx = !request.rx.empty();
 
     // No-op request.
     if (!has_tx && !has_rx) {
-        response.success   = true;
+        response.success = true;
         response.cy_status = CY_RSLT_SUCCESS;
         return response;
     }
@@ -145,8 +145,8 @@ spi_response spi_bus::process(const spi_request &request) noexcept {
     // Route this transaction to the requested slave-select line. The SCB
     // hardware will assert this SS pin at the start of the next transfer
     // and deassert it at the end automatically.
-    auto select_status = cyhal_spi_select_active_ssel(m_spi_object,
-                                                      request.ssel);
+    auto select_status =
+        cyhal_spi_select_active_ssel(m_spi_object, request.ssel);
     if (select_status != CY_RSLT_SUCCESS) {
         response.cy_status = select_status;
         return response;
@@ -158,13 +158,13 @@ spi_response spi_bus::process(const spi_request &request) noexcept {
         //   tx + no rx  → write-only
         //   no tx + rx  → read-only (write_fill clocked on MOSI)
         //   no tx + no rx → caught above as a no-op
-        auto const *tx_ptr  = has_tx ? request.tx.data() : nullptr;
-        auto        tx_size = has_tx ? request.tx.size() : size_t{0};
-        auto       *rx_ptr  = has_rx ? request.rx.data() : nullptr;
-        auto        rx_size = has_rx ? request.rx.size() : size_t{0};
+        auto const *tx_ptr = has_tx ? request.tx.data() : nullptr;
+        auto tx_size = has_tx ? request.tx.size() : size_t{0};
+        auto *rx_ptr = has_rx ? request.rx.data() : nullptr;
+        auto rx_size = has_rx ? request.rx.size() : size_t{0};
 
-        auto status = cyhal_spi_transfer(m_spi_object, tx_ptr, tx_size,
-                                         rx_ptr, rx_size, request.write_fill);
+        auto status = cyhal_spi_transfer(m_spi_object, tx_ptr, tx_size, rx_ptr,
+                                         rx_size, request.write_fill);
 
         response.cy_status = status;
 

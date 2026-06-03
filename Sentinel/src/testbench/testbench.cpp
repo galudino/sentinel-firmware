@@ -76,25 +76,30 @@ static inline void create_tests() {
     // selection menu over the retarget-io UART is planned but not yet
     // wired up.
 
+#ifdef CYBSP_I2C_HW
     rtos_result = test::bme280::task_create();
 
     if (rtos_result != pdPASS) {
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR, "BME280 test task creation failed\n");
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
+                   "BME280 test task creation failed\n");
     }
 
     rtos_result = test::ds3231::task_create();
 
     if (rtos_result != pdPASS) {
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR, "DS3231 test task creation failed\n");
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
+                   "DS3231 test task creation failed\n");
     }
+#endif /* CYBSP_I2C_HW */
 
 #ifdef CYBSP_SPI_HW
     rtos_result = test::w25q128::task_create();
 
     if (rtos_result != pdPASS) {
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR, "W25Q128 test task creation failed\n");
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
+                   "W25Q128 test task creation failed\n");
     }
-#endif
+#endif /* CYBSP_SPI_HW */
 }
 
 ///
@@ -106,14 +111,15 @@ static inline void create_tasks() {
     rtos_result = sentinel::task::battery_service::task_create();
 
     if (rtos_result != pdPASS) {
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
                    "Battery service task creation failed\n");
     }
 
     rtos_result = sentinel::task::rtc_service::task_create();
 
     if (rtos_result != pdPASS) {
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR, "RTC service task creation failed\n");
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
+                   "RTC service task creation failed\n");
     }
 }
 
@@ -138,10 +144,10 @@ static inline void initialize() {
                         CY_RETARGET_IO_BAUDRATE);
 
     // default for all logging to WARNING.
-    cy_log_init(CY_LOG_INFO, NULL, NULL);
+    cy_log_init(CY_LOG_LEVEL_T::CY_LOG_INFO, nullptr, nullptr);
 
     // Set default log levels.
-    cy_ota_set_log_level(CY_LOG_INFO);
+    cy_ota_set_log_level(CY_LOG_LEVEL_T::CY_LOG_INFO);
 
     // Initialize QuadSPI if using external flash.
 #if defined(OTA_USE_EXTERNAL_FLASH)
@@ -153,19 +159,19 @@ static inline void initialize() {
 #endif
 
 #ifdef TEST_REVERT
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
+    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                "======================TESTING "
                "REVERT==========================\r\n");
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
+    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                "==========================================================="
                "====\r\n");
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
+    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                "==========================================================="
                "====\r\n");
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
+    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                "=========================== Rebooting "
                "!!!======================\r\n");
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
+    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                "==========================================================="
                "====\r\n");
     NVIC_SystemReset();
@@ -193,18 +199,19 @@ static inline void initialize() {
     auto wiced_result = ble_context_object.stack_initialize();
 
     if (wiced_result != wiced_result_t::WICED_BT_SUCCESS) {
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
                    "Bluetooth Stack Initialization failed!! \r\n");
         CY_ASSERT(false);
     }
 
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
+    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                "sentinel-testbench =============================\r\n");
     cy_log_msg(
-        CYLF_DEF, CY_LOG_INFO, "Application version: %d.%d.%d.%d\n",
-        current_firmware_version.major(), current_firmware_version.minor(),
-        current_firmware_version.patch(), current_firmware_version.build());
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
+        CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
+        "Application version: %d.%d.%d.%d\n", current_firmware_version.major(),
+        current_firmware_version.minor(), current_firmware_version.patch(),
+        current_firmware_version.build());
+    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                "================================================\n\n");
 }
 } // namespace sentinel::testbench

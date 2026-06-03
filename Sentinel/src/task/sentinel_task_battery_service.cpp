@@ -74,7 +74,8 @@ void battery_service::task_function(void *task_parameter) {
     unused(task_parameter);
 
     // Initialize the HAL timer used to count seconds
-    auto result = cyhal_timer_init(&timer, NC, nullptr);
+    auto result = cyhal_timer_init(
+        &timer, cyhal_gpio_psoc6_01_116_bga_ble_t::NC, nullptr);
 
     if (result != CY_RSLT_SUCCESS) {
         CY_ASSERT(false);
