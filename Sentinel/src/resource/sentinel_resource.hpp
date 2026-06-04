@@ -24,6 +24,7 @@
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
 extern "C" {
+#include "cy_log.h"
 #include "cy_result.h"
 #include "cycfg_peripherals.h"
 #include "cycfg_pins.h"
@@ -97,34 +98,100 @@ inline constexpr cyhal_gpio_t rtc_sqw_pin = CYBSP_RTC_SQW;
 ///          submitting I²C or SPI requests immediately.
 ///
 inline void peripheral_initialize() noexcept {
-    cyhal_pwm_init_cfg(&led1, &LED1_PWM_hal_config);
-    cyhal_pwm_init_cfg(&led2, &LED2_PWM_hal_config);
-    cyhal_pwm_init_cfg(&led3, &LED3_PWM_hal_config);
 
-    cyhal_i2c_init_cfg(&cybsp_i2c, &CYBSP_I2C_hal_config);
+#ifdef CYBSP_LED1_PWM_HW
+    auto led1_config_result =
+        cyhal_pwm_init_cfg(&led1, &CYBSP_LED1_PWM_hal_config);
+    configASSERT(led1_config_result == CY_RSLT_SUCCESS);
+    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
+               "LED1 PWM init result: %d\n",
+               static_cast<int>(led1_config_result));
+#endif /* CYBSP_LED1_PWM_HW */
+
+#ifdef CYBSP_LED2_PWM_HW
+    auto led2_config_result =
+        cyhal_pwm_init_cfg(&led2, &CYBSP_LED2_PWM_hal_config);
+    configASSERT(led2_config_result == CY_RSLT_SUCCESS);
+    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
+               "LED2 PWM init result: %d\n",
+               static_cast<int>(led2_config_result));
+#endif /* CYBSP_LED2_PWM_HW */
+
+#ifdef CYBSP_LED3_PWM_HW
+    auto led3_config_result =
+        cyhal_pwm_init_cfg(&led3, &CYBSP_LED3_PWM_hal_config);
+    configASSERT(led3_config_result == CY_RSLT_SUCCESS);
+    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
+               "LED3 PWM init result: %d\n",
+               static_cast<int>(led3_config_result));
+#endif /* CYBSP_LED3_PWM_HW */
+
+    cyhal_pwm_set_duty_cycle(&led1, 100, 1000); // R full on
+    cyhal_pwm_set_duty_cycle(&led2, 0, 1000);
+    cyhal_pwm_set_duty_cycle(&led3, 0, 1000);
+
+#ifdef CYBSP_I2C_HW
+    auto i2c_config_result =
+        cyhal_i2c_init_cfg(&cybsp_i2c, &CYBSP_I2C_hal_config);
+    configASSERT(i2c_config_result == CY_RSLT_SUCCESS);
+    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
+               "I2C init result: %d\n", static_cast<int>(i2c_config_result));
+#endif /* CYBSP_I2C_HW */
+
+    cyhal_pwm_set_duty_cycle(&led1, 0, 1000); // G
+    cyhal_pwm_set_duty_cycle(&led2, 100, 1000);
+
 #ifdef CYBSP_SPI_HW
-    cyhal_spi_init_cfg(&cybsp_spi, &CYBSP_SPI_hal_config);
-#endif
+    auto spi_config_result =
+        cyhal_spi_init_cfg(&cybsp_spi, &CYBSP_SPI_hal_config);
+    configASSERT(spi_config_result == CY_RSLT_SUCCESS);
+    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
+               "SPI init result: %d\n", static_cast<int>(spi_config_result));
+#endif /* CYBSP_SPI_HW */
 
-    // Spawn the I²C and SPI bus-arbiter tasks. Failures here are
-    // unrecoverable — every driver downstream expects the arbiters to
+    cyhal_pwm_set_duty_cycle(&led2, 0, 1000); // B
+    cyhal_pwm_set_duty_cycle(&led3, 100, 1000);
+
+#ifdef CYBSP_I2C_HW
+    // Spawn the I²C bus-arbiter task. Failures here are
+    // unrecoverable — every driver downstream expects the arbiter to
     // be running.
-    auto i2c_bus_rc = cybsp_i2c_bus.task_create();
-    configASSERT(i2c_bus_rc == pdPASS);
+    auto i2c_bus_task_create_return_code = cybsp_i2c_bus.task_create();
+    configASSERT(i2c_bus_task_create_return_code == pdPASS);
+    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
+               "I2C bus task create result passed: %s\n",
+               static_cast<int>(i2c_bus_task_create_return_code) ? "true"
+                                                                 : "false");
+#endif /* CYBSP_I2C_HW */
+
+    cyhal_pwm_set_duty_cycle(
+        &led3, 0,
+        1000); // all off — reached after I²C init but before bus task creation
+
+    cyhal_pwm_set_duty_cycle(&led1, 100, 1000); // R+B = magenta
 
 #ifdef CYBSP_SPI_HW
-    auto spi_bus_rc = cybsp_spi_bus.task_create();
-    configASSERT(spi_bus_rc == pdPASS);
-#endif
+    // Spawn the SPI bus-arbiter task. Failures here are
+    // unrecoverable — every driver downstream expects the arbiter to
+    // be running.
+    auto spi_bus_task_create_return_code = cybsp_spi_bus.task_create();
+    configASSERT(spi_bus_task_create_return_code == pdPASS);
+    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
+               "SPI bus task create result passed: %s\n",
+               static_cast<int>(spi_bus_task_create_return_code) ? "true"
+                                                                 : "false");
+#endif /* CYBSP_SPI_HW */
+
+    cyhal_pwm_set_duty_cycle(&led2, 100,
+                             1000); // white again — but now reached
 }
 
 ///
 /// \brief Release peripheral resources from Device Configurator.
 ///
 inline void peripheral_deinitialize() noexcept {
-#ifdef CYBSP_SPI_HW
     cyhal_spi_free(&cybsp_spi);
-#endif
+
     cyhal_i2c_free(&cybsp_i2c);
 
     cyhal_pwm_free(&led3);
