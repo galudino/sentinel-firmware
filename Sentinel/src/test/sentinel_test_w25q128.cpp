@@ -128,11 +128,6 @@ void sentinel::test::w25q128::presence_check() {
     logi("W25Q128 presence_check: driver constructed", "");
     yield_for_debug_drain(200);
 
-    auto raw = uint32_t{};
-    raw = Cy_GPIO_Read(GPIO_PRT10, 3);
-    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-               "[%s] CS idle level: %u\n", __func__, raw, raw);
-
     auto jedec = flash.jedec_id();
 
     if (!jedec) {
@@ -155,21 +150,18 @@ void sentinel::test::w25q128::presence_check() {
          static_cast<int>(jedec->memory_type),
          static_cast<int>(jedec->capacity));
 
-    auto const expected = w25q128_t::jedec_id_data{
-        w25q128_t::JEDEC_MANUFACTURER_ID, w25q128_t::JEDEC_MEMORY_TYPE,
-        w25q128_t::JEDEC_CAPACITY};
-    if (*jedec != expected) {
-        loge("presence_check FAIL: JEDEC mismatch (expected 0x%02X 0x%02X "
-             "0x%02X)",
-             static_cast<int>(expected.manufacturer),
-             static_cast<int>(expected.memory_type),
-             static_cast<int>(expected.capacity));
+    if (!w25q128_t::is_known_jedec(*jedec)) {
+        loge("presence_check FAIL: JEDEC 0x%02X 0x%02X 0x%02X not in "
+             "known-good list",
+             static_cast<int>(jedec->manufacturer),
+             static_cast<int>(jedec->memory_type),
+             static_cast<int>(jedec->capacity));
         cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "W25Q128 presence_check FAIL: JEDEC mismatch (expected "
-                   "0x%02X 0x%02X 0x%02X)\n",
-                   static_cast<int>(expected.manufacturer),
-                   static_cast<int>(expected.memory_type),
-                   static_cast<int>(expected.capacity));
+                   "W25Q128 presence_check FAIL: JEDEC 0x%02X 0x%02X 0x%02X "
+                   "not in known-good list\n",
+                   static_cast<int>(jedec->manufacturer),
+                   static_cast<int>(jedec->memory_type),
+                   static_cast<int>(jedec->capacity));
         return;
     }
 
@@ -486,10 +478,9 @@ void sentinel::test::w25q128::power_down_release() {
     // tDP (CS high to power-down) = 3 µs typical. Wait a bit longer.
     vTaskDelay(pdMS_TO_TICKS(1));
 
-    // 2. Probe with JEDEC — chip should be unresponsive (mismatched ID).
+    // 2. Probe with JEDEC — chip should be unresponsive (no known-good ID).
     auto probe = flash.jedec_id();
-    auto in_pd =
-        !probe || probe->manufacturer != w25q128_t::JEDEC_MANUFACTURER_ID;
+    auto in_pd = !probe || !w25q128_t::is_known_jedec(*probe);
     if (!in_pd) {
         logw("power_down_release: chip still answering JEDEC during PD "
              "(some W25Q variants ignore commands silently rather than "
@@ -523,9 +514,7 @@ void sentinel::test::w25q128::power_down_release() {
 
     // 4. JEDEC again to confirm full responsiveness.
     auto recheck = flash.jedec_id();
-    if (!recheck || recheck->manufacturer != w25q128_t::JEDEC_MANUFACTURER_ID ||
-        recheck->memory_type != w25q128_t::JEDEC_MEMORY_TYPE ||
-        recheck->capacity != w25q128_t::JEDEC_CAPACITY) {
+    if (!recheck || !w25q128_t::is_known_jedec(*recheck)) {
         loge("power_down_release FAIL: post-release JEDEC mismatch", "");
         cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "W25Q128 power_down_release FAIL: post-release JEDEC\n");

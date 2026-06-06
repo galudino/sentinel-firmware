@@ -98,7 +98,6 @@ inline constexpr cyhal_gpio_t rtc_sqw_pin = CYBSP_RTC_SQW;
 ///          submitting I²C or SPI requests immediately.
 ///
 inline void peripheral_initialize() noexcept {
-
 #ifdef CYBSP_LED1_PWM_HW
     auto led1_config_result =
         cyhal_pwm_init_cfg(&led1, &CYBSP_LED1_PWM_hal_config);
@@ -126,10 +125,6 @@ inline void peripheral_initialize() noexcept {
                static_cast<int>(led3_config_result));
 #endif /* CYBSP_LED3_PWM_HW */
 
-    cyhal_pwm_set_duty_cycle(&led1, 100, 1000); // R full on
-    cyhal_pwm_set_duty_cycle(&led2, 0, 1000);
-    cyhal_pwm_set_duty_cycle(&led3, 0, 1000);
-
 #ifdef CYBSP_I2C_HW
     auto i2c_config_result =
         cyhal_i2c_init_cfg(&cybsp_i2c, &CYBSP_I2C_hal_config);
@@ -138,9 +133,6 @@ inline void peripheral_initialize() noexcept {
                "I2C init result: %d\n", static_cast<int>(i2c_config_result));
 #endif /* CYBSP_I2C_HW */
 
-    cyhal_pwm_set_duty_cycle(&led1, 0, 1000); // G
-    cyhal_pwm_set_duty_cycle(&led2, 100, 1000);
-
 #ifdef CYBSP_SPI_HW
     auto spi_config_result =
         cyhal_spi_init_cfg(&cybsp_spi, &CYBSP_SPI_hal_config);
@@ -148,9 +140,6 @@ inline void peripheral_initialize() noexcept {
     cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                "SPI init result: %d\n", static_cast<int>(spi_config_result));
 #endif /* CYBSP_SPI_HW */
-
-    cyhal_pwm_set_duty_cycle(&led2, 0, 1000); // B
-    cyhal_pwm_set_duty_cycle(&led3, 100, 1000);
 
 #ifdef CYBSP_I2C_HW
     // Spawn the I²C bus-arbiter task. Failures here are
@@ -164,12 +153,6 @@ inline void peripheral_initialize() noexcept {
                                                                  : "false");
 #endif /* CYBSP_I2C_HW */
 
-    cyhal_pwm_set_duty_cycle(
-        &led3, 0,
-        1000); // all off — reached after I²C init but before bus task creation
-
-    cyhal_pwm_set_duty_cycle(&led1, 100, 1000); // R+B = magenta
-
 #ifdef CYBSP_SPI_HW
     // Spawn the SPI bus-arbiter task. Failures here are
     // unrecoverable — every driver downstream expects the arbiter to
@@ -181,22 +164,31 @@ inline void peripheral_initialize() noexcept {
                static_cast<int>(spi_bus_task_create_return_code) ? "true"
                                                                  : "false");
 #endif /* CYBSP_SPI_HW */
-
-    cyhal_pwm_set_duty_cycle(&led2, 100,
-                             1000); // white again — but now reached
 }
 
 ///
 /// \brief Release peripheral resources from Device Configurator.
 ///
 inline void peripheral_deinitialize() noexcept {
+#ifdef CYBSP_SPI_HW
     cyhal_spi_free(&cybsp_spi);
+#endif /* CYBSP_SPI_HW */
 
+#ifdef CYBSP_I2C_HW
     cyhal_i2c_free(&cybsp_i2c);
+#endif /* CYBSP_I2C_HW */
 
+#ifdef CYBSP_LED3_PWM_HW
     cyhal_pwm_free(&led3);
+#endif /* CYBSP_LED3_PWM_HW */
+
+#ifdef CYBSP_LED2_PWM_HW
     cyhal_pwm_free(&led2);
+#endif /* CYBSP_LED2_PWM_HW */
+
+#ifdef CYBSP_LED1_PWM_HW
     cyhal_pwm_free(&led1);
+#endif /* CYBSP_LED1_PWM_HW */
 }
 
 } // namespace sentinel::resource

@@ -271,7 +271,7 @@ public:
     /// \brief JEDEC ID payload returned by opcode 0x9F.
     ///
     struct jedec_id_data {
-        uint8_t manufacturer; ///< Expected: 0xEF (Winbond).
+        uint8_t manufacturer; ///< 0xEF Winbond, 0xC8 GigaDevice, etc.
         uint8_t memory_type;  ///< Expected: 0x40 (W25Q SPI family).
         uint8_t capacity;     ///< Expected: 0x18 (128 Mbit).
 
@@ -286,6 +286,46 @@ public:
             return !(a == b);
         }
     };
+
+    ///
+    /// \brief Known-good JEDEC ID triples for W25Q128-compatible parts.
+    ///
+    /// \details The W25Q128JV is heavily cloned. Parts from GigaDevice,
+    ///          XTX, Boya, ZBIT and others are functionally drop-in for
+    ///          the Winbond original — same command set, same address
+    ///          layout, same status-register semantics — but advertise
+    ///          their own manufacturer byte in the 0x9F JEDEC response.
+    ///          Memory-type (\c 0x40) and capacity (\c 0x18) are stable
+    ///          across the ecosystem; only the manufacturer byte varies.
+    ///
+    ///          Use \ref is_known_jedec to test whether an observed
+    ///          \ref jedec_id_data matches any entry in this list.
+    ///          Add new entries here as new clones are physically
+    ///          validated against the testbench.
+    ///
+    static constexpr std::array<jedec_id_data, 5> KNOWN_GOOD_JEDEC = {{
+        { 0xEF, 0x40, 0x18 }, ///< Winbond W25Q128JV (the original).
+        { 0xC8, 0x40, 0x18 }, ///< GigaDevice GD25Q128.
+        { 0x0B, 0x40, 0x18 }, ///< XTX XT25F128B.
+        { 0x68, 0x40, 0x18 }, ///< Boya BY25Q128AS.
+        { 0x5E, 0x40, 0x18 }, ///< ZBIT ZB25VQ128.
+    }};
+
+    ///
+    /// \brief Test whether a JEDEC ID triple matches any known-good entry.
+    ///
+    /// \param id JEDEC ID as returned by \ref jedec_id().
+    /// \return \c true if \p id matches any entry in
+    ///         \ref KNOWN_GOOD_JEDEC, \c false otherwise.
+    ///
+    static constexpr bool is_known_jedec(const jedec_id_data &id) noexcept {
+        for (auto const &entry : KNOWN_GOOD_JEDEC) {
+            if (id == entry) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     ///
     /// \brief Manufacturer + Device ID payload returned by opcode 0x90.
