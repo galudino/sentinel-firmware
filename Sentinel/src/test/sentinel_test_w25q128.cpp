@@ -49,7 +49,7 @@ namespace {
 ///          with SS1.
 ///
 sentinel::cyhal_spi_bus_transport w25q128_bus{sentinel::resource::cybsp_spi_bus,
-                                              CYBSP_SPI_CS};
+                                              CYBSP_SPI_FLASH_CS};
 
 ///
 /// \brief Yield long enough for the BLE debug ring buffer to drain.
