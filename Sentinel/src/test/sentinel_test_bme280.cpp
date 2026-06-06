@@ -70,8 +70,8 @@ namespace {
 ///          transport itself is inert until the testbench has finished
 ///          hardware init.
 ///
-sentinel::cyhal_i2c_bus_transport
-    bme280_bus(sentinel::resource::cybsp_i2c_bus, BME280_I2C_ADDR_PRIM);
+sentinel::cyhal_i2c_bus_transport bme280_bus(sentinel::resource::cybsp_i2c_bus,
+                                             BME280_I2C_ADDR_PRIM);
 
 ///
 /// \brief Yield long enough for the BLE debug ring buffer to drain
@@ -147,7 +147,7 @@ void sentinel::test::bme280::chip_id_read() {
     if (!id) {
         loge("chip_id_read FAIL: I2C error %d",
              static_cast<int>(sensor.last_error()));
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "BME280 chip_id_read FAIL: I2C error %d\n",
                    static_cast<int>(sensor.last_error()));
         return;
@@ -163,7 +163,7 @@ void sentinel::test::bme280::chip_id_read() {
 
     loge("chip_id_read FAIL: got 0x%02X, expected 0x%02X",
          static_cast<int>(*id), static_cast<int>(BME280_CHIP_ID));
-    cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                "BME280 chip_id_read FAIL: got 0x%02X, expected 0x%02X\n",
                static_cast<int>(*id), static_cast<int>(BME280_CHIP_ID));
 }
@@ -181,7 +181,8 @@ void sentinel::test::bme280::soft_reset() {
     if (!sensor.soft_reset()) {
         loge("soft_reset FAIL: reset call error %d",
              static_cast<int>(sensor.last_error()));
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR, "BME280 soft_reset FAIL: %d\n",
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
+                   "BME280 soft_reset FAIL: %d\n",
                    static_cast<int>(sensor.last_error()));
         return;
     }
@@ -198,7 +199,7 @@ void sentinel::test::bme280::soft_reset() {
         loge("soft_reset FAIL: post-reset chip ID 0x%02X (last_err=%d)",
              id ? static_cast<int>(*id) : 0xFF,
              static_cast<int>(sensor.last_error()));
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "BME280 soft_reset FAIL: post-reset chip ID 0x%02X\n",
                    id ? static_cast<int>(*id) : 0xFF);
         return;
@@ -223,7 +224,7 @@ void sentinel::test::bme280::settings_round_trip() {
     if (!original) {
         loge("settings_round_trip FAIL: initial get error %d",
              static_cast<int>(sensor.last_error()));
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "BME280 settings_round_trip FAIL: initial get %d\n",
                    static_cast<int>(sensor.last_error()));
         return;
@@ -247,7 +248,7 @@ void sentinel::test::bme280::settings_round_trip() {
     if (!sensor.set_sensor_settings(BME280_SEL_FILTER, mutated)) {
         loge("settings_round_trip FAIL: set error %d",
              static_cast<int>(sensor.last_error()));
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "BME280 settings_round_trip FAIL: set %d\n",
                    static_cast<int>(sensor.last_error()));
         return;
@@ -258,7 +259,7 @@ void sentinel::test::bme280::settings_round_trip() {
     if (!readback) {
         loge("settings_round_trip FAIL: readback error %d",
              static_cast<int>(sensor.last_error()));
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "BME280 settings_round_trip FAIL: readback %d\n",
                    static_cast<int>(sensor.last_error()));
         return;
@@ -268,7 +269,7 @@ void sentinel::test::bme280::settings_round_trip() {
         loge("settings_round_trip FAIL: filter %d != expected %d",
              static_cast<int>(readback->filter),
              static_cast<int>(target_filter));
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "BME280 settings_round_trip FAIL: filter %d != %d\n",
                    static_cast<int>(readback->filter),
                    static_cast<int>(target_filter));
@@ -304,7 +305,7 @@ void sentinel::test::bme280::sensor_mode_transitions() {
     if (!sensor.set_sensor_mode(BME280_POWERMODE_SLEEP)) {
         loge("sensor_mode_transitions FAIL: set SLEEP error %d",
              static_cast<int>(sensor.last_error()));
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "BME280 sensor_mode_transitions FAIL: set SLEEP %d\n",
                    static_cast<int>(sensor.last_error()));
         return;
@@ -316,7 +317,7 @@ void sentinel::test::bme280::sensor_mode_transitions() {
              "(last_err=%d)",
              mode ? static_cast<int>(*mode) : -1,
              static_cast<int>(sensor.last_error()));
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "BME280 sensor_mode_transitions FAIL: SLEEP readback %d\n",
                    mode ? static_cast<int>(*mode) : -1);
         return;
@@ -332,7 +333,7 @@ void sentinel::test::bme280::sensor_mode_transitions() {
     if (!sensor.set_sensor_mode(BME280_POWERMODE_FORCED)) {
         loge("sensor_mode_transitions FAIL: set FORCED error %d",
              static_cast<int>(sensor.last_error()));
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "BME280 sensor_mode_transitions FAIL: set FORCED %d\n",
                    static_cast<int>(sensor.last_error()));
         return;
@@ -342,7 +343,7 @@ void sentinel::test::bme280::sensor_mode_transitions() {
     if (!mode) {
         loge("sensor_mode_transitions FAIL: FORCED readback error %d",
              static_cast<int>(sensor.last_error()));
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "BME280 sensor_mode_transitions FAIL: FORCED readback %d\n",
                    static_cast<int>(sensor.last_error()));
         return;
@@ -353,7 +354,7 @@ void sentinel::test::bme280::sensor_mode_transitions() {
     if (*mode != BME280_POWERMODE_FORCED && *mode != BME280_POWERMODE_SLEEP) {
         loge("sensor_mode_transitions FAIL: unexpected mode %d after FORCED",
              static_cast<int>(*mode));
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "BME280 sensor_mode_transitions FAIL: post-FORCED mode %d\n",
                    static_cast<int>(*mode));
         return;
@@ -385,7 +386,7 @@ void sentinel::test::bme280::sensor_mode_transitions() {
         loge("continuous_read ABORT: chip ID 0x%02X (last_err=%d)",
              id ? static_cast<int>(*id) : 0xFF,
              static_cast<int>(sensor.last_error()));
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "BME280 continuous_read ABORT: chip ID 0x%02X\n",
                    id ? static_cast<int>(*id) : 0xFF);
         while (true) {
@@ -402,7 +403,7 @@ void sentinel::test::bme280::sensor_mode_transitions() {
         if (!sample) {
             loge("continuous_read: read error %d",
                  static_cast<int>(sensor.last_error()));
-            cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+            cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                        "BME280 continuous_read: read error %d\n",
                        static_cast<int>(sensor.last_error()));
         } else {
@@ -424,16 +425,18 @@ void sentinel::test::bme280::sensor_mode_transitions() {
             auto hum_frac = int32_t{};
             split_centi(hum_centi, hum_sign, hum_whole, hum_frac);
 
-            logi("T=%c%d.%02d C  P=%d Pa  H=%c%d.%02d %%",
-                 temp_sign, static_cast<int>(temp_whole), static_cast<int>(temp_frac),
-                 static_cast<int>(pres_pa),
-                 hum_sign, static_cast<int>(hum_whole), static_cast<int>(hum_frac));
+            logi("T=%c%d.%02d C  P=%d Pa  H=%c%d.%02d %%", temp_sign,
+                 static_cast<int>(temp_whole), static_cast<int>(temp_frac),
+                 static_cast<int>(pres_pa), hum_sign,
+                 static_cast<int>(hum_whole), static_cast<int>(hum_frac));
 
-            cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-                       "BME280 sample: T=%c%d.%02d C  P=%d Pa  H=%c%d.%02d %%\n",
-                       temp_sign, static_cast<int>(temp_whole), static_cast<int>(temp_frac),
-                       static_cast<int>(pres_pa),
-                       hum_sign, static_cast<int>(hum_whole), static_cast<int>(hum_frac));
+            cy_log_msg(
+                CYLF_DEF, CY_LOG_INFO,
+                "BME280 sample: T=%c%d.%02d C  P=%d Pa  H=%c%d.%02d %%\n",
+                temp_sign, static_cast<int>(temp_whole),
+                static_cast<int>(temp_frac), static_cast<int>(pres_pa),
+                hum_sign, static_cast<int>(hum_whole),
+                static_cast<int>(hum_frac));
         }
 
         vTaskDelay(pdMS_TO_TICKS(1000));

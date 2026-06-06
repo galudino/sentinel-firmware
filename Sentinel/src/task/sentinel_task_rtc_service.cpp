@@ -206,7 +206,7 @@ void rtc_service::task_function(void *task_parameter) {
     if (!configure_square_wave(rtc)) {
         loge("rtc_service: 1 Hz SQW config failed (last_err=%d)",
              static_cast<int>(rtc.last_error()));
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
                    "RTC service: 1 Hz SQW config failed (last_err=%d)\n",
                    static_cast<int>(rtc.last_error()));
         vTaskDelete(nullptr);
@@ -216,7 +216,7 @@ void rtc_service::task_function(void *task_parameter) {
     configure_sqw_interrupt();
 
     logi("rtc_service: 1 Hz SQW armed (falling-edge IRQ on P6_3)", "");
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
+    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                "RTC service: 1 Hz SQW armed (falling-edge IRQ on P6_3)\n");
 
     while (true) {
@@ -248,7 +248,7 @@ void rtc_service::task_function(void *task_parameter) {
         if (!temp) {
             loge("rtc_service: temperature read error %d",
                  static_cast<int>(rtc.last_error()));
-            cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+            cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
                        "rtc_service: temperature error %d\n",
                        static_cast<int>(rtc.last_error()));
             continue;
@@ -266,7 +266,7 @@ void rtc_service::task_function(void *task_parameter) {
              static_cast<int>(now->second), sign, static_cast<int>(whole),
              static_cast<int>(frac));
 
-        cy_log_msg(CYLF_DEF, CY_LOG_INFO,
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "rtc_service: %04d-%02d-%02d %s %02d:%02d:%02d  "
                    "T=%c%d.%02d C\n",
                    static_cast<int>(now->year), static_cast<int>(now->month),
