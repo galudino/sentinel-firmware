@@ -38,6 +38,7 @@ extern "C" {
 #include "FreeRTOS.h"
 #include "cy_log.h"
 #include "cy_result.h"
+#include "cycfg_pins.h"
 #include "portmacro.h"
 #include "task.h"
 }
@@ -72,9 +73,8 @@ namespace {
 ///
 sentinel::cyhal_i2c_bus_transport ds3231_bus(
     sentinel::resource::cybsp_i2c_bus,
-    static_cast<uint16_t>(
-        sentinel::ds3231<
-            sentinel::cyhal_i2c_bus_transport>::slave_address::primary));
+    static_cast<uint16_t>(sentinel::ds3231<sentinel::cyhal_i2c_bus_transport>::
+                              slave_address::primary));
 
 ///
 /// \brief Yield long enough for the BLE debug ring buffer to drain.
@@ -155,8 +155,13 @@ void sentinel::test::ds3231::all() {
     alarm_round_trip();
     yield_for_debug_drain(200);
 
-    // Never returns — runs forever at 1 Hz.
+#if !CYBSP_RTC_SQW_ENABLED
+    // No SQW interrupt pin configured: fall back to the polled 1 Hz loop
+    // (never returns). When CYBSP_RTC_SQW is enabled, the interrupt-driven
+    // sentinel::task::rtc_service owns the continuous reads instead, so this
+    // is compiled out and all() returns to let the test task self-delete.
     continuous_read();
+#endif
 }
 
 // ============================================================================
@@ -172,7 +177,7 @@ void sentinel::test::ds3231::presence_check() {
     if (!status) {
         loge("presence_check FAIL: status read error %d",
              static_cast<int>(rtc.last_error()));
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "DS3231 presence_check FAIL: status read error %d\n",
                    static_cast<int>(rtc.last_error()));
         return;
@@ -184,7 +189,7 @@ void sentinel::test::ds3231::presence_check() {
     // from a working part.
     if (*status == 0xFF) {
         loge("presence_check FAIL: status=0xFF (no slave?)", "");
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "DS3231 presence_check FAIL: status=0xFF\n");
         return;
     }
@@ -193,7 +198,7 @@ void sentinel::test::ds3231::presence_check() {
     if (!osf) {
         loge("presence_check FAIL: OSF read error %d",
              static_cast<int>(rtc.last_error()));
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "DS3231 presence_check FAIL: OSF read error %d\n",
                    static_cast<int>(rtc.last_error()));
         return;
@@ -227,7 +232,7 @@ void sentinel::test::ds3231::register_round_trip() {
     if (!original) {
         loge("register_round_trip FAIL: initial read error %d",
              static_cast<int>(rtc.last_error()));
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "DS3231 register_round_trip FAIL: initial read error %d\n",
                    static_cast<int>(rtc.last_error()));
         return;
@@ -244,7 +249,7 @@ void sentinel::test::ds3231::register_round_trip() {
     if (!rtc.set_aging_offset(target)) {
         loge("register_round_trip FAIL: write error %d",
              static_cast<int>(rtc.last_error()));
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "DS3231 register_round_trip FAIL: write error %d\n",
                    static_cast<int>(rtc.last_error()));
         return;
@@ -254,7 +259,7 @@ void sentinel::test::ds3231::register_round_trip() {
     if (!readback) {
         loge("register_round_trip FAIL: readback error %d",
              static_cast<int>(rtc.last_error()));
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "DS3231 register_round_trip FAIL: readback error %d\n",
                    static_cast<int>(rtc.last_error()));
         return;
@@ -263,7 +268,7 @@ void sentinel::test::ds3231::register_round_trip() {
     if (*readback != target) {
         loge("register_round_trip FAIL: readback %d != expected %d",
              static_cast<int>(*readback), static_cast<int>(target));
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "DS3231 register_round_trip FAIL: readback %d != %d\n",
                    static_cast<int>(*readback), static_cast<int>(target));
     } else {
@@ -303,7 +308,7 @@ void sentinel::test::ds3231::time_read() {
         if (!now) {
             loge("time_read FAIL: read %d returned error %d",
                  static_cast<int>(i), static_cast<int>(rtc.last_error()));
-            cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+            cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                        "DS3231 time_read FAIL: read %d error %d\n",
                        static_cast<int>(i), static_cast<int>(rtc.last_error()));
             return;
@@ -352,7 +357,7 @@ void sentinel::test::ds3231::time_write() {
     if (!before) {
         loge("time_write FAIL: initial read error %d",
              static_cast<int>(rtc.last_error()));
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "DS3231 time_write FAIL: initial read error %d\n",
                    static_cast<int>(rtc.last_error()));
         return;
@@ -371,18 +376,18 @@ void sentinel::test::ds3231::time_write() {
     // is unambiguous in the readback, and to sit comfortably in the
     // DS3231-addressable range (2000–2199).
     auto target = ds3231_t::datetime();
-    target.year        = 2024;
-    target.month       = 2;
-    target.date        = 29;
+    target.year = 2024;
+    target.month = 2;
+    target.date = 29;
     target.day_of_week = static_cast<uint8_t>(ds3231_t::day_of_week::thursday);
-    target.hour        = 12;
-    target.minute      = 34;
-    target.second      = 56;
+    target.hour = 12;
+    target.minute = 34;
+    target.second = 56;
 
     if (!rtc.set_time(target)) {
         loge("time_write FAIL: set_time error %d",
              static_cast<int>(rtc.last_error()));
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "DS3231 time_write FAIL: set_time error %d\n",
                    static_cast<int>(rtc.last_error()));
         return;
@@ -395,7 +400,7 @@ void sentinel::test::ds3231::time_write() {
     if (!after) {
         loge("time_write FAIL: readback error %d",
              static_cast<int>(rtc.last_error()));
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "DS3231 time_write FAIL: readback error %d\n",
                    static_cast<int>(rtc.last_error()));
         return;
@@ -403,21 +408,20 @@ void sentinel::test::ds3231::time_write() {
 
     auto seconds_drift_ok = false;
     for (auto offset = uint8_t{0}; offset <= 2; ++offset) {
-        auto expected_second = static_cast<uint8_t>(
-            (target.second + offset) % 60);
+        auto expected_second =
+            static_cast<uint8_t>((target.second + offset) % 60);
         if (after->second == expected_second) {
             seconds_drift_ok = true;
             break;
         }
     }
 
-    auto fields_ok = after->year        == target.year
-                  && after->month       == target.month
-                  && after->date        == target.date
-                  && after->day_of_week == target.day_of_week
-                  && after->hour        == target.hour
-                  && after->minute      == target.minute
-                  && seconds_drift_ok;
+    auto fields_ok = after->year == target.year &&
+                     after->month == target.month &&
+                     after->date == target.date &&
+                     after->day_of_week == target.day_of_week &&
+                     after->hour == target.hour &&
+                     after->minute == target.minute && seconds_drift_ok;
 
     if (!fields_ok) {
         loge("time_write FAIL: readback mismatch — "
@@ -426,12 +430,11 @@ void sentinel::test::ds3231::time_write() {
              static_cast<int>(target.year), static_cast<int>(target.month),
              static_cast<int>(target.date), day_name(target.day_of_week),
              static_cast<int>(target.hour), static_cast<int>(target.minute),
-             static_cast<int>(target.second),
-             static_cast<int>(after->year), static_cast<int>(after->month),
-             static_cast<int>(after->date), day_name(after->day_of_week),
-             static_cast<int>(after->hour), static_cast<int>(after->minute),
-             static_cast<int>(after->second));
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+             static_cast<int>(target.second), static_cast<int>(after->year),
+             static_cast<int>(after->month), static_cast<int>(after->date),
+             day_name(after->day_of_week), static_cast<int>(after->hour),
+             static_cast<int>(after->minute), static_cast<int>(after->second));
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "DS3231 time_write FAIL: readback mismatch\n");
         return;
     }
@@ -483,7 +486,7 @@ void sentinel::test::ds3231::time_sync_from_build() {
     if (!sentinel::build_time::sync_from_build_time(rtc)) {
         loge("time_sync_from_build FAIL: sync helper error %d",
              static_cast<int>(rtc.last_error()));
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "DS3231 time_sync_from_build FAIL: sync error %d\n",
                    static_cast<int>(rtc.last_error()));
         return;
@@ -493,7 +496,7 @@ void sentinel::test::ds3231::time_sync_from_build() {
     if (!after) {
         loge("time_sync_from_build FAIL: post-sync read error %d",
              static_cast<int>(rtc.last_error()));
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "DS3231 time_sync_from_build FAIL: read error %d\n",
                    static_cast<int>(rtc.last_error()));
         return;
@@ -503,15 +506,14 @@ void sentinel::test::ds3231::time_sync_from_build() {
     // We don't compare hours/minutes/seconds because by the time we read
     // back, real-world wall time has likely advanced past what the helper
     // wrote (fudge + I²C round-trip + extra logging).
-    auto date_matches = after->year  == sentinel::build_time::build_year()
-                     && after->month == sentinel::build_time::build_month()
-                     && after->date  == sentinel::build_time::build_day();
+    auto date_matches = after->year == sentinel::build_time::build_year() &&
+                        after->month == sentinel::build_time::build_month() &&
+                        after->date == sentinel::build_time::build_day();
     if (!date_matches) {
         logw("time_sync_from_build: post-sync date %04d-%02d-%02d "
              "differs from build date %04d-%02d-%02d "
              "(boundary crossed during sync? non-fatal)",
-             static_cast<int>(after->year),
-             static_cast<int>(after->month),
+             static_cast<int>(after->year), static_cast<int>(after->month),
              static_cast<int>(after->date),
              static_cast<int>(sentinel::build_time::build_year()),
              static_cast<int>(sentinel::build_time::build_month()),
@@ -547,7 +549,7 @@ void sentinel::test::ds3231::temperature_read() {
     if (!first) {
         loge("temperature_read FAIL: initial read error %d",
              static_cast<int>(rtc.last_error()));
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "DS3231 temperature_read FAIL: initial read error %d\n",
                    static_cast<int>(rtc.last_error()));
         return;
@@ -564,7 +566,7 @@ void sentinel::test::ds3231::temperature_read() {
     if (!rtc.start_temperature_conversion()) {
         loge("temperature_read FAIL: start_conversion error %d",
              static_cast<int>(rtc.last_error()));
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "DS3231 temperature_read FAIL: start_conversion error %d\n",
                    static_cast<int>(rtc.last_error()));
         return;
@@ -580,7 +582,7 @@ void sentinel::test::ds3231::temperature_read() {
         if (!busy) {
             loge("temperature_read FAIL: BSY poll error %d",
                  static_cast<int>(rtc.last_error()));
-            cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+            cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                        "DS3231 temperature_read FAIL: BSY poll error %d\n",
                        static_cast<int>(rtc.last_error()));
             return;
@@ -593,7 +595,7 @@ void sentinel::test::ds3231::temperature_read() {
 
     if (!completed) {
         loge("temperature_read FAIL: BSY did not clear within 200ms", "");
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "DS3231 temperature_read FAIL: BSY timeout\n");
         return;
     }
@@ -602,7 +604,7 @@ void sentinel::test::ds3231::temperature_read() {
     if (!second) {
         loge("temperature_read FAIL: post-conversion read error %d",
              static_cast<int>(rtc.last_error()));
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "DS3231 temperature_read FAIL: post-conv read error %d\n",
                    static_cast<int>(rtc.last_error()));
         return;
@@ -636,7 +638,7 @@ void sentinel::test::ds3231::alarm_round_trip() {
         loge("alarm_round_trip FAIL: could not disable alarm interrupts "
              "(last_err=%d)",
              static_cast<int>(rtc.last_error()));
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "DS3231 alarm_round_trip FAIL: disable IE %d\n",
                    static_cast<int>(rtc.last_error()));
         return;
@@ -654,7 +656,7 @@ void sentinel::test::ds3231::alarm_round_trip() {
     if (!rtc.set_alarm1(alarm1_target)) {
         loge("alarm_round_trip FAIL: set_alarm1 error %d",
              static_cast<int>(rtc.last_error()));
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "DS3231 alarm_round_trip FAIL: set_alarm1 %d\n",
                    static_cast<int>(rtc.last_error()));
         return;
@@ -664,7 +666,7 @@ void sentinel::test::ds3231::alarm_round_trip() {
     if (!alarm1_readback) {
         loge("alarm_round_trip FAIL: get_alarm1 error %d",
              static_cast<int>(rtc.last_error()));
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "DS3231 alarm_round_trip FAIL: get_alarm1 %d\n",
                    static_cast<int>(rtc.last_error()));
         return;
@@ -680,7 +682,7 @@ void sentinel::test::ds3231::alarm_round_trip() {
              static_cast<int>(alarm1_readback->minute),
              static_cast<int>(alarm1_readback->second),
              static_cast<int>(alarm1_readback->match_mode));
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "DS3231 alarm_round_trip FAIL: alarm1 mismatch\n");
         return;
     }
@@ -702,7 +704,7 @@ void sentinel::test::ds3231::alarm_round_trip() {
     if (!rtc.set_alarm2(alarm2_target)) {
         loge("alarm_round_trip FAIL: set_alarm2 error %d",
              static_cast<int>(rtc.last_error()));
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "DS3231 alarm_round_trip FAIL: set_alarm2 %d\n",
                    static_cast<int>(rtc.last_error()));
         return;
@@ -712,7 +714,7 @@ void sentinel::test::ds3231::alarm_round_trip() {
     if (!alarm2_readback) {
         loge("alarm_round_trip FAIL: get_alarm2 error %d",
              static_cast<int>(rtc.last_error()));
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "DS3231 alarm_round_trip FAIL: get_alarm2 %d\n",
                    static_cast<int>(rtc.last_error()));
         return;
@@ -728,7 +730,7 @@ void sentinel::test::ds3231::alarm_round_trip() {
              static_cast<int>(alarm2_readback->minute),
              static_cast<int>(alarm2_readback->day_or_date),
              static_cast<int>(alarm2_readback->match_mode));
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "DS3231 alarm_round_trip FAIL: alarm2 mismatch\n");
         return;
     }
@@ -764,13 +766,13 @@ void sentinel::test::ds3231::alarm_round_trip() {
         if (!now) {
             loge("continuous_read: time error %d",
                  static_cast<int>(rtc.last_error()));
-            cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+            cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                        "DS3231 continuous_read: time error %d\n",
                        static_cast<int>(rtc.last_error()));
         } else if (!temp) {
             loge("continuous_read: temperature error %d",
                  static_cast<int>(rtc.last_error()));
-            cy_log_msg(CYLF_DEF, CY_LOG_ERR,
+            cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                        "DS3231 continuous_read: temperature error %d\n",
                        static_cast<int>(rtc.last_error()));
         } else {
@@ -810,7 +812,13 @@ BaseType_t sentinel::test::ds3231::task_create() {
     constexpr auto priority =
         static_cast<UBaseType_t>(configMAX_PRIORITIES - 3);
 
-    return xTaskCreate([](void *) -> void { sentinel::test::ds3231::all(); },
-                       "DS3231 Test Task", stack_words, nullptr, priority,
-                       nullptr);
+    return xTaskCreate(
+        [](void *) -> void {
+            sentinel::test::ds3231::all();
+            // all() returns only when continuous_read() is compiled out
+            // (SQW interrupt active). A FreeRTOS task must not fall off the
+            // end of its entry function, so delete it explicitly.
+            vTaskDelete(nullptr);
+        },
+        "DS3231 Test Task", stack_words, nullptr, priority, nullptr);
 }
