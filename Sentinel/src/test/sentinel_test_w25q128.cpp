@@ -71,17 +71,22 @@ inline bool region_is_blank(w25q128_t &flash, uint32_t address,
     auto buf = std::array<uint8_t, 64>{};
     auto remaining = length;
     auto offset = uint32_t{0};
+
     while (remaining > 0) {
         auto chunk =
             (remaining < buf.size()) ? remaining : uint32_t{buf.size()};
+
         if (!flash.read_data(address + offset,
                              sentinel::make_span(buf.data(), chunk))) {
             return false;
         }
-        for (auto i = uint32_t{0}; i < chunk; ++i) {
-            if (buf[i] != 0xFF)
+
+        for (auto i = uint32_t{0}; i < chunk; i++) {
+            if (buf[i] != 0xFF) {
                 return false;
+            }
         }
+
         offset += chunk;
         remaining -= chunk;
     }
@@ -123,7 +128,13 @@ void sentinel::test::w25q128::presence_check() {
     logi("W25Q128 presence_check: driver constructed", "");
     yield_for_debug_drain(200);
 
+    auto raw = uint32_t{};
+    raw = Cy_GPIO_Read(GPIO_PRT10, 3);
+    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
+               "[%s] CS idle level: %u\n", __func__, raw, raw);
+
     auto jedec = flash.jedec_id();
+
     if (!jedec) {
         loge("presence_check FAIL: JEDEC read transport error %d",
              static_cast<int>(flash.last_error()));
@@ -132,6 +143,12 @@ void sentinel::test::w25q128::presence_check() {
                    static_cast<int>(flash.last_error()));
         return;
     }
+
+    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
+               "W25Q128 presence_check: JEDEC = 0x%02X 0x%02X 0x%02X\n",
+               static_cast<int>(jedec->manufacturer),
+               static_cast<int>(jedec->memory_type),
+               static_cast<int>(jedec->capacity));
 
     logi("presence_check: JEDEC = 0x%02X 0x%02X 0x%02X",
          static_cast<int>(jedec->manufacturer),
@@ -148,16 +165,27 @@ void sentinel::test::w25q128::presence_check() {
              static_cast<int>(expected.memory_type),
              static_cast<int>(expected.capacity));
         cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "W25Q128 presence_check FAIL: JEDEC mismatch\n");
+                   "W25Q128 presence_check FAIL: JEDEC mismatch (expected "
+                   "0x%02X 0x%02X 0x%02X)\n",
+                   static_cast<int>(expected.manufacturer),
+                   static_cast<int>(expected.memory_type),
+                   static_cast<int>(expected.capacity));
         return;
     }
 
     // Bonus diagnostics — manufacturer+device ID and unique ID.
     if (auto mfr_dev = flash.manufacturer_device_id()) {
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
+                   "W25Q128 presence_check: Mfr/Dev = 0x%02X 0x%02X\n",
+                   static_cast<int>(mfr_dev->manufacturer),
+                   static_cast<int>(mfr_dev->device));
         logi("presence_check: Mfr/Dev = 0x%02X 0x%02X",
              static_cast<int>(mfr_dev->manufacturer),
              static_cast<int>(mfr_dev->device));
     } else {
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
+                   "W25Q128 presence_check: Mfr/Dev read error %d\n",
+                   static_cast<int>(flash.last_error()));
         logw("presence_check: Mfr/Dev read transport error %d",
              static_cast<int>(flash.last_error()));
     }
@@ -267,7 +295,7 @@ void sentinel::test::w25q128::erase_program_read() {
     constexpr uint32_t test_address = 0xFFF000u;
     constexpr uint32_t verify_length = 256u;
     auto pattern = std::array<uint8_t, verify_length>{};
-    for (auto i = uint32_t{0}; i < verify_length; ++i) {
+    for (auto i = uint32_t{0}; i < verify_length; i++) {
         pattern[i] = static_cast<uint8_t>(i & 0xFF);
     }
 
@@ -319,7 +347,7 @@ void sentinel::test::w25q128::erase_program_read() {
         return;
     }
 
-    for (auto i = uint32_t{0}; i < verify_length; ++i) {
+    for (auto i = uint32_t{0}; i < verify_length; i++) {
         if (readback[i] != pattern[i]) {
             loge("erase_program_read FAIL: byte %u readback=0x%02X "
                  "expected=0x%02X",
@@ -373,7 +401,7 @@ void sentinel::test::w25q128::security_register_round_trip() {
                    static_cast<int>(flash.last_error()));
         return;
     }
-    for (auto i = size_t{0}; i < blank_check.size(); ++i) {
+    for (auto i = size_t{0}; i < blank_check.size(); i++) {
         if (blank_check[i] != 0xFF) {
             loge("security_round_trip FAIL: post-erase byte %u = 0x%02X",
                  static_cast<unsigned>(i), static_cast<int>(blank_check[i]));
@@ -410,7 +438,7 @@ void sentinel::test::w25q128::security_register_round_trip() {
                    static_cast<int>(flash.last_error()));
         return;
     }
-    for (auto i = size_t{0}; i < pattern.size(); ++i) {
+    for (auto i = size_t{0}; i < pattern.size(); i++) {
         if (readback[i] != pattern[i]) {
             loge("security_round_trip FAIL: byte %u readback=0x%02X "
                  "expected=0x%02X",
