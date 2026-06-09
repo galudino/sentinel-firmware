@@ -41,7 +41,7 @@ which platform served the data.
 
 | Phase | Scope | Progress |
 |---|---|---|
-| **I — MVP on Infineon CYBLE-416045** | Environmental sensing, event log, snapshot history, live snapshot stream, OTA DFU | **In progress** — 10 / 20 issues closed |
+| **I — MVP on Infineon CYBLE-416045** | Environmental sensing, event log, snapshot history, live snapshot stream, OTA DFU | **In progress** — 10 / 21 issues closed |
 | **II — Driver expansion + refinements** | Full driver backlog (15 chips spanning I²C / SPI / GPIO / PWM / 1-Wire), BME280 SPI mode, refinements to Phase I | Not started |
 | **III — Raspberry Pi 5 (POSIX) port** | Port the platform-agnostic layer to Raspberry Pi 5 (POSIX / Linux) | Not started |
 | **IV — Nordic nRF5340 port** | Port to Nordic nRF5340 (Zephyr / nRF Connect SDK) | Not started |
