@@ -105,6 +105,17 @@ default.
    `uint16` 0.01 %RH, `uint32` Pa = 8 B), NOT three. Split only when registers are
    genuinely independent (DS3231 Unix-time / temp / alarm-flags). #6 owns the
    contract + UUIDs; client #9 mirrors it 1:1.
+9. **Device identity = standard DIS + machine-stable `platform_id` enum (#45).**
+   The standard Device Information Service (`0x180A`) carries display metadata
+   (Manufacturer Name, Model Number, HW Rev, PnP ID — Phase I). The `System`
+   service carries a `uint8` `platform_id` enum (`cyble_416045`/`rpi5`/`nrf5340`)
+   that the client + cloud branch on — **never** the Model Number string (same
+   lesson as manifest-over-filename for firmware versions). `vendor_id` is
+   *derived* via `vendor_of(platform_id)`, not its own characteristic. These
+   `uint8` values are a permanent **wire contract** (BLE + cloud-manifest keys):
+   explicit, append-only, never reused. One canonical token set
+   (`cyble-416045`/`rpi5`/`nrf5340`) spans firmware `platform:` labels ↔ GATT
+   `platform_id` ↔ cloud manifest `target`.
 
 ---
 
