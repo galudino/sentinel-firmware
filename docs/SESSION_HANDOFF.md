@@ -7,8 +7,10 @@ infrastructure, or non-obvious constraints. Keep it under ~350 lines — rotate
 old context into commit messages, issue bodies, or `docs/architecture/*.md`
 when it grows too long.
 
-**Last updated:** 2026-06-08 (end of Phase I planning + Driver Backlog
-flesh-out + companion client-repo scaffolding session)
+**Last updated:** 2026-06-09 (merged the two project boards into one `sentinel`
+board; stage-only Status + Phase field; namespaced labels; phase milestone-epics
+under a per-repo root; GATT contract sync — descriptive aggregate names +
+BME280 one-shot-sample rule; milestone corrections)
 
 ---
 
@@ -44,7 +46,8 @@ default.
   MCUBoot for OTA.
 - **Active phase:** Phase I (MVP on Infineon CYBLE-416045)
 - **Companion repo:** `sentinel-client` (SwiftUI iOS/iPadOS/macOS client) —
-  separate repo + project board; see its own `docs/SESSION_HANDOFF.md`.
+  separate repo, but **shares ONE merged project board** with firmware (the
+  `sentinel` board, `galudino/projects/2`); see its own `docs/SESSION_HANDOFF.md`.
 - **What ships in Phase I:** BME280 + DS3231 + W25Q128 telemetry over BLE GATT,
   flash-backed System Event Log, flash-backed periodic Device Snapshots, live
   Device Snapshot stream, OTA DFU via MCUBoot.
@@ -91,8 +94,17 @@ default.
    service. Reason: TMP117 vs DS18B20 (both temperature) need disambiguation;
    chip-specific quirks differ; firmware + client mirror each other 1:1. The
    sentinel-client side uses the same convention (`BME280Service`,
-   `DS3231Service`). Aggregate/cross-cutting services keep function names
-   (`LiveTelemetry`, `SystemEventLog`, `OTA`, `Debug`).
+   `DS3231Service`). Aggregate/cross-cutting services keep **descriptive**
+   function names: `System`, `LiveTelemetry`, `SnapshotHistory`,
+   `SystemEventLog`, `OTA`, `DebugStream`. (Naming locked 2026-06-09; the old
+   `Debug` / `Telemetry History` names are retired.)
+8. **One-shot-sample rule for sensor GATT characteristics.** When a sensor IC +
+   driver return all fields in a single read, the GATT layer exposes them as
+   **one packed-struct characteristic**, not one per field. BME280's `read()`
+   yields T+H+P at once → a single `bme280_sample` characteristic (`int16` 0.01 °C,
+   `uint16` 0.01 %RH, `uint32` Pa = 8 B), NOT three. Split only when registers are
+   genuinely independent (DS3231 Unix-time / temp / alarm-flags). #6 owns the
+   contract + UUIDs; client #9 mirrors it 1:1.
 
 ---
 
@@ -121,8 +133,15 @@ default.
 ## GitHub infrastructure
 
 - **Repository:** [github.com/galudino/sentinel-firmware](https://github.com/galudino/sentinel-firmware)
-- **Project board:** `galudino/projects/2` — project ID `PVT_kwHOAbZCmc4BYDDx`
-- **Milestones:** Phase I (M1), Phase II (M2), Phase III (M3)
+- **Project board:** `galudino/projects/2`, named **`sentinel`** — project ID
+  `PVT_kwHOAbZCmc4BYDDx`. **MERGED board** holding BOTH `sentinel-firmware` and
+  `sentinel-client` issues (the old client board `projects/4` was deleted
+  2026-06-08). Per-repo focus = saved Views filtered by `repository:`. Repo is a
+  built-in board axis; Status is stage-only.
+- **Milestones (repo):** Phase I (MVP on Infineon CYBLE-416045), Phase II (driver
+  expansion + refinements), Phase III (Raspberry Pi 5 / POSIX), Phase IV (Nordic
+  nRF5340). Each phase also has a `Main firmware application: Phase N` epic issue
+  (the `milestone`-labelled roadmap nodes #4/#42/#43/#44) under root epic #41.
 - **Tags:** annotated pre-squash history tags: `migration-history`,
   `ds3231-driver-history`, `i2c-bus-task-history`, `flash-memory-history`
 - **`gh` is fully set up** with scopes `repo`, `read:project`, `project`
@@ -132,19 +151,26 @@ default.
   | Field | Type | ID |
   |---|---|---|
   | Status | single-select | `PVTSSF_lAHOAbZCmc4BYDDxzhTLlPE` |
+  | Phase | single-select | `PVTSSF_lAHOAbZCmc4BYDDxzhU_3FM` |
   | Priority | single-select | `PVTSSF_lAHOAbZCmc4BYDDxzhTLlU8` |
   | Size | single-select | `PVTSSF_lAHOAbZCmc4BYDDxzhTLlVA` |
   | Start date | date | `PVTF_lAHOAbZCmc4BYDDxzhTLlVI` |
   | Target date | date | `PVTF_lAHOAbZCmc4BYDDxzhTLlVM` |
   | Estimate | text | `PVTF_lAHOAbZCmc4BYDDxzhTLlVE` |
 
-- **Status single-select option IDs:** Platform Backlog `18fe16c9`,
-  Driver Backlog `d238a41a`, General Backlog `f75ad846`, Ready `61e4505c`,
-  In progress `47fc9ee4`, In review `df73e18b`, On Hold/Blocked `06bd8365`,
+- **Status option IDs (stage-only, collapsed 2026-06-08):** Backlog `18fe16c9`
+  (was "Platform Backlog"; Driver/General Backlog deleted), Ready `61e4505c`,
+  In Progress `47fc9ee4`, In Review `df73e18b`, On Hold/Blocked `06bd8365`,
   Done `98236657`.
+- **Phase option IDs:** Phase I `eb79509f`, Phase II `2bd5ada7`,
+  Phase III `f009f762`, Phase IV `a59b2206`.
 - **Priority option IDs:** P0 `79628723`, P1 `0a877460`, P2 `da944a9c`.
 - **Size option IDs:** XS `6c6483d2`, S `f784b110`, M `7515a9f1`,
   L `817d0097`, XL `db339eb2`.
+- **Labels:** namespaced — `platform:`, `interface:`, `stack:`, `subsystem:`,
+  plus `driver`/`transport`, `milestone` (phase-epic marker), `project config:
+  vscode`. The `subsystem:` set (ble/dfu/event-log/snapshot/debug) is spelled
+  identically on the client repo.
 
 ---
 
@@ -238,13 +264,17 @@ These lines (if not already present) carry the most useful context across
 sessions and complement this handoff doc:
 
 ```
-- gh is fully configured (repo + read:project + project scopes). Firmware
-  project board ID PVT_kwHOAbZCmc4BYDDx (galudino/projects/2); client board
-  PVT_kwHOAbZCmc4BZ6kp (galudino/projects/4). Phase I/II/III milestones in both.
+- gh is fully configured (repo + read:project + project scopes). ONE merged
+  board `sentinel` (galudino/projects/2, ID PVT_kwHOAbZCmc4BYDDx) holds BOTH
+  repos' issues; the old client board projects/4 was deleted. Phase is a
+  single-select field (I–IV); per-repo focus via saved Views.
 - Companion repo sentinel-client (SwiftUI iOS/iPadOS/macOS) mirrors firmware
   Phase I over BLE. Uses AsyncBluetooth SPM lib; chip-named GATT service
   protocols; see its docs/SESSION_HANDOFF.md.
 - GATT services are chip-named (BME280Service, DS3231Service), not a generic
-  "Sensor" service. Firmware #6 and the client mirror this 1:1.
+  "Sensor" service; aggregate services are descriptive (System, LiveTelemetry,
+  SnapshotHistory, SystemEventLog, OTA, DebugStream). Firmware #6 owns the
+  contract; client #9 mirrors 1:1. One-shot-sample sensors = one packed-struct
+  characteristic (BME280).
 - Default working cadence: one Claude Code session per GitHub issue.
 ```
