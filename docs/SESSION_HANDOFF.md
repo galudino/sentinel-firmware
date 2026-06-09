@@ -95,7 +95,7 @@ default.
    chip-specific quirks differ; firmware + client mirror each other 1:1. The
    sentinel-client side uses the same convention (`BME280Service`,
    `DS3231Service`). Aggregate/cross-cutting services keep **descriptive**
-   function names: `System`, `LiveTelemetry`, `SnapshotHistory`,
+   function names: `System`, `SnapshotStream`, `SnapshotHistory`,
    `SystemEventLog`, `OTA`, `DebugStream`. (Naming locked 2026-06-09; the old
    `Debug` / `Telemetry History` names are retired.)
 8. **One-shot-sample rule for sensor GATT characteristics.** When a sensor IC +
@@ -272,7 +272,7 @@ sessions and complement this handoff doc:
   Phase I over BLE. Uses AsyncBluetooth SPM lib; chip-named GATT service
   protocols; see its docs/SESSION_HANDOFF.md.
 - GATT services are chip-named (BME280Service, DS3231Service), not a generic
-  "Sensor" service; aggregate services are descriptive (System, LiveTelemetry,
+  "Sensor" service; aggregate services are descriptive (System, SnapshotStream,
   SnapshotHistory, SystemEventLog, OTA, DebugStream). Firmware #6 owns the
   contract; client #9 mirrors 1:1. One-shot-sample sensors = one packed-struct
   characteristic (BME280).
