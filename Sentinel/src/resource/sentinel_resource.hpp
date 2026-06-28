@@ -24,12 +24,14 @@
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
 extern "C" {
+#include "FreeRTOS.h"
 #include "cy_log.h"
 #include "cy_result.h"
 #include "cycfg_peripherals.h"
 #include "cycfg_pins.h"
 #include "cyhal_gpio.h"
 #include "cyhal_hw_types.h"
+#include "semphr.h"
 }
 #pragma GCC diagnostic pop
 
@@ -69,6 +71,31 @@ inline sentinel::task::i2c_bus cybsp_i2c_bus{&cybsp_i2c, "I2C Bus"};
 ///          \ref peripheral_initialize handles that.
 ///
 inline sentinel::task::spi_bus cybsp_spi_bus{&cybsp_spi, "SPI Bus"};
+
+///
+/// \brief Recursive mutex serialising logical operations on the W25Q128.
+///
+/// \details The SPI bus-arbiter (\ref cybsp_spi_bus) serialises individual
+///          CS-asserted transactions, but a flash write is a *multi-*
+///          transaction logical operation (write-enable, then program/erase,
+///          then poll BUSY) and the W25Q128 carries global state across those
+///          transactions — most importantly the Write Enable Latch (WEL),
+///          which auto-clears when any program/erase completes. Two tasks
+///          writing the flash concurrently can therefore clear each other's
+///          WEL between write-enable and program, silently dropping a write;
+///          and a read issued while another task's program/erase is in flight
+///          (BUSY) returns undefined data. The per-transaction arbiter cannot
+///          prevent either hazard.
+///
+///          This device-level mutex closes both gaps: \ref sentinel::w25q128
+///          takes it around every logical operation, so all access to the
+///          physical chip is mutually exclusive regardless of how many tasks
+///          share it (e.g. the System Event Log and Snapshot Capture writers).
+///          It is recursive because the driver's public operations nest
+///          (e.g. \c page_program calls \c write_enable). Created in
+///          \ref peripheral_initialize; pass it to each \c w25q128 instance.
+///
+inline SemaphoreHandle_t flash_device_mutex{nullptr};
 
 ///
 /// \brief GPIO pin wired to the DS3231 INT/SQW output.
@@ -163,6 +190,12 @@ inline void peripheral_initialize() noexcept {
                "SPI bus task create result passed: %s\n",
                static_cast<int>(spi_bus_task_create_return_code) ? "true"
                                                                  : "false");
+
+    // Create the W25Q128 device mutex before any task can construct a flash
+    // driver instance. Every w25q128 sharing the physical chip is handed this
+    // handle so their logical operations are mutually exclusive.
+    flash_device_mutex = xSemaphoreCreateRecursiveMutex();
+    configASSERT(flash_device_mutex != nullptr);
 #endif /* CYBSP_SPI_HW */
 }
 

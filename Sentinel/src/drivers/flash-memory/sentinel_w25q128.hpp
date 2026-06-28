@@ -53,7 +53,9 @@
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
 extern "C" {
+#include "FreeRTOS.h"
 #include "cy_result.h"
+#include "semphr.h"
 }
 #pragma GCC diagnostic pop
 
@@ -349,8 +351,19 @@ public:
     ///
     /// \param bus Reference to the SPI transport. Must outlive this
     ///            driver instance.
+    /// \param device_mutex Optional recursive mutex serialising logical
+    ///            operations on the physical chip. Pass
+    ///            \c sentinel::resource::flash_device_mutex when more than one
+    ///            task may touch this flash (the SPI bus arbiter only
+    ///            serialises individual transactions, which is not enough to
+    ///            keep a write-enable→program→poll sequence atomic — see that
+    ///            mutex's documentation). When \c nullptr (the default) the
+    ///            driver performs no locking, which is correct for strictly
+    ///            single-task use.
     ///
-    explicit w25q128(Transport &bus) noexcept : m_bus(bus) {}
+    explicit w25q128(Transport &bus,
+                     SemaphoreHandle_t device_mutex = nullptr) noexcept
+        : m_bus(bus), m_device_mutex(device_mutex) {}
 
     w25q128(const w25q128 &)            = delete;
     w25q128 &operator=(const w25q128 &) = delete;
@@ -513,6 +526,7 @@ public:
     ///
     bool wait_until_ready(uint32_t timeout_ms = 30000,
                           uint32_t poll_interval_ms = 1) noexcept {
+        auto guard = lock();
         auto elapsed = uint32_t{0};
         while (elapsed < timeout_ms) {
             auto busy = is_busy();
@@ -531,6 +545,7 @@ public:
     // =====================================================================
 
     bool write_enable() noexcept {
+        auto guard = lock();
         if (!send_command(opcode::write_enable)) return false;
         auto enabled = is_write_enabled();
         if (!enabled) return false;
@@ -609,6 +624,7 @@ public:
     ///
     bool page_program(uint32_t address,
                       sentinel::span<const uint8_t> tx) noexcept {
+        auto guard = lock();
         if (tx.empty() || tx.size() > PAGE_SIZE_BYTES) {
             m_last_error = err::invalid_argument;
             return false;
@@ -664,6 +680,7 @@ public:
     ///          bus does not spuriously time out.
     ///
     bool chip_erase() noexcept {
+        auto guard = lock();
         if (!write_enable()) return false;
         if (!send_command(opcode::chip_erase)) return false;
         return wait_until_ready(/*timeout_ms=*/250000);
@@ -720,6 +737,7 @@ public:
     ///          issuing the next command.
     ///
     bool software_reset() noexcept {
+        auto guard = lock();
         if (!send_command(opcode::enable_reset))  return false;
         if (!send_command(opcode::reset_device))  return false;
         m_bus.delay(1); // generous; datasheet wants ~30 µs
@@ -738,6 +756,7 @@ public:
     ///              0x0010xx / 0x0020xx / 0x0030xx).
     ///
     bool erase_security_register(uint8_t index) noexcept {
+        auto guard = lock();
         if (index < 1 || index > SECURITY_REGISTER_COUNT) {
             m_last_error = err::invalid_argument;
             return false;
@@ -757,6 +776,7 @@ public:
     ///
     bool program_security_register(uint8_t index, uint8_t offset,
                                     sentinel::span<const uint8_t> tx) noexcept {
+        auto guard = lock();
         if (index < 1 || index > SECURITY_REGISTER_COUNT) {
             m_last_error = err::invalid_argument;
             return false;
@@ -846,6 +866,44 @@ public:
 
 private:
     // =====================================================================
+    // Device locking
+    // =====================================================================
+
+    ///
+    /// \brief RAII guard that holds \ref m_device_mutex for its lifetime.
+    ///
+    /// \details A no-op when the driver was constructed without a mutex. The
+    ///          mutex is recursive, so nested locked operations (e.g.
+    ///          \c page_program taking the lock and then calling
+    ///          \c write_enable, which also takes it) do not deadlock.
+    ///
+    class scoped_device_lock {
+    public:
+        explicit scoped_device_lock(SemaphoreHandle_t mutex) noexcept
+            : m_mutex(mutex) {
+            if (m_mutex != nullptr) {
+                xSemaphoreTakeRecursive(m_mutex, portMAX_DELAY);
+            }
+        }
+        ~scoped_device_lock() {
+            if (m_mutex != nullptr) {
+                xSemaphoreGiveRecursive(m_mutex);
+            }
+        }
+        scoped_device_lock(const scoped_device_lock &)            = delete;
+        scoped_device_lock &operator=(const scoped_device_lock &) = delete;
+
+    private:
+        SemaphoreHandle_t m_mutex;
+    };
+
+    /// Acquire the device lock for the current scope (guaranteed copy elision
+    /// lets callers write \c auto guard = lock();).
+    scoped_device_lock lock() const noexcept {
+        return scoped_device_lock(m_device_mutex);
+    }
+
+    // =====================================================================
     // Internal helpers
     // =====================================================================
 
@@ -881,6 +939,7 @@ private:
     ///
     bool write_status_register(opcode cmd, uint8_t value,
                                bool volatile_only) noexcept {
+        auto guard = lock();
         if (volatile_only) {
             if (!write_enable_volatile_sr()) return false;
         } else {
@@ -902,6 +961,7 @@ private:
     ///
     bool erase_with_address(opcode cmd, uint32_t address,
                             uint32_t timeout_ms) noexcept {
+        auto guard = lock();
         if (address >= TOTAL_SIZE_BYTES) {
             m_last_error = err::invalid_argument;
             return false;
@@ -924,6 +984,10 @@ private:
     ///
     bool read_chunked(opcode cmd, uint8_t dummy_bytes, uint32_t address,
                       sentinel::span<uint8_t> rx) noexcept {
+        // Hold the lock across every chunk so another task's program/erase
+        // cannot start mid-read and leave the device BUSY (which would make a
+        // subsequent chunk read undefined data).
+        auto guard = lock();
         if (rx.empty()) {
             m_last_error = err::ok;
             return true;
@@ -974,6 +1038,7 @@ private:
     ///
     bool transact(const uint8_t *tx, size_t tx_size,
                   uint8_t *rx, size_t rx_size) const noexcept {
+        auto guard = lock();
         auto rc = cy_rslt_t{};
 
         if (rx_size > 0) {
@@ -1006,6 +1071,7 @@ private:
     }
 
     Transport         &m_bus;                    ///< Non-owning bus ref.
+    SemaphoreHandle_t  m_device_mutex;           ///< Optional device lock.
     mutable err        m_last_error{err::ok};    ///< Cached most-recent.
 };
 
