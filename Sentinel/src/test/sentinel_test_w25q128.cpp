@@ -124,7 +124,7 @@ void sentinel::test::w25q128::all() {
 // ============================================================================
 
 void sentinel::test::w25q128::presence_check() {
-    auto flash = w25q128_t(w25q128_bus);
+    auto flash = w25q128_t(w25q128_bus, sentinel::resource::flash_device_mutex);
     logi("W25Q128 presence_check: driver constructed", "");
     yield_for_debug_drain(200);
 
@@ -207,7 +207,7 @@ void sentinel::test::w25q128::presence_check() {
 // ============================================================================
 
 void sentinel::test::w25q128::status_register_round_trip() {
-    auto flash = w25q128_t(w25q128_bus);
+    auto flash = w25q128_t(w25q128_bus, sentinel::resource::flash_device_mutex);
     logi("W25Q128 status_register_round_trip: driver constructed", "");
     yield_for_debug_drain(200);
 
@@ -278,7 +278,7 @@ void sentinel::test::w25q128::status_register_round_trip() {
 // ============================================================================
 
 void sentinel::test::w25q128::erase_program_read() {
-    auto flash = w25q128_t(w25q128_bus);
+    auto flash = w25q128_t(w25q128_bus, sentinel::resource::flash_device_mutex);
     logi("W25Q128 erase_program_read: driver constructed", "");
     yield_for_debug_drain(200);
 
@@ -364,7 +364,7 @@ void sentinel::test::w25q128::erase_program_read() {
 // ============================================================================
 
 void sentinel::test::w25q128::security_register_round_trip() {
-    auto flash = w25q128_t(w25q128_bus);
+    auto flash = w25q128_t(w25q128_bus, sentinel::resource::flash_device_mutex);
     logi("W25Q128 security_register_round_trip: driver constructed", "");
     yield_for_debug_drain(200);
 
@@ -461,7 +461,7 @@ void sentinel::test::w25q128::security_register_round_trip() {
 // ============================================================================
 
 void sentinel::test::w25q128::power_down_release() {
-    auto flash = w25q128_t(w25q128_bus);
+    auto flash = w25q128_t(w25q128_bus, sentinel::resource::flash_device_mutex);
     logi("W25Q128 power_down_release: driver constructed", "");
     yield_for_debug_drain(200);
 
@@ -530,7 +530,7 @@ void sentinel::test::w25q128::power_down_release() {
 // ============================================================================
 
 [[noreturn]] void sentinel::test::w25q128::continuous_status_poll() {
-    auto flash = w25q128_t(w25q128_bus);
+    auto flash = w25q128_t(w25q128_bus, sentinel::resource::flash_device_mutex);
     logi("W25Q128 continuous_status_poll: entering 1 Hz loop", "");
     cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                "W25Q128 continuous_status_poll: entering 1 Hz loop\n");
