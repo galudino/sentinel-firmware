@@ -7,10 +7,10 @@ infrastructure, or non-obvious constraints. Keep it under ~350 lines — rotate
 old context into commit messages, issue bodies, or `docs/architecture/*.md`
 when it grows too long.
 
-**Last updated:** 2026-06-09 (merged the two project boards into one `sentinel`
-board; stage-only Status + Phase field; namespaced labels; phase milestone-epics
-under a per-repo root; GATT contract sync — descriptive aggregate names +
-BME280 one-shot-sample rule; milestone corrections)
+**Last updated:** 2026-06-28 (#33 record store DONE — squash-merged into
+`develop`, tagged `record-store-history`; added a shared W25Q128 device mutex
+for multi-writer safety; #34 System Event Log design LOCKED — implementation
+pending next session)
 
 ---
 
@@ -51,13 +51,14 @@ default.
 - **What ships in Phase I:** BME280 + DS3231 + W25Q128 telemetry over BLE GATT,
   flash-backed System Event Log, flash-backed periodic Device Snapshots, live
   Device Snapshot stream, OTA DFU via MCUBoot.
-- **What's working today (closed):** all three Phase I drivers (#1, #5, #14,
-  #15), both bus arbiters (#27, #28), BLE stack init (#29), debug stream (#25),
-  cross-platform transport CRTP base (#26), full BSP / build / OTA
-  infrastructure (#30).
+- **What's working today (closed/merged to `develop`):** all three Phase I
+  drivers (#1, #5, #14, #15), both bus arbiters (#27, #28), BLE stack init
+  (#29), debug stream (#25), cross-platform transport CRTP base (#26), full BSP
+  / build / OTA infrastructure (#30), and **#33 — flash-backed circular record
+  store** (+ a shared W25Q128 device mutex; all 6 ACs pass on the GD25Q128).
 - **What's next (open, ordered by dependency):**
-  1. **#33** — Flash-backed circular record store (foundation) ← START HERE
-  2. **#34** — System Event Log + **#35** — POST (both consume #33)
+  1. **#34** — System Event Log (design LOCKED, see below) ← START HERE
+  2. **#35** — POST (consumes #33 + emits event-log records via #34)
   3. **#36** — Device Snapshot struct + populate
   4. **#37** — Telemetry sample task + **#38** — Periodic snapshot persistence
   5. **#6** — BLE GATT services Phase I (consumes all the above)
@@ -74,21 +75,48 @@ default.
 2. **ONE event log, not two.** Periodic structured state is a *separate*
    dedicated log (#38) of `device_snapshot` records. Discrete events vs periodic
    state are separated by purpose, not by record format.
-3. **#33 (record store) is the shared foundation.** Both #34 (events) and #38
-   (snapshots) consume `record_store<RecordT, Capacity>` on top of the W25Q128.
-   Template params let each consumer pick its own record size.
-4. **#6 (BLE GATT services Phase I) is parented under #4, not #24.** GATT
+3. **#33 (record store) is the shared foundation — AS BUILT.** Both #34 (events)
+   and #38 (snapshots) consume `sentinel::record_store<RecordT, Transport>`
+   (`Sentinel/src/storage/sentinel_record_store.hpp`) on top of the W25Q128.
+   Header-only template, duck-typed like the drivers. Key as-built facts that
+   differ from the original #33 sketch:
+   - **Signature is `<RecordT, Transport>`, capacity is a runtime ctor arg**
+     (`record_store(flash&, region_offset_bytes, region_size_bytes)`), not a
+     `CapacityRecords` template param.
+   - **Each slot carries a 4-byte monotonic `sequence`** (8-byte header:
+     status + 3 reserved + sequence) so head/tail recover correctly *after
+     wrap* — status bytes alone can't tell newest from oldest once every slot
+     is `0xA5`.
+   - **Slots are power-of-two sized** (`next_pow2(8 + sizeof(RecordT))`), so a
+     slot never straddles a 256 B page / 4 KiB sector and index→address is one
+     multiply. Consequence: a 36-byte record → 64-byte slot (≈44% overhead);
+     size flash regions accordingly (see #34 plan).
+   - `append()` is a two-phase write (payload, then status commit) → power-loss
+     safe. `append_uncommitted_for_test()` exists to exercise the torn-write
+     path. `initialize()` scans to recover head/tail; `erase_all()` resets.
+4. **W25Q128 access is serialized by a shared recursive device mutex.** The SPI
+   bus arbiter only serializes individual transactions, but a flash write is a
+   multi-transaction logical op (write-enable → program → poll BUSY) and the
+   chip's Write Enable Latch is global state that auto-clears on completion.
+   Two concurrent writers clobbered each other's WEL (observed on-bench as
+   spurious test failures); a read during another task's in-flight erase
+   returns garbage. Fix: `sentinel::resource::flash_device_mutex` (recursive,
+   created in `peripheral_initialize`), passed to each `w25q128` instance,
+   taken around **every** logical op. This is what the #34 event-log task and
+   #38 snapshot task (both flash writers) require to coexist. The driver's
+   mutex param defaults to `nullptr` (no locking) for single-task use.
+5. **#6 (BLE GATT services Phase I) is parented under #4, not #24.** GATT
    surface area is cross-platform application scope, not Infineon-specific
    platform implementation.
-5. **SCB1, not SCB2, for the SPI bus on Infineon.** SCB2 hangs at boot on this
+6. **SCB1, not SCB2, for the SPI bus on Infineon.** SCB2 hangs at boot on this
    BSP — reproducible against the stock Infineon Hello-World template; fault
    lands in FreeRTOS `xQueueSemaphoreTake` during `cybsp_init`. Detail + the
    debugging arc captured in issue #1. SCB1 + P10[0..3] is the workaround.
-6. **W25Q128 driver accepts known clones via accept-list.** Winbond, GigaDevice,
+7. **W25Q128 driver accepts known clones via accept-list.** Winbond, GigaDevice,
    XTX, Boya, ZBIT. Memory-type `0x40` and capacity `0x18` are stable across the
    ecosystem; only the manufacturer byte varies. The physical part on the bench
    is a **GigaDevice GD25Q128** (`0xC8 0x40 0x18`).
-7. **GATT services are CHIP-NAMED, not function-named, for sensors.** The
+8. **GATT services are CHIP-NAMED, not function-named, for sensors.** The
    Phase I GATT contract (#6) exposes a `BME280` service and a `DS3231` service
    as distinct services with distinct UUIDs — NOT a single generic "Sensor"
    service. Reason: TMP117 vs DS18B20 (both temperature) need disambiguation;
@@ -98,14 +126,14 @@ default.
    function names: `System`, `SnapshotStream`, `SnapshotHistory`,
    `SystemEventLog`, `OTA`, `DebugStream`. (Naming locked 2026-06-09; the old
    `Debug` / `Telemetry History` names are retired.)
-8. **One-shot-sample rule for sensor GATT characteristics.** When a sensor IC +
+9. **One-shot-sample rule for sensor GATT characteristics.** When a sensor IC +
    driver return all fields in a single read, the GATT layer exposes them as
    **one packed-struct characteristic**, not one per field. BME280's `read()`
    yields T+H+P at once → a single `bme280_sample` characteristic (`int16` 0.01 °C,
    `uint16` 0.01 %RH, `uint32` Pa = 8 B), NOT three. Split only when registers are
    genuinely independent (DS3231 Unix-time / temp / alarm-flags). #6 owns the
    contract + UUIDs; client #9 mirrors it 1:1.
-9. **Device identity = standard DIS + machine-stable `platform_id` enum (#45).**
+10. **Device identity = standard DIS + machine-stable `platform_id` enum (#45).**
    The standard Device Information Service (`0x180A`) carries display metadata
    (Manufacturer Name, Model Number, HW Rev, PnP ID — Phase I). The `System`
    service carries a `uint8` `platform_id` enum (`cyble_416045`/`rpi5`/`nrf5340`)
@@ -154,7 +182,8 @@ default.
   nRF5340). Each phase also has a `Main firmware application: Phase N` epic issue
   (the `milestone`-labelled roadmap nodes #4/#42/#43/#44) under root epic #41.
 - **Tags:** annotated pre-squash history tags: `migration-history`,
-  `ds3231-driver-history`, `i2c-bus-task-history`, `flash-memory-history`
+  `ds3231-driver-history`, `i2c-bus-task-history`, `flash-memory-history`,
+  `record-store-history` (#33)
 - **`gh` is fully set up** with scopes `repo`, `read:project`, `project`
   (issue writes + project board writes both work). Logged in as `galudino`.
 - **Project field IDs** (for `gh project item-edit --field-id ...`):
@@ -252,17 +281,72 @@ sentinel-firmware/
 
 ---
 
-## Next session — recommended starting point (#33)
+## Next session — recommended starting point (#34, design LOCKED)
 
-1. Read this file + the body of issue #33.
-2. `git checkout -b 33-flash-record-store develop`
-3. Implement `record_store<RecordT, CapacityRecords>` on top of the W25Q128
-   driver (`Sentinel/src/drivers/flash-memory/sentinel_w25q128.hpp`). Circular
-   append + indexed read; 1-byte status byte per record for power-loss safety;
-   lazy sector erase. See #33 body for the full spec.
-4. Wire a smoke test into the testbench; run against the GD25Q128 on the bench.
-5. When complete: tag `record-store-history`, squash-merge into `develop`,
-   merge `develop` into `main` with `--no-ff`. Update this file. Push.
+`develop` is **1 commit ahead of `origin/develop`** (the #33 squash `41abac9`)
+and the `record-store-history` tag is local-only — **both still need pushing**
+(held this session by request). Also note #33 is on `develop` but **not yet
+merged to `main`**; do that `--no-ff` merge when convenient.
+
+1. Read this file + the body of issue #34.
+2. `git checkout -b 34-diagnostics-system-event-log develop`
+3. Implement per the locked design below. Scope = the `system_event_log`
+   component + typed records + queue/drain task, validated **in testbench**
+   against a RAM-backed store. BLE GATT retrieval is **#6**; POST emission is
+   **#35**; both are out of scope for #34.
+
+### Locked design (decided 2026-06-28)
+
+Target split (per the established convention): #34 is a record-store *consumer*,
+but its 8 ACs are all testbench-shaped, so build + validate in **testbench**
+with the RAM store. App `main.cpp` boot-wiring is thin and follows later.
+
+**Files**
+- `src/diagnostics/sentinel_system_event.hpp` — `system_event` enum (closed,
+  ranges per issue), 8-byte `system_event_record_header`, 36-byte
+  `system_event_record`, and the per-type typed views, each with
+  `static_assert(sizeof(...) == 36)`.
+- `src/diagnostics/sentinel_system_event_log.hpp` — the log class + FreeRTOS
+  staging queue + drain task.
+- `src/storage/sentinel_ram_record_store.hpp` — RAM-backed store exposing the
+  **same duck-typed API** as `record_store` (initialize/append/read/count/
+  head_index/tail_index/capacity/erase_all + `append_uncommitted_for_test`),
+  backed by a fixed array. Lets tests avoid flash wear.
+- `src/test/sentinel_test_system_event_log.{hpp,cpp}` + testbench wiring
+  (mirror the `record_store` test module; one-shot suite → `vTaskDelete(nullptr)`
+  at the end — do NOT fall off the task fn, it freezes the scheduler).
+
+**Three approved deviations from the issue's API sketch**
+1. **Template the log on the store type:** `system_event_log<Store>` (duck-typed,
+   no vtable), so the same code runs over the flash `record_store` (app) or
+   `ram_record_store` (tests). Singleton accessor becomes
+   `system_event_log<Store>::instance()`.
+2. **Inject a time-provider callback** (`uint32_t (*now_unix)()`), NOT a
+   `ds3231&`. The log only needs "unix time, or 0 if unavailable"; a callback
+   decouples it from the RTC driver and makes timestamps deterministic in tests
+   (needed for `unexpected_shutdown_synthesis`). App passes a thin wrapper over
+   rtc_service; tests pass a controllable lambda.
+3. **Size the flash region ~512 KiB (8,192 records), not 256 KiB.** The #33
+   power-of-two slotting makes a 36-byte record a 64-byte slot, so 256 KiB only
+   holds 4,096. 512 KiB on a 16 MiB chip is free. (Tests use the RAM store, so
+   this only matters for the app-side region constant.)
+
+**Behavior to implement**
+- `record_*()` enqueue a 36-byte staging record (`xQueueSend`, 0 timeout →
+  non-blocking; return false if full). The drain task `xQueueReceive`-blocks
+  and `store.append()`s — keeps SPI off the caller's path.
+- `count()/read()/read_range()` delegate to the store. Cross-task read is safe:
+  single writer (the task) writes flash-then-`m_head`, and aligned 32-bit
+  reads are atomic on CM4, so a reader sees either the old or a fully-committed
+  head — no torn record. (Document this; don't add a lock for reads.)
+- Boot sequence in the task before the drain loop: read the most-recent record;
+  if it is NOT `shutdown_clean`, synthesize a `shutdown_unexpected` at that
+  record's timestamp; then append `boot_complete` (fw version + boot_count,
+  where boot_count = prior `boot_lifecycle_record.boot_count` + 1, else 1).
+- Per-type structs MUST stay 36 bytes; adding a field eats reserved padding.
+
+5. When complete: tag `event-log-history`, squash-merge into `develop`, merge
+   `develop` into `main` with `--no-ff`. Update this file. Push.
 ```
 git push origin main develop <new-history-tag>
 ```
