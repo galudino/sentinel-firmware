@@ -569,6 +569,13 @@ BaseType_t sentinel::test::record_store::task_create() {
         static_cast<UBaseType_t>(configMAX_PRIORITIES - 3);
 
     return xTaskCreate(
-        [](void *) -> void { sentinel::test::record_store::all(); },
+        [](void *) -> void {
+            sentinel::test::record_store::all();
+            // The record_store suite is one-shot: all() runs the six tests
+            // and returns. A FreeRTOS task must not fall off the end of its
+            // entry function (that traps in prvTaskExitError with interrupts
+            // disabled, freezing the scheduler), so delete it explicitly.
+            vTaskDelete(nullptr);
+        },
         "Record Store Test Task", stack_words, nullptr, priority, nullptr);
 }
