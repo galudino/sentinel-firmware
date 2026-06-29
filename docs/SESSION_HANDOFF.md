@@ -259,6 +259,32 @@ default.
      Because `populate()` reads #37's cache, **#37 lands before #36** (a swap from
      the old #36-first sketch). The two lanes then consume `populate()`; #6 wires
      the producer notify-sinks to characteristics + assigns the 128-bit UUIDs.
+15. **The testbench validates REAL planned components — no test-specific
+   doubles for on-bench ACs.** Fake driver doubles (e.g. the #35 POST suite's
+   `fake_bme280`/`fake_store`) are for **off-bench LOGIC** only — they prove a
+   pure algorithm forwards the right bytes deterministically on a host. A
+   component's **on-bench acceptance criteria** are validated by running it
+   through its **real** wiring / consumers, never a throwaway harness built just
+   to exercise it. Consequences, applied this session:
+   - **#35 POST hardware ACs are owned by #38.** A true on-bench POST must run
+     the real BME280/DS3231/W25Q128 through the real boot orchestrator + shared
+     device context — which *is* #38. So all six physical ACs (`all_pass_path`,
+     `bme280_disconnect`, `w25q128_unknown_jedec`, `oscillator_stop`,
+     `degraded_operation`, `timing < 100 ms`) are validated under #38, not via a
+     temporary POST harness. (#35 stays closed on off-bench-green; #38 carries
+     the bench sign-off.)
+   - **#36 `populate()` ACs** (`populate_default`/`populate_partial`) validate
+     via the real consumers (#46 stream / #38 persistence calling it on-bench),
+     not a populate-runner harness.
+   - **#37 ACs** split: `task_create_success` / `bus_coexistence` /
+     `bme280_disconnect_resilience` are observable now from the running service
+     task; `sample_period_change` / `subscriber_notify` / `mutex_correctness`
+     validate when their real consumers (#6 GATT characteristic, #46 stream)
+     exercise the API.
+   - **Board pattern:** an issue that cannot proceed until a dependency is
+     complete goes to **On Hold/Blocked** (this session: #6 ← #46+#38; #45 ← #6).
+     Keep board status in sync with reality (this session also corrected #34,
+     which was stale at On Hold/Blocked despite being closed → Done).
 
 ---
 
