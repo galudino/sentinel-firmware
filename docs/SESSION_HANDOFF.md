@@ -7,11 +7,13 @@ infrastructure, or non-obvious constraints. Keep it under ~350 lines — rotate
 old context into commit messages, issue bodies, or `docs/architecture/*.md`
 when it grows too long.
 
-**Last updated:** 2026-06-28 (#34 System Event Log DONE — squash-merged into
-`develop` as `ecc1618`, tagged `event-log-history`; `develop` merged into
-`main` (`a90aed0`, `--no-ff`) which also carried #33 to `main`; all four pushed
-to origin along with the `record-store-history` + `event-log-history` tags.
-Issue #34 closed, board → Done. Next: #35 POST.)
+**Last updated:** 2026-06-28 (#35 POST implemented on branch
+`35-power-on-self-test` off `develop`; testbench links cleanly. NOT yet
+committed/merged/closed — on-bench hardware ACs + app boot-wiring still pending.
+Prior: #34 System Event Log DONE — squash-merged into `develop` as `ecc1618`,
+tagged `event-log-history`; `develop` merged into `main` (`a90aed0`, `--no-ff`)
+which also carried #33 to `main`; tags `record-store-history` +
+`event-log-history` pushed. Next after #35: #36 Device Snapshot.)
 
 ---
 
@@ -60,8 +62,11 @@ default.
   Event Log** (typed 36-byte records, store-templated non-blocking log, RAM
   store test double; all 8 ACs pass in the testbench).
 - **What's next (open, ordered by dependency):**
-  1. **#35** — POST (consumes #33 + emits event-log records via #34) ← START HERE
-  2. **#36** — Device Snapshot struct + populate
+  1. **#35** — POST: module + testbench suite implemented (branch
+     `35-power-on-self-test`); first real *producer* of System Event Log
+     records. Remaining: on-bench hardware ACs + app boot-wiring, then
+     commit/squash/merge per the git-flow cadence.
+  2. **#36** — Device Snapshot struct + populate ← NEXT
   3. **#37** — Telemetry sample task + **#38** — Periodic snapshot persistence
   4. **#6** — BLE GATT services Phase I (consumes all the above)
 
@@ -159,6 +164,24 @@ default.
    atomic aligned head). `ram_record_store` mirrors the flash slot layout
    (status + sequence + payload) over a **caller-owned** buffer so a fresh store
    re-scanning the same bytes faithfully emulates a warm reboot.
+12. **POST is probe / aggregate / record, all duck-typed (#35, AS BUILT).**
+   `sentinel::diagnostics::post` (`src/diagnostics/sentinel_post.hpp`, header-
+   only) splits into three testable layers: one templated `probe_*()` per
+   subsystem (duck-typed on the driver — `read_chip_id`, `oscillator_stop_flag`,
+   `jedec_id`+`is_known_jedec`, store `initialize`/head/tail/capacity), a pure
+   `post::summary` accumulator (`all_passed` / `failure_count` / 16-slot
+   `invalid`-sentinel-terminated `results`), and `record_results(log, summary)`
+   that emits to a duck-typed event log. The testbench drives the probes with
+   tiny **fake driver doubles** so every `post_result` code is exercised
+   deterministically off-bench (the physical ACs — pull a pin, swap the flash,
+   drain the RTC battery — are manual on-bench). `post_subsystem` /
+   `post_result` enums are an append-only wire contract (shared with #6 + iOS
+   client). **Deviation from the issue sketch:** the record-store probe is
+   read-only (no throwaway test record → no log pollution); the SPI+flash+store
+   write path is instead validated by `record_results` writing POST's own real
+   result records. On all-pass → one `post_passed`; per failure → one
+   `post_subsystem_failed`. If the *record store itself* failed POST, event-log
+   writes are skipped (futile) and the BLE debug stream (#25) is the only sink.
 
 ---
 
@@ -296,20 +319,29 @@ sentinel-firmware/
 
 ---
 
-## Next session — recommended starting point (#35 POST)
+## Next session — finish #35, then start #36
 
 `develop` and `main` are both synced with origin (through the #34 merge
 `a90aed0`); tags `record-store-history` + `event-log-history` are pushed.
 
-1. Read this file + the body of issue #35.
-2. `git checkout -b 35-<slug> develop`.
-3. #35 (Power-On Self-Test) consumes the #33 record store and **emits**
-   `post_passed` / `post_subsystem_failed` event-log records via the #34 API —
-   i.e. it is the first real *producer* of System Event Log records. Use the
-   typed helpers `system_event_log<Store>::record_post_passed()` /
-   `record_post_subsystem_fail(subsystem, result, detail)` (already implemented;
-   `post_result_record` typed view exists). Decide POST's subsystem-id and
-   result-code enumerations as part of #35.
+**#35 is implemented on branch `35-power-on-self-test`** (off `develop`):
+`src/diagnostics/sentinel_post.hpp` (POST module) + `src/test/sentinel_test_post.{hpp,cpp}`
+(7-test fake-driven suite) + wired into `src/testbench/testbench.cpp`. Testbench
+links cleanly under the strict flags. See architectural decision #12 for the
+as-built design. Remaining to close #35:
+
+1. **On-bench hardware ACs** (manual): `all_pass_path`, `bme280_disconnect`,
+   `w25q128_unknown_jedec`, `oscillator_stop`, `degraded_operation`, `timing
+   < 100 ms`. The testbench suite already validates the *logic* of each via fakes.
+2. **App boot-wiring** (deferred, like #34): call `post::run(...)` from `main()`
+   `initialize()` after `peripheral_initialize()`, passing the real drivers + a
+   flash `record_store`-backed `system_event_log`, then `record_results()`. The
+   BLE-stack-status args come from the `stack_initialize()` return + GATT-db
+   registration result.
+3. Then commit/squash/merge per the git-flow cadence (tag `post-history`), close
+   #35, board → Done.
+
+After #35: **#36 Device Snapshot struct + populate.**
 
 ### How #34 actually shipped (for #35's consumers)
 
