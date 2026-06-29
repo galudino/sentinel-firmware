@@ -142,7 +142,8 @@ sentinel-firmware/
 ├── README.md                       # ← you are here
 ├── LICENSE
 ├── docs/
-│   └── SESSION_HANDOFF.md          # rolling context for new contributors
+│   ├── SESSION_HANDOFF.md          # rolling context for new contributors
+│   └── architecture/               # durable reference (decisions, infra, bench, layout)
 ├── mtb_shared/                     # ModusToolbox dependencies (gitignored)
 └── Sentinel/                       # ModusToolbox project root
     ├── README.md                   # Build / flash / project layout details
@@ -185,9 +186,11 @@ different files. A future repository restructure may flatten this.
 - **Branch workflow.** git-flow style: branch off `develop`, incremental
   commits, tag the pre-squash tip, squash-merge into `develop`, merge `develop`
   into `main` with an explicit `--no-ff` merge commit. See
-  `docs/SESSION_HANDOFF.md` for the full convention.
+  [`docs/architecture/github-infrastructure.md`](docs/architecture/github-infrastructure.md)
+  for the full convention.
 - **Issue body templates.** "Completed" for closed retros; forward-spec for
-  backlog items. Templates documented in `docs/SESSION_HANDOFF.md`.
+  backlog items. Templates documented in
+  [`docs/architecture/github-infrastructure.md`](docs/architecture/github-infrastructure.md).
 
 ---
 
