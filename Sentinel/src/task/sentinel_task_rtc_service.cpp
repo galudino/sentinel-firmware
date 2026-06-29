@@ -79,6 +79,13 @@ cyhal_gpio_callback_data_t sqw_callback_data{};
 volatile uint32_t last_unix_seconds = 0;
 
 ///
+/// \brief Last DS3231 die temperature in 0.01 °C, cached for cross-task reads.
+///        16-bit aligned → atomic single-halfword access on Cortex-M, so no
+///        lock is needed for the read in \ref last_temperature_centi_c.
+///
+volatile int16_t last_temperature_centi = 0;
+
+///
 /// \brief NVIC priority for the SQW GPIO interrupt.
 ///
 /// \details Matches the value the battery service uses for its timer event.
@@ -192,6 +199,10 @@ using namespace sentinel::task;
 
 uint32_t rtc_service::last_unix_time() noexcept { return last_unix_seconds; }
 
+int16_t rtc_service::last_temperature_centi_c() noexcept {
+    return last_temperature_centi;
+}
+
 BaseType_t rtc_service::task_create() {
     return xTaskCreate(task_function, "RTC Service Task",
                        (configMINIMAL_STACK_SIZE * 4), nullptr,
@@ -253,6 +264,10 @@ void rtc_service::task_function(void *task_parameter) {
                        static_cast<int>(rtc.last_error()));
             continue;
         }
+
+        // Publish the latest temperature for cross-task consumers (the device
+        // snapshot #36 reads this cache rather than issuing its own I²C read).
+        last_temperature_centi = *temp;
 
         auto sign = char{};
         auto whole = int32_t{};

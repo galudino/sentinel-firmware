@@ -70,6 +70,19 @@ inline TaskHandle_t task_handle;
 ///
 uint32_t last_unix_time() noexcept;
 
+///
+/// \brief Most recent DS3231 die temperature, in 0.01 °C.
+///
+/// \details Cached on the same cadence the time is latched. Consumed by the
+///          device snapshot \c populate() (#36) so it never has to issue a
+///          fresh I²C read of its own. Backed by a 16-bit aligned value, so the
+///          cross-task read is atomic on Cortex-M without a lock.
+///
+/// \return Temperature in 0.01 °C as of the last successful read, or \c 0
+///         before the first successful read.
+///
+int16_t last_temperature_centi_c() noexcept;
+
 } // namespace sentinel::task::rtc_service
 
 #endif /* SENTINEL_TASK_RTC_SERVICE_HPP */
