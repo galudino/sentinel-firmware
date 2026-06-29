@@ -42,11 +42,13 @@ extern "C" {
 
 ///< Tasks
 #include "sentinel_task_battery_service.hpp"
+#include "sentinel_task_bme280_service.hpp"
 #include "sentinel_task_debug_stream.hpp"
 #include "sentinel_task_rtc_service.hpp"
 
 ///< Tests
 #include "sentinel_test_bme280.hpp"
+#include "sentinel_test_device_snapshot.hpp"
 #include "sentinel_test_ds3231.hpp"
 #include "sentinel_test_post.hpp"
 #include "sentinel_test_record_store.hpp"
@@ -128,6 +130,15 @@ static inline void create_tests() {
         cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
                    "POST test task creation failed\n");
     }
+
+    // The device_snapshot suite (#36) exercises the packed wire layout in RAM,
+    // so it needs no physical sensor either.
+    rtos_result = test::device_snapshot::task_create();
+
+    if (rtos_result != pdPASS) {
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
+                   "device_snapshot test task creation failed\n");
+    }
 }
 
 ///
@@ -148,6 +159,17 @@ static inline void create_tasks() {
     if (rtos_result != pdPASS) {
         cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
                    "RTC service task creation failed\n");
+    }
+
+    // BME280 sample service (#37): caches the latest reading for the device
+    // snapshot populate() and the live BLE characteristic. The driver smoke
+    // test in create_tests() still owns its own instance; the bus arbiter
+    // serializes the two. Comment one out to isolate on-bench.
+    rtos_result = sentinel::task::bme280_service::task_create();
+
+    if (rtos_result != pdPASS) {
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
+                   "BME280 service task creation failed\n");
     }
 }
 
