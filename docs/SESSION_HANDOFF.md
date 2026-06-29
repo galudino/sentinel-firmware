@@ -22,7 +22,13 @@ in #38. #38 issue body updated to match. Then planned the snapshot cluster:
 the previously-missing producer), revised #36 (`populate()` is cache-backed) +
 #38 (retitled "App: Boot orchestrator + shared device context + periodic
 snapshot persistence"). Corrected build order: **#37 → #36 → #46/#38 → #6**.
-Now starting #37.)
+**#37 + #36 then implemented** (branches `37-bme280-sample-task` and stacked
+`36-device-snapshot`; both build clean in the testbench, pushed, NOT yet
+merged/closed — on-bench ACs ride on #38/#6/#46 per decision #15). Added
+**decision #15** (testbench tests real components, not test-specific doubles;
+POST hardware ACs owned by #38). Board hygiene: #34 stale→Done, #6+#45→On
+Hold/Blocked, #38→Ready. Next: **#46 (live stream)** then **#38 (orchestrator +
+device context + persistence)**.)
 
 ---
 
