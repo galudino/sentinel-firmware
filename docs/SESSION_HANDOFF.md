@@ -14,7 +14,10 @@ issue #35 closed, board → Done. All 7 testbench ACs pass. On-bench hardware AC
 are deferred and follow later — same cadence as #34. Prior: #34 System Event Log
 DONE — squash-merged as `ecc1618`, tagged `event-log-history`; `develop` merged
 into `main` (`a90aed0`, `--no-ff`) which also carried #33; tags
-`record-store-history` + `event-log-history` pushed. Next: #36 Device Snapshot.)
+`record-store-history` + `event-log-history` pushed. Next: #36 Device Snapshot.
+Also recorded **decision #13** — boot-orchestrator task over a shared
+`sentinel::resource` device context; POST + event-log app boot-wiring land there
+in #38. #38 issue body updated to match.)
 
 ---
 
@@ -183,6 +186,46 @@ default.
    result records. On all-pass → one `post_passed`; per failure → one
    `post_subsystem_failed`. If the *record store itself* failed POST, event-log
    writes are skipped (futile) and the BLE debug stream (#25) is the only sink.
+   **App boot-wiring deferred → see decision #13:** POST is NOT wired from a
+   pre-scheduler `main()` as this issue's wording implies. The probes do their
+   I/O through the bus-arbiter tasks, which only pump once the scheduler runs,
+   so POST is wired from a high-priority one-shot boot-orchestrator task over a
+   shared device context, landing with #38.
+13. **Boot orchestration = ONE high-priority one-shot task over a shared device
+   context (PLANNED; lands with #38).** Two coupled structural moves that
+   collapse POST wiring + event-log wiring + snapshot persistence into a single
+   readable boot sequence on the production I/O path:
+   - **Shared device context.** The sensor/storage drivers (`bme280`, `ds3231`,
+     `w25q128`), the flash record stores (event-log + snapshot `record_store`),
+     and the `system_event_log` become application-scoped singletons owned by
+     `sentinel::resource` and borrowed by reference — exactly how the cyhal SCB
+     bus handles + `flash_device_mutex` already live there. Stops every task
+     `new`-ing up its own driver. Motivation: (a) the BME280 ctor reads factory
+     calibration into per-instance `calib_data` (`sentinel_bme280.hpp`), so N
+     instances = N redundant calibration reads + N cached copies; (b) consumers
+     multiply fast (POST, #37 telemetry, #38 snapshot, ~6 #6 GATT services all
+     read the same sensors); (c) it completes the resource-layer shared-device
+     pattern the flash mutex (decision #4) already started. This was always the
+     intended shape — drivers reachable like the SCB representations.
+   - **Boot-orchestrator task.** A single highest-priority one-shot FreeRTOS
+     task created in `create_tasks()` that runs FIRST then self-deletes:
+     `post::run(ctx…)` → `post::record_results(ctx.event_log, summary)` →
+     `event_log.run_boot_sequence()` → spawn the service tasks. All boot-time
+     sequencing in one function, in dependency order.
+   - **Why a task, not pre-scheduler (deviation from #35's wording).** Every
+     probe's I/O goes through the bus-ARBITER tasks, which block on
+     `xQueueReceive(…, portMAX_DELAY)` and only pump after `vTaskStartScheduler()`.
+     A literally-pre-scheduler POST can't complete one I²C/SPI transaction. The
+     orchestrator honors the issue's *intent* (POST before the app does real
+     work; results before service tasks spawn) while using the SAME production
+     arbiter path POST validates — no parallel direct-bus code to rot. POST is
+     also the event log's first writer (per the spec), so the two wire together
+     here, not separately.
+   - **Sequencing.** Gated on the flash map: #36 locks the event-log + snapshot
+     region offsets/sizes (decision #11 left them provisional for exactly this);
+     the orchestrator + device context + POST/event-log/snapshot wiring then land
+     together in #38. Wiring POST alone before the map is final = throwaway
+     region numbers or a half-built context #38 reopens.
 
 ---
 
@@ -334,22 +377,24 @@ they don't overlap (decision #11 left `kEventLogRegion*` provisional at ~512 KiB
 pending exactly this). Then #37 (telemetry sample task) + #38 (periodic snapshot
 persistence) wire it up, and #6 exposes it over GATT.
 
-### Two deferred items still owed (carried from #34 + #35), do alongside #6
+### Two deferred items still owed (carried from #34 + #35) → land via the boot orchestrator in #38
 
-Both #34 (event-log) and #35 (POST) shipped with **app `main.cpp` boot-wiring
-deferred** — the testbenches validate the logic over RAM/fake doubles, but
-nothing calls them from the real boot path yet:
+Both #34 (event-log) and #35 (POST) shipped with **app boot-wiring deferred** —
+the testbenches validate the logic over RAM/fake doubles, but nothing calls them
+from the real boot path yet. Per **decision #13**, both land together inside the
+single high-priority one-shot **boot-orchestrator task** (over the shared
+`sentinel::resource` device context), sequenced for **#38** once #36 locks the
+flash map — NOT pre-scheduler in `main()`, and NOT gated on #6:
 
-1. **Event-log task** — clock wrapper over `rtc_service::last_unix_time`, an app
-   `record_store` over `kEventLogRegionOffsetBytes/SizeBytes`, then
-   `task_create()` for the drain task + `run_boot_sequence()`.
-2. **POST** — call `post::run(bme, rtc, flash, store, ble_stack_ok, gatt_db_ok)`
-   from `main()` `initialize()` after `peripheral_initialize()`, then
-   `post::record_results(log, summary)`. The BLE-stack-status args come from the
-   `stack_initialize()` return + GATT-db registration result.
+1. **POST** — `post::run(ctx.bme, ctx.rtc, ctx.flash, ctx.event_store,
+   ble_stack_ok, gatt_db_ok)` then `post::record_results(ctx.event_log, summary)`.
+   The BLE-status args come from `stack_initialize()` + GATT-db registration.
+2. **Event-log task** — clock wrapper over `rtc_service::last_unix_time`, the app
+   event-log `record_store` over the now-final region constants, the drain task,
+   and `event_log.run_boot_sequence()` (the orchestrator calls this right after
+   POST records, since POST is the log's first writer).
 
-These are thin and naturally land when #6 stands up the real app boot path.
-**On-bench POST hardware ACs are manual** (pull the BME280 SDA pin, swap in an
+**On-bench POST hardware ACs remain manual** (pull the BME280 SDA pin, swap in an
 unknown-JEDEC flash, drain the DS3231 battery, scope the < 100 ms timing).
 
 ### How #34 actually shipped (for #35's consumers)
