@@ -48,6 +48,7 @@ extern "C" {
 ///< Tests
 #include "sentinel_test_bme280.hpp"
 #include "sentinel_test_ds3231.hpp"
+#include "sentinel_test_post.hpp"
 #include "sentinel_test_record_store.hpp"
 #include "sentinel_test_system_event_log.hpp"
 #include "sentinel_test_w25q128.hpp"
@@ -117,6 +118,15 @@ static inline void create_tests() {
     if (rtos_result != pdPASS) {
         cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
                    "System event log test task creation failed\n");
+    }
+
+    // The POST suite drives the probes with fake driver doubles, so it too is
+    // independent of any physical sensor / flash being present.
+    rtos_result = test::post::task_create();
+
+    if (rtos_result != pdPASS) {
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
+                   "POST test task creation failed\n");
     }
 }
 
