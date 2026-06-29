@@ -20,17 +20,16 @@ sample task via `b9fee41`; #33 record store + #34 event log already on `main`.)
 `sentinel::resource` device context), #14 (two-lane snapshot model), #15
 (testbench tests REAL components), #16 (all FreeRTOS tasks are OO/class style —
 **now fully realized by #47**).
-**NEW IDEA (not yet an issue) — testbench serial orchestrator:** make the
-testbench run bottom-up + serially (inits → bus tasks → per-driver prelim tests
-→ service tests → event-log/snapshot/POST → THEN start continuous readers) so
-the serial log reads top-to-bottom as a diagnostic. This is the testbench twin
-of the #38 boot orchestrator (decision #13) and needs the test modules turned
-into run-to-completion `run()` calls invoked by one high-priority one-shot
-orchestrator task (post-scheduler — I/O tests can't run pre-scheduler). User is
-in favour; sequence near #38 so both share the orchestrator pattern.
-**NEXT: #46 (live snapshot stream, lane 2) → #38 (boot orchestrator + device
-context + lane-1 persistence; also folds in the testbench-orchestrator idea) →
-#6 (GATT).**
+**Created this session: #48 — testbench serial orchestrator** (standalone,
+sequenced *before* #38). Make the testbench run bottom-up + serially (inits →
+bus tasks → per-driver prelim tests → service/event-log/snapshot/POST tests →
+THEN start continuous readers) so the serial log reads top-to-bottom as a
+diagnostic. Testbench twin of the #38 boot orchestrator (decision #13); needs
+the 7 test modules turned into run-to-completion `run()` calls invoked by one
+high-priority one-shot orchestrator task (post-scheduler — I/O tests can't run
+pre-scheduler). #38 then inherits the proven pattern.
+**NEXT: #46 (live snapshot stream, lane 2) → #48 (testbench serial orchestrator)
+→ #38 (boot orchestrator + device context + lane-1 persistence) → #6 (GATT).**
 
 ---
 
@@ -85,11 +84,12 @@ default.
   #46/#38's new tasks.
 - **What's next (open, dependency-ordered):**
   1. **#46** — Live snapshot stream task (lane 2, ~100 ms BLE) ← **NEXT**
-  2. **#38** — boot orchestrator + shared device context + periodic snapshot
+  2. **#48** — testbench serial orchestrator (bottom-up run-to-completion test
+     sequence; pioneers #38's one-shot-orchestrator pattern)
+  3. **#38** — boot orchestrator + shared device context + periodic snapshot
      persistence (lane 1, ~5 min flash); also wires #34/#35 boot-path + carries
-     POST's on-bench hardware ACs. **Candidate to fold in: testbench serial
-     orchestrator** (same one-shot-orchestrator pattern; see header).
-  3. **#6** — BLE GATT services Phase I (wires producer notify-sinks → characteristics; assigns UUIDs) — *On Hold/Blocked until #46+#38*
+     POST's on-bench hardware ACs. Inherits #48's orchestrator pattern.
+  4. **#6** — BLE GATT services Phase I (wires producer notify-sinks → characteristics; assigns UUIDs) — *On Hold/Blocked until #46+#38*
 
 ---
 
