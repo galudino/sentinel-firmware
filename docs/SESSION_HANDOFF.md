@@ -7,19 +7,30 @@ infrastructure, or non-obvious constraints. Keep it under ~350 lines — rotate
 old context into commit messages, issue bodies, or `docs/architecture/*.md`
 when it grows too long.
 
-**Last updated:** 2026-06-29 (long session). **Merged to `main` this session:**
-#35 POST (`02dd786`, tag `post-history`), **#37 BME280 sample task** (`5dc2815`,
-tag `bme280-sample-task-history`), **#36 Device Snapshot struct + populate**
-(`2f6c4fb`, tag `device-snapshot-history`) — all via merge `b9fee41`; closed,
-board → Done. (Prior: #33 record store + #34 event log already on `main`.)
-**Decisions added:** #13 (boot orchestrator over a shared `sentinel::resource`
-device context), #14 (two-lane snapshot model), #15 (testbench tests REAL
-components — POST hardware ACs owned by #38; #36/#37 closed on off-bench-green,
-bench ACs ride on #38/#6/#46), #16 (all FreeRTOS tasks are OO/class style).
-**Created:** #46 (live snapshot stream task — was a gap), #47 (OO task refactor).
-Board hygiene: #34 stale→Done, #6+#45→On Hold/Blocked, #38→Ready.
-**NEXT: #47 — refactor procedural tasks → OO (user: consistency before moving
-forward) — then #46 → #38 → #6.**)
+**Last updated:** 2026-06-29 (session: #47). **Merged to `main` this session:**
+**#47 OO task refactor** — squash `1dc481d` on `develop`, merge `0528923` on
+`main`, tag `oo-task-refactor-history`; #47 closed, board → Done. All four
+procedural tasks (battery/debug/rtc/bme280 services) are now Meyers-singleton
+classes (`X::instance().…`) mirroring the bus arbiters; no file-static task
+state remains (ISRs recover the instance via the HAL callback arg; bus
+transports moved to `run()` locals). Both app + testbench link clean under
+`-Werror`. (Prior session merged #35 POST + #36 snapshot struct + #37 BME280
+sample task via `b9fee41`; #33 record store + #34 event log already on `main`.)
+**Decisions in play (unchanged):** #13 (boot orchestrator over a shared
+`sentinel::resource` device context), #14 (two-lane snapshot model), #15
+(testbench tests REAL components), #16 (all FreeRTOS tasks are OO/class style —
+**now fully realized by #47**).
+**NEW IDEA (not yet an issue) — testbench serial orchestrator:** make the
+testbench run bottom-up + serially (inits → bus tasks → per-driver prelim tests
+→ service tests → event-log/snapshot/POST → THEN start continuous readers) so
+the serial log reads top-to-bottom as a diagnostic. This is the testbench twin
+of the #38 boot orchestrator (decision #13) and needs the test modules turned
+into run-to-completion `run()` calls invoked by one high-priority one-shot
+orchestrator task (post-scheduler — I/O tests can't run pre-scheduler). User is
+in favour; sequence near #38 so both share the orchestrator pattern.
+**NEXT: #46 (live snapshot stream, lane 2) → #38 (boot orchestrator + device
+context + lane-1 persistence; also folds in the testbench-orchestrator idea) →
+#6 (GATT).**
 
 ---
 
@@ -68,14 +79,17 @@ default.
   Log**, **#35 — POST** (fake-driven suite; hardware ACs owned by #38),
   **#37 — BME280 sample service task + cache**, and **#36 — `device_snapshot`
   struct + `populate()`** (80-byte packed, cache-backed; off-bench suite passes).
+- **What's working today (merged to `main`):** add **#47 — all FreeRTOS tasks
+  are OO/class singletons** (battery/debug/rtc/bme280 services + the bus
+  arbiters); `X::instance().task_create()` / accessors. Style is now locked for
+  #46/#38's new tasks.
 - **What's next (open, dependency-ordered):**
-  1. **#47** — refactor procedural tasks → OO/class style ← **NEXT** (user:
-     consistency *before* moving forward; locks the style for #46/#38's new tasks)
-  2. **#46** — Live snapshot stream task (lane 2, ~100 ms BLE)
-  3. **#38** — boot orchestrator + shared device context + periodic snapshot
+  1. **#46** — Live snapshot stream task (lane 2, ~100 ms BLE) ← **NEXT**
+  2. **#38** — boot orchestrator + shared device context + periodic snapshot
      persistence (lane 1, ~5 min flash); also wires #34/#35 boot-path + carries
-     POST's on-bench hardware ACs
-  4. **#6** — BLE GATT services Phase I (wires producer notify-sinks → characteristics; assigns UUIDs) — *On Hold/Blocked until #46+#38*
+     POST's on-bench hardware ACs. **Candidate to fold in: testbench serial
+     orchestrator** (same one-shot-orchestrator pattern; see header).
+  3. **#6** — BLE GATT services Phase I (wires producer notify-sinks → characteristics; assigns UUIDs) — *On Hold/Blocked until #46+#38*
 
 ---
 
