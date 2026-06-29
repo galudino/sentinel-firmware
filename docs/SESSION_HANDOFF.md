@@ -7,10 +7,13 @@ infrastructure, or non-obvious constraints. Keep it under ~350 lines — rotate
 old context into commit messages, issue bodies, or `docs/architecture/*.md`
 when it grows too long.
 
-**Last updated:** 2026-06-28 (#33 record store DONE — squash-merged into
-`develop`, tagged `record-store-history`; added a shared W25Q128 device mutex
-for multi-writer safety; #34 System Event Log design LOCKED — implementation
-pending next session)
+**Last updated:** 2026-06-28 (#34 System Event Log IMPLEMENTED on branch
+`34-diagnostics-system-event-log` — typed-variant 36-byte records, RAM-backed
+record store test double, store-templated log with a non-blocking staging
+queue + drain task + boot-sequence synthesis; all 8 ACs validated in the
+testbench against the RAM store, and the full `sentinel-testbench` ELF builds +
+links clean. NOT yet squash-merged/tagged/pushed — pending review. #33 record
+store remains on `develop`, still not merged to `main`.)
 
 ---
 
