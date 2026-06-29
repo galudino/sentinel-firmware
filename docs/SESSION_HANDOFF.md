@@ -7,29 +7,37 @@ infrastructure, or non-obvious constraints. Keep it under ~350 lines — rotate
 old context into commit messages, issue bodies, or `docs/architecture/*.md`
 when it grows too long.
 
-**Last updated:** 2026-06-29 (session: #47). **Merged to `main` this session:**
-**#47 OO task refactor** — squash `1dc481d` on `develop`, merge `0528923` on
-`main`, tag `oo-task-refactor-history`; #47 closed, board → Done. All four
-procedural tasks (battery/debug/rtc/bme280 services) are now Meyers-singleton
-classes (`X::instance().…`) mirroring the bus arbiters; no file-static task
-state remains (ISRs recover the instance via the HAL callback arg; bus
-transports moved to `run()` locals). Both app + testbench link clean under
-`-Werror`. (Prior session merged #35 POST + #36 snapshot struct + #37 BME280
-sample task via `b9fee41`; #33 record store + #34 event log already on `main`.)
+**Last updated:** 2026-06-29 (session: #46). **Merged to `main` this session:**
+**#46 live snapshot stream task (lane 2)** — squash `5bfccc9` on `develop`,
+merge `61b7d1d` on `main`, tag `snapshot-stream-history`; #46 closed, board →
+Done. New `sentinel::task::snapshot_stream_task` (OO/class singleton, decision
+#16): normally idle (blocks on `ulTaskNotifyTake`, zero CPU), woken by `start()`
+to loop `populate_snapshot()` → notify sink at ~100 ms while
+`streaming() && central_connected()`, auto-stops on `stop()` or disconnect.
+Producer/GATT split — `set_notify_sink(notify_fn)` for #6's `wiced_bt_gatt`
+notify; connection via a `connected_fn` predicate (default
+`ble_context_object.connected()`, overridable for off-bench tests). Off-bench
+behavioral suite covers all 5 ACs; on-bench BLE-central AC owned by #6 (decision
+#15). **Deviation from #46's sketch:** class is in `sentinel::task` (not the
+sketch's `sentinel::app`) — every task lives there (decision #16). Both app +
+testbench link clean under `-Werror`. (Prior session #47 OO task refactor —
+squash `1dc481d`, merge `0528923`, tag `oo-task-refactor-history`; before that
+#35 POST + #36 snapshot struct + #37 BME280 sample task via `b9fee41`; #33/#34
+already on `main`.)
 **Decisions in play (unchanged):** #13 (boot orchestrator over a shared
-`sentinel::resource` device context), #14 (two-lane snapshot model), #15
-(testbench tests REAL components), #16 (all FreeRTOS tasks are OO/class style —
-**now fully realized by #47**).
-**Created this session: #48 — testbench serial orchestrator** (standalone,
-sequenced *before* #38). Make the testbench run bottom-up + serially (inits →
-bus tasks → per-driver prelim tests → service/event-log/snapshot/POST tests →
-THEN start continuous readers) so the serial log reads top-to-bottom as a
-diagnostic. Testbench twin of the #38 boot orchestrator (decision #13); needs
-the 7 test modules turned into run-to-completion `run()` calls invoked by one
-high-priority one-shot orchestrator task (post-scheduler — I/O tests can't run
-pre-scheduler). #38 then inherits the proven pattern.
-**NEXT: #46 (live snapshot stream, lane 2) → #48 (testbench serial orchestrator)
-→ #38 (boot orchestrator + device context + lane-1 persistence) → #6 (GATT).**
+`sentinel::resource` device context), #14 (two-lane snapshot model — **lane 2
+now realized by #46**), #15 (testbench tests REAL components), #16 (all FreeRTOS
+tasks are OO/class style).
+**#48 — testbench serial orchestrator** (standalone, sequenced *before* #38).
+Make the testbench run bottom-up + serially (inits → bus tasks → per-driver
+prelim tests → service/event-log/snapshot/POST tests → THEN start continuous
+readers) so the serial log reads top-to-bottom as a diagnostic. Testbench twin
+of the #38 boot orchestrator (decision #13); needs the test modules turned into
+run-to-completion `run()` calls invoked by one high-priority one-shot
+orchestrator task (post-scheduler — I/O tests can't run pre-scheduler). #38 then
+inherits the proven pattern.
+**NEXT: #48 (testbench serial orchestrator) → #38 (boot orchestrator + device
+context + lane-1 persistence) → #6 (GATT).**
 
 ---
 
@@ -81,15 +89,17 @@ default.
 - **What's working today (merged to `main`):** add **#47 — all FreeRTOS tasks
   are OO/class singletons** (battery/debug/rtc/bme280 services + the bus
   arbiters); `X::instance().task_create()` / accessors. Style is now locked for
-  #46/#38's new tasks.
+  #38's new tasks — and was followed by **#46 — live snapshot stream task
+  (lane 2)**: `sentinel::task::snapshot_stream_task`, idle-until-enabled, loops
+  `populate_snapshot()` → notify sink at ~100 ms (off-bench behavioral suite
+  passes; on-bench BLE-central AC owned by #6).
 - **What's next (open, dependency-ordered):**
-  1. **#46** — Live snapshot stream task (lane 2, ~100 ms BLE) ← **NEXT**
-  2. **#48** — testbench serial orchestrator (bottom-up run-to-completion test
-     sequence; pioneers #38's one-shot-orchestrator pattern)
-  3. **#38** — boot orchestrator + shared device context + periodic snapshot
+  1. **#48** — testbench serial orchestrator (bottom-up run-to-completion test
+     sequence; pioneers #38's one-shot-orchestrator pattern) ← **NEXT**
+  2. **#38** — boot orchestrator + shared device context + periodic snapshot
      persistence (lane 1, ~5 min flash); also wires #34/#35 boot-path + carries
      POST's on-bench hardware ACs. Inherits #48's orchestrator pattern.
-  4. **#6** — BLE GATT services Phase I (wires producer notify-sinks → characteristics; assigns UUIDs) — *On Hold/Blocked until #46+#38*
+  3. **#6** — BLE GATT services Phase I (wires producer notify-sinks → characteristics; assigns UUIDs) — *On Hold/Blocked until #38* (its lane-2 dependency #46 is now done; it attaches the `snapshot_stream_task` notify sink)
 
 ---
 
@@ -251,14 +261,14 @@ default.
      flash record store every ~5 min for the device's whole operational life,
      connected or not. Read back via the same paged protocol as the System Event
      Log (`SnapshotHistory` service). Mirrors #34 one-for-one.
-   - **Lane 2 — on-demand live stream (#46, CREATED this session).** A dedicated
-     normally-idle task (option a — NOT a timer inside #6) that the
-     `SnapshotStream` enable characteristic (#6) wakes. While enabled + connected
-     it loops `populate()` → BLE notify at ~100 ms, then returns to idle.
-     Producer/GATT split: the task produces + calls a notify sink; #6 owns the
-     characteristic + the actual `wiced_bt_gatt` notify. The live-stream task had
-     NO issue before this session — it was hand-waved "forthcoming, under #6";
-     #46 closes that gap.
+   - **Lane 2 — on-demand live stream (#46, BUILT — `snapshot_stream_task`).** A
+     dedicated normally-idle task (option a — NOT a timer inside #6) that the
+     `SnapshotStream` enable characteristic (#6) wakes via `start()`. While
+     enabled + connected it loops `populate()` → notify sink at ~100 ms, then
+     returns to idle on `stop()`/disconnect. Producer/GATT split: the task
+     produces + calls a `notify_fn` sink (set by #6); #6 owns the characteristic
+     + the actual `wiced_bt_gatt` notify. Connection gating is a `connected_fn`
+     predicate (default `ble_context_object.connected()`, overridable off-bench).
    - **`populate()` reads CACHES, not fresh bus I/O.** BME280 from #37's ~1 Hz
      sample cache, time from rtc_service, store counts from head/tail, BLE state,
      uptime — all cheap. This is what lets lane 2 stream at 100 ms with zero
@@ -446,30 +456,35 @@ sentinel-firmware/
 
 ---
 
-## This/next session — the snapshot cluster (#37 → #36 → #46/#38 → #6)
+## This/next session — the snapshot cluster (#37 → #36 → #46 ✓ / #38 → #6)
 
-`develop` and `main` are both synced with origin through the **#35 POST merge**;
-tags `record-store-history`, `event-log-history`, `post-history` are pushed.
-#35 is closed, board → Done. The snapshot cluster was **planned as a unit** this
-session (decision #14 + #46 created) so session boundaries can't drop the
-live-stream task. Build in dependency order:
+`develop` and `main` are both synced with origin through the **#46 live snapshot
+stream merge** (`5bfccc9` develop / `61b7d1d` main, tag `snapshot-stream-history`).
+Tags `record-store-history`, `event-log-history`, `post-history`,
+`oo-task-refactor-history`, `snapshot-stream-history` are pushed. The snapshot
+cluster was **planned as a unit** (decision #14) so session boundaries can't drop
+any lane. Progress through the dependency order:
 
-1. **#37 — BME280 sample task + cache ← STARTING NOW.** Production replacement
-   for the testbench `continuous_read` loop: sample BME280 at ~1 Hz over the I²C
-   arbiter, cache `latest()` behind a mutex, expose a notify-queue/subscribe API.
-   No BLE dependency — testable standalone. This is the cache `populate()` reads.
-2. **#36 — `device_snapshot` + `populate()`.** Struct (no deps) + `populate()`
-   that aggregates **from caches** (BME280 ← #37, time ← rtc_service, store
-   head/tail counts, BLE state, uptime). Coordinate the snapshot flash region
-   offset/size with the event-log region so they don't overlap (decision #11
-   left `kEventLogRegion*` provisional at ~512 KiB pending exactly this — **#36
-   locks the full flash map**).
-3. **#46 (lane 2 stream) + #38 (lane 1 persistence + boot orchestrator + device
-   context).** See decisions #13 + #14. #38 is the big one (stands up the real
-   app boot path + the always-on persistence); #46 is the idle-until-enabled
-   100 ms live stream.
-4. **#6 — GATT.** Wires producer notify-sinks → characteristics, assigns the
-   128-bit UUIDs. Client #9 mirrors 1:1.
+1. **#37 — BME280 sample task + cache. ✓ DONE.** Samples BME280 at ~1 Hz over the
+   I²C arbiter, caches `latest()` behind a mutex; the cache `populate()` reads.
+2. **#36 — `device_snapshot` + `populate()`. ✓ DONE.** 80-byte packed struct +
+   cache-backed `populate()` (BME280 ← #37, time ← rtc_service, uptime). Storage
+   counts / BLE state / CPU temp / POST status are still 0 — they wire from the
+   shared device context + ble_context cache in **#38** / **#6**.
+3a. **#46 — lane 2 live stream. ✓ DONE.** `snapshot_stream_task`,
+    idle-until-enabled, `populate()` → notify sink at ~100 ms. Off-bench suite
+    green; on-bench BLE-central AC owned by #6.
+3b. **#38 — lane 1 persistence + boot orchestrator + shared device context.**
+    ← the big one: stands up the real app boot path (decision #13) + the
+    always-on ~5 min flash persistence, wires #34/#35 boot-path, carries POST's
+    on-bench hardware ACs. **Sequenced after #48** (which pioneers the one-shot
+    orchestrator pattern #38 inherits).
+4. **#6 — GATT.** Wires producer notify-sinks → characteristics (incl. attaching
+   `snapshot_stream_task`'s notify sink + driving its `start()`/`stop()` from the
+   `SnapshotStream` enable char), assigns the 128-bit UUIDs. Client #9 mirrors 1:1.
+
+**Immediate next: #48 — testbench serial orchestrator** (see the header block;
+standalone, sequenced before #38, pioneers the one-shot-orchestrator pattern).
 
 ### Two deferred items still owed (carried from #34 + #35) → land via the boot orchestrator in #38
 
