@@ -7,13 +7,14 @@ infrastructure, or non-obvious constraints. Keep it under ~350 lines — rotate
 old context into commit messages, issue bodies, or `docs/architecture/*.md`
 when it grows too long.
 
-**Last updated:** 2026-06-28 (#35 POST implemented on branch
-`35-power-on-self-test` off `develop`; testbench links cleanly. NOT yet
-committed/merged/closed — on-bench hardware ACs + app boot-wiring still pending.
-Prior: #34 System Event Log DONE — squash-merged into `develop` as `ecc1618`,
-tagged `event-log-history`; `develop` merged into `main` (`a90aed0`, `--no-ff`)
-which also carried #33 to `main`; tags `record-store-history` +
-`event-log-history` pushed. Next after #35: #36 Device Snapshot.)
+**Last updated:** 2026-06-29 (#35 POST DONE — squash-merged into `develop` as
+`02dd786`, tagged `post-history`; `develop` merged into `main` (`--no-ff`);
+issue #35 closed, board → Done. All 7 testbench ACs pass. On-bench hardware ACs
+(manual: pull a pin / swap the flash / drain the RTC battery) + app boot-wiring
+are deferred and follow later — same cadence as #34. Prior: #34 System Event Log
+DONE — squash-merged as `ecc1618`, tagged `event-log-history`; `develop` merged
+into `main` (`a90aed0`, `--no-ff`) which also carried #33; tags
+`record-store-history` + `event-log-history` pushed. Next: #36 Device Snapshot.)
 
 ---
 
@@ -62,13 +63,13 @@ default.
   Event Log** (typed 36-byte records, store-templated non-blocking log, RAM
   store test double; all 8 ACs pass in the testbench).
 - **What's next (open, ordered by dependency):**
-  1. **#35** — POST: module + testbench suite implemented (branch
-     `35-power-on-self-test`); first real *producer* of System Event Log
-     records. Remaining: on-bench hardware ACs + app boot-wiring, then
-     commit/squash/merge per the git-flow cadence.
-  2. **#36** — Device Snapshot struct + populate ← NEXT
-  3. **#37** — Telemetry sample task + **#38** — Periodic snapshot persistence
-  4. **#6** — BLE GATT services Phase I (consumes all the above)
+  1. **#36** — Device Snapshot struct + populate ← NEXT
+  2. **#37** — Telemetry sample task + **#38** — Periodic snapshot persistence
+  3. **#6** — BLE GATT services Phase I (consumes all the above)
+- **Just shipped (#35 — POST, merged to `main`):** first real *producer* of
+  System Event Log records. `probe`/`aggregate`/`record` split, all duck-typed;
+  7 fake-driven testbench ACs pass. On-bench hardware ACs + `main.cpp`
+  boot-wiring deferred (follow later, same as #34). See decision #12.
 
 ---
 
@@ -319,29 +320,37 @@ sentinel-firmware/
 
 ---
 
-## Next session — finish #35, then start #36
+## Next session — start #36 Device Snapshot
 
-`develop` and `main` are both synced with origin (through the #34 merge
-`a90aed0`); tags `record-store-history` + `event-log-history` are pushed.
+`develop` and `main` are both synced with origin through the **#35 POST merge**;
+tags `record-store-history`, `event-log-history`, `post-history` are pushed.
+#35 is closed, board → Done.
 
-**#35 is implemented on branch `35-power-on-self-test`** (off `develop`):
-`src/diagnostics/sentinel_post.hpp` (POST module) + `src/test/sentinel_test_post.{hpp,cpp}`
-(7-test fake-driven suite) + wired into `src/testbench/testbench.cpp`. Testbench
-links cleanly under the strict flags. See architectural decision #12 for the
-as-built design. Remaining to close #35:
+**#36 — Device Snapshot struct + populate.** The periodic structured-state
+record type (separate dedicated log from the discrete event log — decision #2).
+Reuses `record_store<RecordT, Transport>` (#33) with a `device_snapshot` record.
+Coordinate the snapshot flash region offset/size with the event-log region so
+they don't overlap (decision #11 left `kEventLogRegion*` provisional at ~512 KiB
+pending exactly this). Then #37 (telemetry sample task) + #38 (periodic snapshot
+persistence) wire it up, and #6 exposes it over GATT.
 
-1. **On-bench hardware ACs** (manual): `all_pass_path`, `bme280_disconnect`,
-   `w25q128_unknown_jedec`, `oscillator_stop`, `degraded_operation`, `timing
-   < 100 ms`. The testbench suite already validates the *logic* of each via fakes.
-2. **App boot-wiring** (deferred, like #34): call `post::run(...)` from `main()`
-   `initialize()` after `peripheral_initialize()`, passing the real drivers + a
-   flash `record_store`-backed `system_event_log`, then `record_results()`. The
-   BLE-stack-status args come from the `stack_initialize()` return + GATT-db
-   registration result.
-3. Then commit/squash/merge per the git-flow cadence (tag `post-history`), close
-   #35, board → Done.
+### Two deferred items still owed (carried from #34 + #35), do alongside #6
 
-After #35: **#36 Device Snapshot struct + populate.**
+Both #34 (event-log) and #35 (POST) shipped with **app `main.cpp` boot-wiring
+deferred** — the testbenches validate the logic over RAM/fake doubles, but
+nothing calls them from the real boot path yet:
+
+1. **Event-log task** — clock wrapper over `rtc_service::last_unix_time`, an app
+   `record_store` over `kEventLogRegionOffsetBytes/SizeBytes`, then
+   `task_create()` for the drain task + `run_boot_sequence()`.
+2. **POST** — call `post::run(bme, rtc, flash, store, ble_stack_ok, gatt_db_ok)`
+   from `main()` `initialize()` after `peripheral_initialize()`, then
+   `post::record_results(log, summary)`. The BLE-stack-status args come from the
+   `stack_initialize()` return + GATT-db registration result.
+
+These are thin and naturally land when #6 stands up the real app boot path.
+**On-bench POST hardware ACs are manual** (pull the BME280 SDA pin, swap in an
+unknown-JEDEC flash, drain the DS3231 battery, scope the < 100 ms timing).
 
 ### How #34 actually shipped (for #35's consumers)
 
