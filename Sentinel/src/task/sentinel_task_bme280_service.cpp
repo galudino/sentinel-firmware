@@ -55,38 +55,6 @@ namespace {
 using bme280_t = sentinel::bme280_i2c<sentinel::cyhal_i2c_bus_transport>;
 
 ///
-/// \brief Bus-arbitrated transport this task uses to reach the BME280.
-///
-/// \details Routes through \c sentinel::resource::cybsp_i2c_bus so the periodic
-///          reads serialize cleanly with every other task on the shared I²C bus
-///          (notably the DS3231 RTC service). Storage lives in BSS until
-///          \c peripheral_initialize() spawns the arbiter; the transport is
-///          inert until then.
-///
-sentinel::cyhal_i2c_bus_transport
-    bme280_bus(sentinel::resource::cybsp_i2c_bus, BME280_I2C_ADDR_PRIM);
-
-///
-/// \brief Cached most-recent sample and the mutex guarding its multi-field
-///        update. The mutex is created in \c task_create before the task runs.
-///
-sentinel::task::bme280_service::sample cached_sample{};
-SemaphoreHandle_t cached_sample_mutex{nullptr};
-
-///
-/// \brief Optional single subscriber, notified with a copy of each new sample.
-///        Pointer write/read is atomic on Cortex-M; single-subscriber by design.
-///
-QueueHandle_t notify_queue{nullptr};
-
-///
-/// \brief Sampling cadence in milliseconds. 32-bit aligned scalar → atomic
-///        single-word access on Cortex-M, so no lock is needed for the
-///        cross-task get/set.
-///
-volatile uint32_t period_ms{1000};
-
-///
 /// \brief Floor on the cadence. Below the BME280's effective conversion time
 ///        for the configured oversampling, extra reads return no new data and
 ///        only burn I²C bandwidth.
@@ -142,75 +110,88 @@ build_sample(const bme280_data &data, uint32_t unix_timestamp) noexcept {
     return s;
 }
 
-///
-/// \brief Publish a fresh sample to the cache (under the mutex) and, if a
-///        subscriber is attached, to its queue (non-blocking).
-///
-void publish(const sentinel::task::bme280_service::sample &s) noexcept {
-    if (cached_sample_mutex != nullptr) {
-        xSemaphoreTake(cached_sample_mutex, portMAX_DELAY);
-        cached_sample = s;
-        xSemaphoreGive(cached_sample_mutex);
-    }
-
-    if (notify_queue != nullptr) {
-        // Zero timeout: drop the sample if the handler's queue is full rather
-        // than stall the sample cadence on a slow consumer.
-        xQueueSendToBack(notify_queue, &s, 0);
-    }
-}
-
 } // namespace
 
 using namespace sentinel::task;
 
-bme280_service::sample bme280_service::latest() noexcept {
-    auto copy = bme280_service::sample{};
+bme280_service &bme280_service::instance() noexcept {
+    static bme280_service service;
+    return service;
+}
 
-    if (cached_sample_mutex == nullptr) {
+void bme280_service::publish(const sample &s) noexcept {
+    if (m_latest_mutex != nullptr) {
+        xSemaphoreTake(m_latest_mutex, portMAX_DELAY);
+        m_latest = s;
+        xSemaphoreGive(m_latest_mutex);
+    }
+
+    if (m_notify_queue != nullptr) {
+        // Zero timeout: drop the sample if the handler's queue is full rather
+        // than stall the sample cadence on a slow consumer.
+        xQueueSendToBack(m_notify_queue, &s, 0);
+    }
+}
+
+bme280_service::sample bme280_service::latest() noexcept {
+    auto copy = sample{};
+
+    if (m_latest_mutex == nullptr) {
         return copy; // task not started yet → valid == false
     }
 
-    xSemaphoreTake(cached_sample_mutex, portMAX_DELAY);
-    copy = cached_sample;
-    xSemaphoreGive(cached_sample_mutex);
+    xSemaphoreTake(m_latest_mutex, portMAX_DELAY);
+    copy = m_latest;
+    xSemaphoreGive(m_latest_mutex);
     return copy;
 }
 
 void bme280_service::set_sample_period_ms(uint32_t new_period_ms) noexcept {
-    period_ms = new_period_ms < MIN_PERIOD_MS ? MIN_PERIOD_MS : new_period_ms;
+    m_period_ms = new_period_ms < MIN_PERIOD_MS ? MIN_PERIOD_MS : new_period_ms;
 }
 
-uint32_t bme280_service::sample_period_ms() noexcept { return period_ms; }
+uint32_t bme280_service::sample_period_ms() const noexcept {
+    return m_period_ms;
+}
 
 bool bme280_service::subscribe_for_notify(QueueHandle_t queue) noexcept {
     if (queue == nullptr) {
         return false;
     }
-    notify_queue = queue;
+    m_notify_queue = queue;
     return true;
 }
 
-void bme280_service::unsubscribe() noexcept { notify_queue = nullptr; }
+void bme280_service::unsubscribe() noexcept { m_notify_queue = nullptr; }
 
-BaseType_t bme280_service::task_create() {
+BaseType_t bme280_service::task_create() noexcept {
     // The cache mutex must exist before any consumer can call latest(), so
     // create it here rather than inside the task body.
-    cached_sample_mutex = xSemaphoreCreateMutex();
-    if (cached_sample_mutex == nullptr) {
+    m_latest_mutex = xSemaphoreCreateMutex();
+    if (m_latest_mutex == nullptr) {
         return pdFAIL;
     }
 
     // configMINIMAL_STACK_SIZE is too lean for the Bosch double-precision
     // compensation paths plus the logging frames; the testbench BME280 task
     // settled on 4× minimum, which we mirror here.
-    return xTaskCreate(task_function, "BME280 Service Task",
-                       (configMINIMAL_STACK_SIZE * 4), nullptr,
-                       (configMAX_PRIORITIES - 3), &task_handle);
+    return xTaskCreate(&bme280_service::task_trampoline, "BME280 Service Task",
+                       (configMINIMAL_STACK_SIZE * 4), this,
+                       (configMAX_PRIORITIES - 3), &m_handle);
 }
 
-void bme280_service::task_function(void *task_parameter) {
-    sentinel::unused(task_parameter);
+void bme280_service::task_trampoline(void *task_parameter) {
+    static_cast<bme280_service *>(task_parameter)->run();
+}
+
+void bme280_service::run() {
+    // Bus transport + driver are task-local: they live for the whole task
+    // lifetime (this loop never returns) and are not shared with other tasks.
+    // Routes through sentinel::resource::cybsp_i2c_bus so the periodic reads
+    // serialize cleanly with every other task on the shared I²C bus (notably
+    // the DS3231 RTC service).
+    auto bme280_bus = sentinel::cyhal_i2c_bus_transport(
+        sentinel::resource::cybsp_i2c_bus, BME280_I2C_ADDR_PRIM);
 
     auto sensor = bme280_t(bme280_bus, BME280_I2C_ADDR_PRIM);
 
@@ -227,7 +208,7 @@ void bme280_service::task_function(void *task_parameter) {
                    id ? static_cast<int>(*id) : 0xFF);
     } else {
         logi("bme280_service: chip ID OK (0x%02X), sampling at %d ms",
-             static_cast<int>(*id), static_cast<int>(period_ms));
+             static_cast<int>(*id), static_cast<int>(m_period_ms));
         cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "BME280 service: chip ID OK, sampling started\n");
     }
@@ -246,7 +227,7 @@ void bme280_service::task_function(void *task_parameter) {
                        "BME280 service: read error %d\n",
                        static_cast<int>(sensor.last_error()));
         } else {
-            auto s = build_sample(*data, rtc_service::last_unix_time());
+            auto s = build_sample(*data, rtc_service::instance().last_unix_time());
             publish(s);
 
             if (sample_counter % HEARTBEAT_LOG_EVERY_N == 0) {
@@ -275,6 +256,6 @@ void bme280_service::task_function(void *task_parameter) {
             ++sample_counter;
         }
 
-        vTaskDelay(pdMS_TO_TICKS(period_ms));
+        vTaskDelay(pdMS_TO_TICKS(m_period_ms));
     }
 }

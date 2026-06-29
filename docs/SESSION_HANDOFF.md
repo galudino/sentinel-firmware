@@ -7,28 +7,19 @@ infrastructure, or non-obvious constraints. Keep it under ~350 lines — rotate
 old context into commit messages, issue bodies, or `docs/architecture/*.md`
 when it grows too long.
 
-**Last updated:** 2026-06-29 (#35 POST DONE — squash-merged into `develop` as
-`02dd786`, tagged `post-history`; `develop` merged into `main` (`--no-ff`);
-issue #35 closed, board → Done. All 7 testbench ACs pass. On-bench hardware ACs
-(manual: pull a pin / swap the flash / drain the RTC battery) + app boot-wiring
-are deferred and follow later — same cadence as #34. Prior: #34 System Event Log
-DONE — squash-merged as `ecc1618`, tagged `event-log-history`; `develop` merged
-into `main` (`a90aed0`, `--no-ff`) which also carried #33; tags
-`record-store-history` + `event-log-history` pushed. Next: #36 Device Snapshot.
-Also recorded **decision #13** — boot-orchestrator task over a shared
-`sentinel::resource` device context; POST + event-log app boot-wiring land there
-in #38. #38 issue body updated to match. Then planned the snapshot cluster:
-**decision #14** (two-lane snapshot model), **created #46** (live-stream task —
-the previously-missing producer), revised #36 (`populate()` is cache-backed) +
-#38 (retitled "App: Boot orchestrator + shared device context + periodic
-snapshot persistence"). Corrected build order: **#37 → #36 → #46/#38 → #6**.
-**#37 + #36 then implemented** (branches `37-bme280-sample-task` and stacked
-`36-device-snapshot`; both build clean in the testbench, pushed, NOT yet
-merged/closed — on-bench ACs ride on #38/#6/#46 per decision #15). Added
-**decision #15** (testbench tests real components, not test-specific doubles;
-POST hardware ACs owned by #38). Board hygiene: #34 stale→Done, #6+#45→On
-Hold/Blocked, #38→Ready. Next: **#46 (live stream)** then **#38 (orchestrator +
-device context + persistence)**.)
+**Last updated:** 2026-06-29 (long session). **Merged to `main` this session:**
+#35 POST (`02dd786`, tag `post-history`), **#37 BME280 sample task** (`5dc2815`,
+tag `bme280-sample-task-history`), **#36 Device Snapshot struct + populate**
+(`2f6c4fb`, tag `device-snapshot-history`) — all via merge `b9fee41`; closed,
+board → Done. (Prior: #33 record store + #34 event log already on `main`.)
+**Decisions added:** #13 (boot orchestrator over a shared `sentinel::resource`
+device context), #14 (two-lane snapshot model), #15 (testbench tests REAL
+components — POST hardware ACs owned by #38; #36/#37 closed on off-bench-green,
+bench ACs ride on #38/#6/#46), #16 (all FreeRTOS tasks are OO/class style).
+**Created:** #46 (live snapshot stream task — was a gap), #47 (OO task refactor).
+Board hygiene: #34 stale→Done, #6+#45→On Hold/Blocked, #38→Ready.
+**NEXT: #47 — refactor procedural tasks → OO (user: consistency before moving
+forward) — then #46 → #38 → #6.**)
 
 ---
 
@@ -73,19 +64,18 @@ default.
   (#1, #5, #14, #15), both bus arbiters (#27, #28), BLE stack init (#29), debug
   stream (#25), cross-platform transport CRTP base (#26), full BSP / build / OTA
   infrastructure (#30), **#33 — flash-backed circular record store** (+ shared
-  W25Q128 device mutex; all 6 ACs pass on the GD25Q128), and **#34 — System
-  Event Log** (typed 36-byte records, store-templated non-blocking log, RAM
-  store test double; all 8 ACs pass in the testbench).
-- **What's next (open, dependency-ordered — corrected per decision #14):**
-  1. **#37** — BME280 sample task + cache ← NEXT (build first: `populate()` reads its cache)
-  2. **#36** — Device Snapshot struct + `populate()` (reads #37's cache)
-  3. **#46** — Live snapshot stream task (lane 2, ~100 ms BLE) **+** **#38** —
-     boot orchestrator + device context + periodic snapshot persistence (lane 1, ~5 min flash)
-  4. **#6** — BLE GATT services Phase I (wires producer notify-sinks → characteristics; assigns UUIDs)
-- **Just shipped (#35 — POST, merged to `main`):** first real *producer* of
-  System Event Log records. `probe`/`aggregate`/`record` split, all duck-typed;
-  7 fake-driven testbench ACs pass. On-bench hardware ACs + `main.cpp`
-  boot-wiring deferred (follow later, same as #34). See decision #12.
+  W25Q128 device mutex; all 6 ACs pass on the GD25Q128), **#34 — System Event
+  Log**, **#35 — POST** (fake-driven suite; hardware ACs owned by #38),
+  **#37 — BME280 sample service task + cache**, and **#36 — `device_snapshot`
+  struct + `populate()`** (80-byte packed, cache-backed; off-bench suite passes).
+- **What's next (open, dependency-ordered):**
+  1. **#47** — refactor procedural tasks → OO/class style ← **NEXT** (user:
+     consistency *before* moving forward; locks the style for #46/#38's new tasks)
+  2. **#46** — Live snapshot stream task (lane 2, ~100 ms BLE)
+  3. **#38** — boot orchestrator + shared device context + periodic snapshot
+     persistence (lane 1, ~5 min flash); also wires #34/#35 boot-path + carries
+     POST's on-bench hardware ACs
+  4. **#6** — BLE GATT services Phase I (wires producer notify-sinks → characteristics; assigns UUIDs) — *On Hold/Blocked until #46+#38*
 
 ---
 
@@ -291,6 +281,20 @@ default.
      complete goes to **On Hold/Blocked** (this session: #6 ← #46+#38; #45 ← #6).
      Keep board status in sync with reality (this session also corrected #34,
      which was stale at On Hold/Blocked despite being closed → Done).
+16. **All FreeRTOS tasks are OO (class) style.** Tasks under `Sentinel/src/task/`
+   had drifted into two styles: OO classes (the bus arbiters `i2c_bus`/`spi_bus`,
+   #27/#28) and procedural namespaces-of-free-functions with the task's state in
+   `.cpp` **file-static globals** (`battery_service`, `debug_stream`,
+   `rtc_service`, and the `bme280_service` written this session). Standardize on
+   OO: a class per task, state (caches, mutexes, notify queues, handles) as
+   **private members**, `task_create()` + accessors as members, the loop as a
+   private `run()` behind a static trampoline — mirroring the bus arbiters and
+   the class sketches the issues already use (#37/#38/#46). **No runtime cost**
+   (singleton-with-members vs namespace-with-statics → identical static storage);
+   pure encapsulation/consistency. #47 does the conversion; **every new task is
+   written OO from the start.** (`bme280_service` was written procedurally only
+   to match `rtc_service` — a mistake; the right move when conventions conflict
+   is to flag it, not silently pick one.)
 
 ---
 
