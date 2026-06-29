@@ -45,10 +45,12 @@ extern "C" {
 #include "sentinel_task_bme280_service.hpp"
 #include "sentinel_task_debug_stream.hpp"
 #include "sentinel_task_rtc_service.hpp"
+#include "sentinel_task_snapshot_stream.hpp"
 
 ///< Tests
 #include "sentinel_test_bme280.hpp"
 #include "sentinel_test_device_snapshot.hpp"
+#include "sentinel_test_snapshot_stream.hpp"
 #include "sentinel_test_ds3231.hpp"
 #include "sentinel_test_post.hpp"
 #include "sentinel_test_record_store.hpp"
@@ -139,6 +141,16 @@ static inline void create_tests() {
         cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
                    "device_snapshot test task creation failed\n");
     }
+
+    // The snapshot stream suite (#46) drives the stream-task singleton created
+    // in create_tasks() through its idle/stream lifecycle with a counting sink;
+    // it needs no physical sensor (populate() is cache-backed).
+    rtos_result = test::snapshot_stream::task_create();
+
+    if (rtos_result != pdPASS) {
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
+                   "Snapshot stream test task creation failed\n");
+    }
 }
 
 ///
@@ -170,6 +182,17 @@ static inline void create_tasks() {
     if (rtos_result != pdPASS) {
         cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
                    "BME280 service task creation failed\n");
+    }
+
+    // Live snapshot stream service (#46, lane 2): normally idle, streams the
+    // live device_snapshot to a connected central at ~100 ms once the
+    // SnapshotStream enable characteristic (#6) calls start(). Created here so
+    // the #46 behavioral test in create_tests() can drive the singleton.
+    rtos_result = sentinel::task::snapshot_stream_task::instance().task_create();
+
+    if (rtos_result != pdPASS) {
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
+                   "Snapshot stream service task creation failed\n");
     }
 }
 
