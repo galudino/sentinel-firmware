@@ -17,40 +17,68 @@
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
 extern "C" {
+#include <FreeRTOS.h>
+#include <cyhal_timer.h>
 #include <task.h>
 }
 #pragma GCC diagnostic pop
 
-namespace sentinel::task::battery_service {
+namespace sentinel::task {
 
 ///
-/// \brief Create and start the battery service task
+/// \brief Single-owner FreeRTOS task that periodically updates the battery
+///        level and sends BLE notifications.
 ///
-/// Creates a FreeRTOS task that manages battery level updates and sends
-/// BLE notifications to connected clients.
+/// \details OO/class style, mirroring \ref sentinel::task::spi_bus: the task's
+///          state (the HAL timer, the task handle) lives in private members
+///          rather than \c .cpp file-static globals, and the loop runs as a
+///          private \ref run reached via a static trampoline. Use the
+///          \ref instance singleton — the timer ISR captures the instance via
+///          its callback argument, so the object must have a stable address.
 ///
-/// \return BaseType_t pdPASS if task created successfully, pdFAIL otherwise
+/// \note    This class is non-copyable and non-movable.
 ///
-BaseType_t task_create(void);
+class battery_service {
+public:
+    ///
+    /// \brief The single battery-service instance.
+    ///
+    static battery_service &instance() noexcept;
 
-///
-/// \brief Battery service task that updates and sends battery level
-/// notifications
-///
-/// This task updates dummy battery value every time it is notified
-/// and sends a notification to the connected peer. Created in main().
-///
-/// \param task_parameter Task parameter (unused)
-///
-/// \return void
-///
-void task_function(void *task_parameter);
+    /// Non-copyable, non-movable: the task/ISR entry points capture \c this.
+    battery_service(const battery_service &) = delete;
+    battery_service &operator=(const battery_service &) = delete;
+    battery_service(battery_service &&) = delete;
+    battery_service &operator=(battery_service &&) = delete;
 
-///
-/// \brief FreeRTOS task handle for battery service task
-///
-inline TaskHandle_t task_handle;
+    ///
+    /// \brief Create and start the battery service task.
+    ///
+    /// Creates a FreeRTOS task that manages battery level updates and sends
+    /// BLE notifications to connected clients.
+    ///
+    /// \return BaseType_t pdPASS if task created successfully, pdFAIL otherwise
+    ///
+    BaseType_t task_create() noexcept;
 
-} // namespace sentinel::task::battery_service
+private:
+    battery_service() = default;
+
+    static void task_trampoline(void *task_parameter);
+    static void timer_isr(void *callback_arg, cyhal_timer_event_t event);
+
+    ///
+    /// \brief Battery service loop. Updates a dummy battery value every time it
+    ///        is notified and sends a notification to the connected peer.
+    ///
+    void run();
+
+    cy_rslt_t configure_timer() noexcept;
+
+    cyhal_timer_t m_timer{};       ///< HAL timer driving the update cadence.
+    TaskHandle_t  m_handle{nullptr}; ///< FreeRTOS task handle.
+};
+
+} // namespace sentinel::task
 
 #endif /* SENTINEL_TASK_BATTERY_SERVICE_HPP */

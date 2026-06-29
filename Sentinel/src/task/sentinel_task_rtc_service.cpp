@@ -50,42 +50,6 @@ namespace {
 using ds3231_t = sentinel::ds3231<sentinel::cyhal_i2c_bus_transport>;
 
 ///
-/// \brief Bus-arbitrated transport this task uses to reach the DS3231.
-///
-/// \details Routes through \c sentinel::resource::cybsp_i2c_bus so the
-///          per-second reads serialize cleanly with every other task on the
-///          shared I²C bus. Storage lives in BSS until
-///          \c peripheral_initialize() spawns the arbiter; the transport is
-///          inert until then.
-///
-sentinel::cyhal_i2c_bus_transport
-    rtc_bus(sentinel::resource::cybsp_i2c_bus,
-            static_cast<uint16_t>(ds3231_t::slave_address::primary));
-
-///
-/// \brief Persistent callback registration for the SQW GPIO interrupt.
-///
-/// \details The HAL keeps a pointer to this structure for as long as the
-///          callback is registered, so it must outlive the task — file scope
-///          satisfies that.
-///
-cyhal_gpio_callback_data_t sqw_callback_data{};
-
-///
-/// \brief Last Unix timestamp latched on a tick. 32-bit aligned → atomic
-///        single-word access on Cortex-M, so no lock is needed for the
-///        cross-task read in \ref last_unix_time.
-///
-volatile uint32_t last_unix_seconds = 0;
-
-///
-/// \brief Last DS3231 die temperature in 0.01 °C, cached for cross-task reads.
-///        16-bit aligned → atomic single-halfword access on Cortex-M, so no
-///        lock is needed for the read in \ref last_temperature_centi_c.
-///
-volatile int16_t last_temperature_centi = 0;
-
-///
 /// \brief NVIC priority for the SQW GPIO interrupt.
 ///
 /// \details Matches the value the battery service uses for its timer event.
@@ -140,23 +104,6 @@ inline void split_centi(int32_t centi, char &sign_out, int32_t &whole_out,
 }
 
 ///
-/// \brief SQW falling-edge interrupt handler.
-///
-/// \details Kept minimal: unblock the service task and request a context
-///          switch if it is now the highest-priority ready task. All bus
-///          work happens back in task context.
-///
-void sqw_event_isr(void *callback_arg, cyhal_gpio_event_t event) noexcept {
-    sentinel::unused(callback_arg);
-    sentinel::unused(event);
-
-    auto higher_priority_task_woken = BaseType_t{pdFALSE};
-    vTaskNotifyGiveFromISR(sentinel::task::rtc_service::task_handle,
-                           &higher_priority_task_woken);
-    portYIELD_FROM_ISR(higher_priority_task_woken);
-}
-
-///
 /// \brief Program the DS3231 to emit a 1 Hz square wave on INT/SQW.
 ///
 /// \param rtc Driver bound to the DS3231.
@@ -168,6 +115,52 @@ bool configure_square_wave(ds3231_t &rtc) noexcept {
     // read-modify-writes.
     return rtc.set_square_wave_freq(ds3231_t::square_wave_freq::hz_1) &&
            rtc.set_int_sqw_mode(ds3231_t::int_sqw_mode::square_wave);
+}
+
+} // namespace
+
+using namespace sentinel::task;
+
+rtc_service &rtc_service::instance() noexcept {
+    static rtc_service service;
+    return service;
+}
+
+uint32_t rtc_service::last_unix_time() const noexcept {
+    return m_last_unix_seconds;
+}
+
+int16_t rtc_service::last_temperature_centi_c() const noexcept {
+    return m_last_temperature_centi;
+}
+
+BaseType_t rtc_service::task_create() noexcept {
+    return xTaskCreate(&rtc_service::task_trampoline, "RTC Service Task",
+                       (configMINIMAL_STACK_SIZE * 4), this,
+                       (configMAX_PRIORITIES - 3), &m_handle);
+}
+
+void rtc_service::task_trampoline(void *task_parameter) {
+    static_cast<rtc_service *>(task_parameter)->run();
+}
+
+///
+/// \brief SQW falling-edge interrupt handler.
+///
+/// \details Kept minimal: unblock the service task and request a context
+///          switch if it is now the highest-priority ready task. All bus
+///          work happens back in task context. The instance is recovered from
+///          the callback argument stored at registration time.
+///
+void rtc_service::sqw_event_isr(void *callback_arg,
+                                cyhal_gpio_event_t event) {
+    sentinel::unused(event);
+
+    auto *self = static_cast<rtc_service *>(callback_arg);
+
+    auto higher_priority_task_woken = BaseType_t{pdFALSE};
+    vTaskNotifyGiveFromISR(self->m_handle, &higher_priority_task_woken);
+    portYIELD_FROM_ISR(higher_priority_task_woken);
 }
 
 ///
@@ -184,33 +177,24 @@ bool configure_square_wave(ds3231_t &rtc) noexcept {
 ///          pull-up drive mode lets the DS3231's open-drain SQW idle high and
 ///          pull low each half-cycle, giving a clean falling edge.
 ///
-void configure_sqw_interrupt() noexcept {
-    sqw_callback_data.callback = &sqw_event_isr;
-    sqw_callback_data.callback_arg = nullptr;
+void rtc_service::configure_sqw_interrupt() noexcept {
+    m_sqw_callback_data.callback = &rtc_service::sqw_event_isr;
+    m_sqw_callback_data.callback_arg = this;
     cyhal_gpio_register_callback(sentinel::resource::rtc_sqw_pin,
-                                 &sqw_callback_data);
+                                 &m_sqw_callback_data);
     cyhal_gpio_enable_event(sentinel::resource::rtc_sqw_pin,
                             CYHAL_GPIO_IRQ_FALL, SQW_IRQ_PRIORITY, true);
 }
 
-} // namespace
-
-using namespace sentinel::task;
-
-uint32_t rtc_service::last_unix_time() noexcept { return last_unix_seconds; }
-
-int16_t rtc_service::last_temperature_centi_c() noexcept {
-    return last_temperature_centi;
-}
-
-BaseType_t rtc_service::task_create() {
-    return xTaskCreate(task_function, "RTC Service Task",
-                       (configMINIMAL_STACK_SIZE * 4), nullptr,
-                       (configMAX_PRIORITIES - 3), &task_handle);
-}
-
-void rtc_service::task_function(void *task_parameter) {
-    sentinel::unused(task_parameter);
+void rtc_service::run() {
+    // Bus transport + driver are task-local: they live for the whole task
+    // lifetime (this loop never returns on the happy path) and are not shared
+    // with other tasks. Routes through sentinel::resource::cybsp_i2c_bus so the
+    // per-second reads serialize cleanly with every other task on the shared
+    // I²C bus.
+    auto rtc_bus = sentinel::cyhal_i2c_bus_transport(
+        sentinel::resource::cybsp_i2c_bus,
+        static_cast<uint16_t>(ds3231_t::slave_address::primary));
 
     auto rtc = ds3231_t(rtc_bus);
 
@@ -245,7 +229,7 @@ void rtc_service::task_function(void *task_parameter) {
         // must not be gated on the best-effort temperature read below.
         auto unix = ds3231_t::datetime::to_unix_time(*now);
         if (unix) {
-            last_unix_seconds = *unix;
+            m_last_unix_seconds = *unix;
         }
 
         // Throttle logging to HEARTBEAT_LOG_PERIOD_SECONDS; the time latch
@@ -267,7 +251,7 @@ void rtc_service::task_function(void *task_parameter) {
 
         // Publish the latest temperature for cross-task consumers (the device
         // snapshot #36 reads this cache rather than issuing its own I²C read).
-        last_temperature_centi = *temp;
+        m_last_temperature_centi = *temp;
 
         auto sign = char{};
         auto whole = int32_t{};
