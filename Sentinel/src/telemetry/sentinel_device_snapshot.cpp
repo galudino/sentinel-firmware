@@ -44,7 +44,7 @@ void populate_snapshot(device_snapshot *out) noexcept {
     std::memset(out, 0, sizeof(*out));
 
     // ---- Header ----
-    out->unix_timestamp = sentinel::task::rtc_service::last_unix_time();
+    out->unix_timestamp = sentinel::task::rtc_service::instance().last_unix_time();
     out->snapshot_version = SNAPSHOT_VERSION;
     out->firmware_major = sentinel::current_firmware_version.major();
     out->firmware_minor = sentinel::current_firmware_version.minor();
@@ -52,7 +52,7 @@ void populate_snapshot(device_snapshot *out) noexcept {
     out->firmware_build = sentinel::current_firmware_version.build();
 
     // ---- Environmental — BME280 sample cache (#37) ----
-    if (auto s = sentinel::task::bme280_service::latest(); s.valid) {
+    if (auto s = sentinel::task::bme280_service::instance().latest(); s.valid) {
         out->temperature_001c = s.temperature_centi_c;
         out->humidity_001pc = s.humidity_centi_pct;
         out->pressure_pa = s.pressure_pa;
@@ -60,7 +60,7 @@ void populate_snapshot(device_snapshot *out) noexcept {
 
     // ---- Timekeeping — rtc_service caches ----
     out->rtc_temperature_001c =
-        sentinel::task::rtc_service::last_temperature_centi_c();
+        sentinel::task::rtc_service::instance().last_temperature_centi_c();
     // rtc_alarm_flags stays 0: Phase I configures no DS3231 alarms. Wire from a
     // status-register cache when the alarm subsystem is used.
 

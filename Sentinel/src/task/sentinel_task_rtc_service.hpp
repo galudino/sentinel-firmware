@@ -31,58 +31,104 @@
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
 extern "C" {
+#include <FreeRTOS.h>
+#include <cyhal_gpio.h>
 #include <task.h>
 }
 #pragma GCC diagnostic pop
 
 #include <cstdint>
 
-namespace sentinel::task::rtc_service {
+namespace sentinel::task {
 
 ///
-/// \brief Create and start the RTC service task.
+/// \brief Single-owner FreeRTOS task that latches the DS3231 time on each
+///        1 Hz SQW-interrupt tick and publishes it for cross-task consumers.
 ///
-/// \return \c pdPASS if the task was created successfully, otherwise the
-///         \c xTaskCreate failure code.
+/// \details OO/class style, mirroring \ref sentinel::task::spi_bus: the task's
+///          state (latched time/temperature, the SQW callback registration,
+///          the bus transport, the task handle) lives in private members rather
+///          than \c .cpp file-static globals, and the loop runs as a private
+///          \ref run reached via a static trampoline. The SQW ISR is a private
+///          static member reached via the instance pointer carried in the
+///          callback data, so the object must have a stable address. Use the
+///          \ref instance singleton.
 ///
-BaseType_t task_create();
+/// \note    This class is non-copyable and non-movable.
+///
+class rtc_service {
+public:
+    ///
+    /// \brief The single RTC-service instance.
+    ///
+    static rtc_service &instance() noexcept;
 
-///
-/// \brief RTC service task body. Configures the 1 Hz SQW interrupt, then
-///        latches the current time on every tick. Created in main().
-///
-/// \param task_parameter Unused.
-///
-void task_function(void *task_parameter);
+    /// Non-copyable, non-movable: the task/ISR entry points capture \c this.
+    rtc_service(const rtc_service &) = delete;
+    rtc_service &operator=(const rtc_service &) = delete;
+    rtc_service(rtc_service &&) = delete;
+    rtc_service &operator=(rtc_service &&) = delete;
 
-///
-/// \brief FreeRTOS task handle for the RTC service task.
-///
-inline TaskHandle_t task_handle;
+    ///
+    /// \brief Create and start the RTC service task.
+    ///
+    /// \return \c pdPASS if the task was created successfully, otherwise the
+    ///         \c xTaskCreate failure code.
+    ///
+    BaseType_t task_create() noexcept;
 
-///
-/// \brief Most recent Unix timestamp latched on a 1 Hz SQW tick.
-///
-/// \return Seconds since 1970-01-01 UTC as of the last tick, or \c 0 before
-///         the first tick (or if the RTC time was unreadable). Backed by a
-///         32-bit aligned value, so the read is atomic on Cortex-M without
-///         a lock.
-///
-uint32_t last_unix_time() noexcept;
+    ///
+    /// \brief Most recent Unix timestamp latched on a 1 Hz SQW tick.
+    ///
+    /// \return Seconds since 1970-01-01 UTC as of the last tick, or \c 0 before
+    ///         the first tick (or if the RTC time was unreadable). Backed by a
+    ///         32-bit aligned value, so the read is atomic on Cortex-M without
+    ///         a lock.
+    ///
+    uint32_t last_unix_time() const noexcept;
 
-///
-/// \brief Most recent DS3231 die temperature, in 0.01 °C.
-///
-/// \details Cached on the same cadence the time is latched. Consumed by the
-///          device snapshot \c populate() (#36) so it never has to issue a
-///          fresh I²C read of its own. Backed by a 16-bit aligned value, so the
-///          cross-task read is atomic on Cortex-M without a lock.
-///
-/// \return Temperature in 0.01 °C as of the last successful read, or \c 0
-///         before the first successful read.
-///
-int16_t last_temperature_centi_c() noexcept;
+    ///
+    /// \brief Most recent DS3231 die temperature, in 0.01 °C.
+    ///
+    /// \details Cached on the same cadence the time is latched. Consumed by the
+    ///          device snapshot \c populate() (#36) so it never has to issue a
+    ///          fresh I²C read of its own. Backed by a 16-bit aligned value, so
+    ///          the cross-task read is atomic on Cortex-M without a lock.
+    ///
+    /// \return Temperature in 0.01 °C as of the last successful read, or \c 0
+    ///         before the first successful read.
+    ///
+    int16_t last_temperature_centi_c() const noexcept;
 
-} // namespace sentinel::task::rtc_service
+private:
+    rtc_service() = default;
+
+    static void task_trampoline(void *task_parameter);
+    static void sqw_event_isr(void *callback_arg, cyhal_gpio_event_t event);
+
+    ///
+    /// \brief RTC service loop. Configures the 1 Hz SQW interrupt, then latches
+    ///        the current time on every tick.
+    ///
+    void run();
+
+    void configure_sqw_interrupt() noexcept;
+
+    cyhal_gpio_callback_data_t m_sqw_callback_data{}; ///< Persistent SQW reg.
+
+    /// Last Unix timestamp latched on a tick. 32-bit aligned → atomic
+    /// single-word access on Cortex-M, so no lock is needed for the cross-task
+    /// read in \ref last_unix_time.
+    volatile uint32_t m_last_unix_seconds{0};
+
+    /// Last DS3231 die temperature in 0.01 °C. 16-bit aligned → atomic
+    /// single-halfword access on Cortex-M, so no lock is needed for the read in
+    /// \ref last_temperature_centi_c.
+    volatile int16_t m_last_temperature_centi{0};
+
+    TaskHandle_t m_handle{nullptr}; ///< FreeRTOS task handle.
+};
+
+} // namespace sentinel::task
 
 #endif /* SENTINEL_TASK_RTC_SERVICE_HPP */

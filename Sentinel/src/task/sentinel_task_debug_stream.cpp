@@ -32,7 +32,7 @@ extern "C" {
 #include <cstdio>
 #include <cstring>
 
-namespace sentinel::task::debug_stream {
+namespace {
 
 //==============================================================================
 // BLE Notification Helpers
@@ -45,8 +45,8 @@ namespace sentinel::task::debug_stream {
 /// \param      length  Length of data
 /// \return     BLE API result
 ///
-static wiced_bt_gatt_status_t
-send_notification_for_output_stream(const uint8_t *data, size_t length);
+wiced_bt_gatt_status_t send_notification_for_output_stream(const uint8_t *data,
+                                                           size_t length);
 
 //==============================================================================
 // Notification Pump
@@ -61,9 +61,9 @@ send_notification_for_output_stream(const uint8_t *data, size_t length);
 /// - CCCD enabled (client subscribed)
 /// - persistent.debugNotifyStreamEnable set
 ///
-static void output_stream_notifier(void);
+void output_stream_notifier(void);
 
-} // namespace sentinel::task::debug_stream
+} // namespace
 
 using namespace sentinel::task;
 
@@ -71,16 +71,21 @@ using namespace sentinel::task;
 // Public API Implementation
 //==============================================================================
 
-BaseType_t debug_stream::task_create(void) {
-    auto result =
-        xTaskCreate(task_function, "Debug Stream Task",
-                    (configMINIMAL_STACK_SIZE * 4), nullptr, 1, &task_handle);
-    return result;
+debug_stream &debug_stream::instance() noexcept {
+    static debug_stream stream;
+    return stream;
 }
 
-void debug_stream::task_function(void *args) {
-    sentinel::unused(args);
+BaseType_t debug_stream::task_create() noexcept {
+    return xTaskCreate(&debug_stream::task_trampoline, "Debug Stream Task",
+                       (configMINIMAL_STACK_SIZE * 4), this, 1, &m_handle);
+}
 
+void debug_stream::task_trampoline(void *args) {
+    static_cast<debug_stream *>(args)->run();
+}
+
+void debug_stream::run() {
     /// TODO: Wait for BLE task to be ready
 
     /// TODO: Wait for Persistent Task to be ready
@@ -117,7 +122,7 @@ void debug_stream::task_function(void *args) {
     }
 }
 
-bool debug_stream::is_enabled(void) {
+bool debug_stream::is_enabled() noexcept {
     if (!ble_context_object.connected()) {
         return false;
     }
@@ -137,15 +142,19 @@ bool debug_stream::is_enabled(void) {
 // Module-private function implementations
 //==============================================================================
 
-static wiced_bt_gatt_status_t
-debug_stream::send_notification_for_output_stream(const uint8_t *data,
-                                                  size_t length) {
+namespace {
+
+wiced_bt_gatt_status_t send_notification_for_output_stream(const uint8_t *data,
+                                                           size_t length) {
     return wiced_bt_gatt_server_send_notification(
-        ble_context_object.connection_id(), HDLC_DEBUG_OUTPUT_STREAM_VALUE,
-        static_cast<uint16_t>(length), const_cast<uint8_t *>(data), nullptr);
+        sentinel::ble_context_object.connection_id(),
+        HDLC_DEBUG_OUTPUT_STREAM_VALUE, static_cast<uint16_t>(length),
+        const_cast<uint8_t *>(data), nullptr);
 }
 
-static void debug_stream::output_stream_notifier(void) {
+void output_stream_notifier(void) {
+    using sentinel::ble_context_object;
+
     // Calculate max payload based on MTU
     size_t max_payload =
         (ble_context_object.mtu() > 3) ? (ble_context_object.mtu() - 3) : 20;
@@ -170,3 +179,5 @@ static void debug_stream::output_stream_notifier(void) {
         // For now, we'll just accept the loss
     }
 }
+
+} // namespace

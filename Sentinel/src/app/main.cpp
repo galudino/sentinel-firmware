@@ -65,7 +65,7 @@ namespace sentinel::app {
 static inline void create_tasks() {
     BaseType_t rtos_result{};
 
-    rtos_result = task::battery_service::task_create();
+    rtos_result = task::battery_service::instance().task_create();
 
     if (rtos_result != pdPASS) {
         cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
@@ -73,7 +73,7 @@ static inline void create_tasks() {
     }
 
 #ifdef CYBSP_I2C_HW
-    rtos_result = task::rtc_service::task_create();
+    rtos_result = task::rtc_service::instance().task_create();
 
     if (rtos_result != pdPASS) {
         cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
@@ -150,7 +150,7 @@ static inline void initialize() {
 
     // Start the BLE debug output stream task. Must be running before any
     // task tries to send log messages over BLE notifications.
-    auto debug_stream_result = task::debug_stream::task_create();
+    auto debug_stream_result = task::debug_stream::instance().task_create();
     configASSERT(debug_stream_result == pdPASS);
 
     // Initialize Bluetooth LE stack and services
