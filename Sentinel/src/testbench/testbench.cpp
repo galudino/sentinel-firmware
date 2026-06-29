@@ -48,6 +48,8 @@ extern "C" {
 ///< Tests
 #include "sentinel_test_bme280.hpp"
 #include "sentinel_test_ds3231.hpp"
+#include "sentinel_test_record_store.hpp"
+#include "sentinel_test_system_event_log.hpp"
 #include "sentinel_test_w25q128.hpp"
 
 ///< Utilities
@@ -99,7 +101,23 @@ static inline void create_tests() {
         cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
                    "W25Q128 test task creation failed\n");
     }
+
+    rtos_result = test::record_store::task_create();
+
+    if (rtos_result != pdPASS) {
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
+                   "Record store test task creation failed\n");
+    }
 #endif /* CYBSP_SPI_HW */
+
+    // The System Event Log suite runs against a RAM-backed record store, so it
+    // is independent of the SPI flash being present.
+    rtos_result = test::system_event_log::task_create();
+
+    if (rtos_result != pdPASS) {
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
+                   "System event log test task creation failed\n");
+    }
 }
 
 ///
