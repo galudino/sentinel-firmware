@@ -7,13 +7,11 @@ infrastructure, or non-obvious constraints. Keep it under ~350 lines — rotate
 old context into commit messages, issue bodies, or `docs/architecture/*.md`
 when it grows too long.
 
-**Last updated:** 2026-06-28 (#34 System Event Log IMPLEMENTED on branch
-`34-diagnostics-system-event-log` — typed-variant 36-byte records, RAM-backed
-record store test double, store-templated log with a non-blocking staging
-queue + drain task + boot-sequence synthesis; all 8 ACs validated in the
-testbench against the RAM store, and the full `sentinel-testbench` ELF builds +
-links clean. NOT yet squash-merged/tagged/pushed — pending review. #33 record
-store remains on `develop`, still not merged to `main`.)
+**Last updated:** 2026-06-28 (#34 System Event Log DONE — squash-merged into
+`develop` as `ecc1618`, tagged `event-log-history`; `develop` merged into
+`main` (`a90aed0`, `--no-ff`) which also carried #33 to `main`; all four pushed
+to origin along with the `record-store-history` + `event-log-history` tags.
+Issue #34 closed, board → Done. Next: #35 POST.)
 
 ---
 
@@ -54,17 +52,18 @@ default.
 - **What ships in Phase I:** BME280 + DS3231 + W25Q128 telemetry over BLE GATT,
   flash-backed System Event Log, flash-backed periodic Device Snapshots, live
   Device Snapshot stream, OTA DFU via MCUBoot.
-- **What's working today (closed/merged to `develop`):** all three Phase I
-  drivers (#1, #5, #14, #15), both bus arbiters (#27, #28), BLE stack init
-  (#29), debug stream (#25), cross-platform transport CRTP base (#26), full BSP
-  / build / OTA infrastructure (#30), and **#33 — flash-backed circular record
-  store** (+ a shared W25Q128 device mutex; all 6 ACs pass on the GD25Q128).
+- **What's working today (merged to `main`):** all three Phase I drivers
+  (#1, #5, #14, #15), both bus arbiters (#27, #28), BLE stack init (#29), debug
+  stream (#25), cross-platform transport CRTP base (#26), full BSP / build / OTA
+  infrastructure (#30), **#33 — flash-backed circular record store** (+ shared
+  W25Q128 device mutex; all 6 ACs pass on the GD25Q128), and **#34 — System
+  Event Log** (typed 36-byte records, store-templated non-blocking log, RAM
+  store test double; all 8 ACs pass in the testbench).
 - **What's next (open, ordered by dependency):**
-  1. **#34** — System Event Log (design LOCKED, see below) ← START HERE
-  2. **#35** — POST (consumes #33 + emits event-log records via #34)
-  3. **#36** — Device Snapshot struct + populate
-  4. **#37** — Telemetry sample task + **#38** — Periodic snapshot persistence
-  5. **#6** — BLE GATT services Phase I (consumes all the above)
+  1. **#35** — POST (consumes #33 + emits event-log records via #34) ← START HERE
+  2. **#36** — Device Snapshot struct + populate
+  3. **#37** — Telemetry sample task + **#38** — Periodic snapshot persistence
+  4. **#6** — BLE GATT services Phase I (consumes all the above)
 
 ---
 
@@ -147,6 +146,19 @@ default.
    explicit, append-only, never reused. One canonical token set
    (`cyble-416045`/`rpi5`/`nrf5340`) spans firmware `platform:` labels ↔ GATT
    `platform_id` ↔ cloud manifest `target`.
+11. **System Event Log is store-templated, clock-injected, RAM-testable (#34,
+   AS BUILT).** `system_event_log<Store>` is duck-typed on its record store so
+   one body runs over the flash `record_store` (app) and a `ram_record_store`
+   test double (tests) with no vtable — same pattern as the drivers. Time comes
+   in as a `uint32_t(*)()` callback ("unix secs, or 0"), NOT a `ds3231&`, so the
+   log doesn't depend on the RTC driver and tests get deterministic timestamps.
+   The full `sentinel::firmware_version` carries a baked version *string* and is
+   far larger than 4 bytes, so records embed a compact 4-byte
+   `firmware_version_compact` (`build` = low 8 bits). Recording is non-blocking
+   (staging queue + drain task); cross-task reads need no lock (single writer,
+   atomic aligned head). `ram_record_store` mirrors the flash slot layout
+   (status + sequence + payload) over a **caller-owned** buffer so a fresh store
+   re-scanning the same bytes faithfully emulates a warm reboot.
 
 ---
 
@@ -284,75 +296,47 @@ sentinel-firmware/
 
 ---
 
-## Next session — recommended starting point (#34, design LOCKED)
+## Next session — recommended starting point (#35 POST)
 
-`develop` is **1 commit ahead of `origin/develop`** (the #33 squash `41abac9`)
-and the `record-store-history` tag is local-only — **both still need pushing**
-(held this session by request). Also note #33 is on `develop` but **not yet
-merged to `main`**; do that `--no-ff` merge when convenient.
+`develop` and `main` are both synced with origin (through the #34 merge
+`a90aed0`); tags `record-store-history` + `event-log-history` are pushed.
 
-1. Read this file + the body of issue #34.
-2. `git checkout -b 34-diagnostics-system-event-log develop`
-3. Implement per the locked design below. Scope = the `system_event_log`
-   component + typed records + queue/drain task, validated **in testbench**
-   against a RAM-backed store. BLE GATT retrieval is **#6**; POST emission is
-   **#35**; both are out of scope for #34.
+1. Read this file + the body of issue #35.
+2. `git checkout -b 35-<slug> develop`.
+3. #35 (Power-On Self-Test) consumes the #33 record store and **emits**
+   `post_passed` / `post_subsystem_failed` event-log records via the #34 API —
+   i.e. it is the first real *producer* of System Event Log records. Use the
+   typed helpers `system_event_log<Store>::record_post_passed()` /
+   `record_post_subsystem_fail(subsystem, result, detail)` (already implemented;
+   `post_result_record` typed view exists). Decide POST's subsystem-id and
+   result-code enumerations as part of #35.
 
-### Locked design (decided 2026-06-28)
+### How #34 actually shipped (for #35's consumers)
 
-Target split (per the established convention): #34 is a record-store *consumer*,
-but its 8 ACs are all testbench-shaped, so build + validate in **testbench**
-with the RAM store. App `main.cpp` boot-wiring is thin and follows later.
+The System Event Log is `sentinel::diagnostics::system_event_log<Store>` in
+`src/diagnostics/sentinel_system_event_log.hpp`, store-templated and duck-typed
+(flash `record_store` in the app, `ram_record_store` in tests; singleton is
+`system_event_log<Store>::instance()`). Records are typed-variant **36-byte**
+structs in `sentinel_system_event.hpp` (8-byte header + 28-byte body; every
+typed view `static_assert`s to 36). Key facts for callers:
 
-**Files**
-- `src/diagnostics/sentinel_system_event.hpp` — `system_event` enum (closed,
-  ranges per issue), 8-byte `system_event_record_header`, 36-byte
-  `system_event_record`, and the per-type typed views, each with
-  `static_assert(sizeof(...) == 36)`.
-- `src/diagnostics/sentinel_system_event_log.hpp` — the log class + FreeRTOS
-  staging queue + drain task.
-- `src/storage/sentinel_ram_record_store.hpp` — RAM-backed store exposing the
-  **same duck-typed API** as `record_store` (initialize/append/read/count/
-  head_index/tail_index/capacity/erase_all + `append_uncommitted_for_test`),
-  backed by a fixed array. Lets tests avoid flash wear.
-- `src/test/sentinel_test_system_event_log.{hpp,cpp}` + testbench wiring
-  (mirror the `record_store` test module; one-shot suite → `vTaskDelete(nullptr)`
-  at the end — do NOT fall off the task fn, it freezes the scheduler).
-
-**Three approved deviations from the issue's API sketch**
-1. **Template the log on the store type:** `system_event_log<Store>` (duck-typed,
-   no vtable), so the same code runs over the flash `record_store` (app) or
-   `ram_record_store` (tests). Singleton accessor becomes
-   `system_event_log<Store>::instance()`.
-2. **Inject a time-provider callback** (`uint32_t (*now_unix)()`), NOT a
-   `ds3231&`. The log only needs "unix time, or 0 if unavailable"; a callback
-   decouples it from the RTC driver and makes timestamps deterministic in tests
-   (needed for `unexpected_shutdown_synthesis`). App passes a thin wrapper over
-   rtc_service; tests pass a controllable lambda.
-3. **Size the flash region ~512 KiB (8,192 records), not 256 KiB.** The #33
-   power-of-two slotting makes a 36-byte record a 64-byte slot, so 256 KiB only
-   holds 4,096. 512 KiB on a 16 MiB chip is free. (Tests use the RAM store, so
-   this only matters for the app-side region constant.)
-
-**Behavior to implement**
-- `record_*()` enqueue a 36-byte staging record (`xQueueSend`, 0 timeout →
-  non-blocking; return false if full). The drain task `xQueueReceive`-blocks
-  and `store.append()`s — keeps SPI off the caller's path.
-- `count()/read()/read_range()` delegate to the store. Cross-task read is safe:
-  single writer (the task) writes flash-then-`m_head`, and aligned 32-bit
-  reads are atomic on CM4, so a reader sees either the old or a fully-committed
-  head — no torn record. (Document this; don't add a lock for reads.)
-- Boot sequence in the task before the drain loop: read the most-recent record;
-  if it is NOT `shutdown_clean`, synthesize a `shutdown_unexpected` at that
-  record's timestamp; then append `boot_complete` (fw version + boot_count,
-  where boot_count = prior `boot_lifecycle_record.boot_count` + 1, else 1).
-- Per-type structs MUST stay 36 bytes; adding a field eats reserved padding.
-
-5. When complete: tag `event-log-history`, squash-merge into `develop`, merge
-   `develop` into `main` with `--no-ff`. Update this file. Push.
-```
-git push origin main develop <new-history-tag>
-```
+- `record_*()` are **non-blocking**: stamp a timestamp (via an injected
+  `uint32_t(*)()` clock), `xQueueSend` a 36-byte staging record (return `false`
+  if the depth-16 queue is full), and a drain task / `drain_pending()` does the
+  `store.append()`. Keep SPI off the caller's path.
+- Boot continuity: `run_boot_sequence()` synthesizes `shutdown_unexpected` (at
+  the prior record's timestamp) when the last session didn't end clean, then
+  appends `boot_complete` with a recovered `boot_count`.
+- Cross-task reads need **no lock** (single writer commits payload-then-head;
+  aligned 32-bit head read is atomic on CM4).
+- App-side wiring is still pending (thin, "follows later"): pass a clock wrapper
+  over `rtc_service::last_unix_time`, an app `record_store` over the provisional
+  `kEventLogRegionOffsetBytes` / `kEventLogRegionSizeBytes` (~512 KiB; finalise
+  alongside the #38 snapshot region so they don't overlap), then
+  `task_create()`. BLE GATT retrieval is **#6**.
+- **Per-type structs MUST stay 36 bytes** — adding a field eats reserved
+  padding; the `static_assert`s enforce it. Treat the field layouts + enum
+  values as an append-only wire contract shared with the iOS client.
 
 ---
 
