@@ -1,14 +1,18 @@
 ///
 /// \file    sentinel_test_driver_file_template.cpp
-/// \brief   Hardware driver test function implementations
+/// \brief   Hardware driver test suite template implementation
 ///
-/// \details This file implements test functions for hardware driver validation.
-///          These functions provide a template structure for adding driver
-///          tests in testbench builds.
+/// \details Copy-me scaffold for a new driver test suite. Demonstrates the
+///          run-to-completion convention (#48): each individual test is a
+///          member of a TU-local \c fixture that owns the shared bus transport
+///          and returns \c true on pass / \c false on fail; \ref run_all
+///          constructs the fixture, folds every outcome into a
+///          \ref sentinel::test::tally, and returns it. The orchestrator calls
+///          \ref run_all directly — the suite never self-schedules as a task.
 ///
 /// \author  galudino
 /// \date    2026-05-15
-/// \version 1.0 - Test template implementation
+/// \version 2.0 - Run-to-completion suite template (#48)
 ///
 
 #pragma GCC diagnostic push
@@ -38,32 +42,55 @@ extern "C" {
 #include "sentinel_utilities.hpp"
 
 #include "sentinel_test_driver_file_template.hpp"
+#include "sentinel_test_result.hpp"
 
-using sentinel::driver;
+namespace {
 
-void sentinel::test::driver::all() {
-    // Set breakpoints while debugging to inspect values.
-    //
-    // Or, since we have the LCD working, display the test results on the LCD!
-    //
-    // Alternatively (or both) -- use SentinelPanel to display logs of running
-    // tests, with our working BLE implementation.
-    //
-    // (create a log service, and have a characteristic send a log notification
-    // to the SentinelPanel app that can then be displayed to the user.)
-    chip_id_read();
-    read();
-    write();
+///
+/// \brief Test fixture: owns the shared resource every test uses.
+///
+/// \details In a real suite this holds the bus-arbitrated transport, e.g.
+///          \c sentinel::cyhal_i2c_bus_transport bus{resource::cybsp_i2c_bus,
+///          DEVICE_ADDR};. Constructed fresh by \ref run_all (like a GoogleTest
+///          \c SetUp), so there is no file-static bus global.
+///
+struct fixture {
+    // <transport member goes here>
+
+    bool chip_id_read() noexcept;
+    bool read() noexcept;
+    bool write() noexcept;
+};
+
+bool fixture::chip_id_read() noexcept {
+    // TODO: read the chip ID over the fixture's transport; return whether it
+    // matched the expected value.
+    return true;
 }
 
-void sentinel::test::driver::chip_id_read() {
-    // TODO: Implement chip ID read test
+bool fixture::read() noexcept {
+    // TODO: exercise driver read operations; return pass/fail.
+    return true;
 }
 
-void sentinel::test::driver::read() {
-    // TODO: Implement driver read operations test
+bool fixture::write() noexcept {
+    // TODO: exercise driver write operations; return pass/fail.
+    return true;
 }
 
-void sentinel::test::driver::write() {
-    // TODO: Implement driver write operations test
+} // namespace
+
+// ============================================================================
+// sentinel::test::driver::run_all
+// ============================================================================
+
+sentinel::test::tally sentinel::test::driver::run_all() noexcept {
+    auto fx = fixture{};
+    auto t  = sentinel::test::tally{};
+
+    t.record(fx.chip_id_read());
+    t.record(fx.read());
+    t.record(fx.write());
+
+    return t;
 }

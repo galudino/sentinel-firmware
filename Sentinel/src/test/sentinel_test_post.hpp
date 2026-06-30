@@ -37,43 +37,23 @@
 #ifndef SENTINEL_TEST_POST_HPP
 #define SENTINEL_TEST_POST_HPP
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wpedantic"
-extern "C" {
-#include "FreeRTOS.h"
-#include "portmacro.h"
-#include "task.h"
-}
-#pragma GCC diagnostic pop
+#include "sentinel_test_result.hpp"
 
 namespace sentinel::test::post {
 
-/// \brief Run the full POST test suite.
-void all();
-
-/// \brief All healthy probes pass; summary clean; one post_passed recorded.
-void all_pass_path();
-
-/// \brief A non-responding BME280 yields fail_no_ack.
-void bme280_disconnect();
-
-/// \brief An unknown flash JEDEC id yields fail_wrong_id + manufacturer detail.
-void w25q128_unknown_jedec();
-
-/// \brief A set oscillator-stop flag yields fail_self_test and is cleared.
-void oscillator_stop();
-
-/// \brief One forced failure is reported; every subsystem is still enumerated.
-void degraded_operation();
-
-/// \brief record_results emits one post_subsystem_failed per failure.
-void records_failures();
-
-/// \brief A failed record store suppresses event-log writes (debug-only).
-void record_store_fallback();
-
-/// \brief Create the FreeRTOS task that runs \ref all.
-BaseType_t task_create();
+///
+/// \brief Run the full POST test suite to completion.
+///
+/// \details Drives every POST probe path against fake driver doubles —
+///          all-pass, per-subsystem failures, degraded operation, and the
+///          record-store fallback — and returns the pass/fail
+///          \ref sentinel::test::tally. Run-to-completion (#48): no longer
+///          self-schedules as a FreeRTOS task; the serial test orchestrator
+///          calls \ref run_all directly.
+///
+/// \return The suite's pass/fail tally.
+///
+tally run_all() noexcept;
 
 } // namespace sentinel::test::post
 

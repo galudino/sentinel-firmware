@@ -1,97 +1,57 @@
 ///
 /// \file    sentinel_test_w25q128.hpp
-/// \brief   W25Q128 flash driver test declarations
+/// \brief   W25Q128 flash driver test suite (run-to-completion)
 ///
-/// \details This header declares the testbench-side smoke tests for the
-///          \ref sentinel::w25q128 driver. Tests exercise the full
-///          public API of the driver against a physical W25Q128JV
-///          attached to the board's SPI bus
-///          (\c sentinel::resource::cybsp_spi via
-///          \c sentinel::resource::cybsp_spi_bus, with the device's
-///          chip-select line on \c CYBSP_SPI_CS / SS0 / P9[3]).
+/// \details Declares the testbench smoke-test suite for the
+///          \ref sentinel::w25q128 driver. The suite exercises the driver's
+///          public API against a physical W25Q128JV attached to the board's
+///          SPI bus (\c sentinel::resource::cybsp_spi_bus, device CS on
+///          \c CYBSP_SPI_FLASH_CS).
 ///
 ///          Test coverage:
-///          - Presence check (JEDEC ID matches 0xEF / 0x40 / 0x18,
-///            manufacturer+device ID and unique ID logged)
-///          - Status Register 1 round-trip (volatile write to avoid
-///            persistently modifying block-protect state on failure)
-///          - Erase + program + verify on the last sector of flash
-///            (\c 0xFFF000, well above any plausible application data)
+///          - Presence check (JEDEC ID matches known-good list)
+///          - Status Register 1 round-trip (volatile write)
+///          - Erase + program + verify on the last sector (\c 0xFFF000)
 ///          - Security Register 3 erase / program / read round-trip
 ///          - Deep power-down + release sequence
-///          - Continuous status / BUSY poll at ~1 Hz
 ///
-///          Per the project convention, every PASS / FAIL line goes to
-///          both the BLE debug stream (\c logi / \c loge) and the
-///          retarget-IO UART (\c cy_log_msg) so the result survives ring-
-///          buffer overflow and missing BLE central.
+///          Run-to-completion (#48): the suite runs synchronously and returns
+///          a \ref sentinel::test::tally. It no longer self-schedules as a
+///          FreeRTOS task and no longer owns a continuous ~1 Hz status poll —
+///          the serial test orchestrator calls \ref run_all directly.
+///
+///          Internally the suite uses a TU-local fixture that owns the
+///          bus-arbitrated SPI transport (the canonical "fixture holds the
+///          shared resource" shape), so there is no file-static bus global.
+///
+///          Per project convention every PASS / FAIL line goes to both the
+///          BLE debug stream (\c logi / \c loge) and the retarget-IO UART
+///          (\c cy_log_msg).
 ///
 /// \author  galudino
 /// \date    2026-05-18
-/// \version 1.0 - W25Q128 test declarations
+/// \version 2.0 - Run-to-completion suite (#48)
 ///
 
 #ifndef SENTINEL_TEST_W25Q128_HPP
 #define SENTINEL_TEST_W25Q128_HPP
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wpedantic"
-extern "C" {
-#include "FreeRTOS.h"
-#include "portmacro.h"
-#include "task.h"
-}
-#pragma GCC diagnostic pop
+#include "sentinel_test_result.hpp"
 
 namespace sentinel::test::w25q128 {
 
 ///
-/// \brief Run the full W25Q128 test suite.
+/// \brief Run the full W25Q128 test suite to completion.
 ///
-void all();
-
+/// \details Executes each test in sequence — presence check, status-register
+///          round-trip, erase/program/read, security-register round-trip,
+///          power-down/release — over a fixture-owned SPI transport, and
+///          returns the pass/fail \ref sentinel::test::tally. Intended to be
+///          called by the testbench serial orchestrator (#48).
 ///
-/// \brief Verify the chip is reachable and identifies as W25Q128JV.
+/// \return The suite's pass/fail tally.
 ///
-void presence_check();
-
-///
-/// \brief Round-trip SR1 with the volatile-write opcode to avoid
-///        persistently changing block-protect state on failure.
-///
-void status_register_round_trip();
-
-///
-/// \brief Erase the last sector (\c 0xFFF000), verify blank, program a
-///        known pattern, read back and verify byte-for-byte.
-///
-void erase_program_read();
-
-///
-/// \brief Round-trip Security Register 3: erase, verify blank, program
-///        a known pattern at offset 0, read back, verify, then erase
-///        again to leave it clean.
-///
-void security_register_round_trip();
-
-///
-/// \brief Power-down + release sequence: deep-power-down, attempt JEDEC
-///        (should fail to match), release via \c 0xAB and confirm
-///        device ID is 0x17, then re-issue JEDEC and confirm full
-///        responsiveness.
-///
-void power_down_release();
-
-///
-/// \brief Continuous status / BUSY poll at ~1 Hz, logged via both
-///        \c logi and \c cy_log_msg.
-///
-[[noreturn]] void continuous_status_poll();
-
-///
-/// \brief Create the FreeRTOS task that runs \ref all.
-///
-BaseType_t task_create();
+tally run_all() noexcept;
 
 } // namespace sentinel::test::w25q128
 

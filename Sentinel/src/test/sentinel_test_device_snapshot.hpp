@@ -24,37 +24,23 @@
 #ifndef SENTINEL_TEST_DEVICE_SNAPSHOT_HPP
 #define SENTINEL_TEST_DEVICE_SNAPSHOT_HPP
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wpedantic"
-extern "C" {
-#include "FreeRTOS.h"
-#include "portmacro.h"
-#include "task.h"
-}
-#pragma GCC diagnostic pop
+#include "sentinel_test_result.hpp"
 
 namespace sentinel::test::device_snapshot {
 
-/// \brief Run the full device_snapshot test suite.
-void all();
-
-/// \brief sizeof(device_snapshot) is exactly the 80-byte wire size.
-void size_invariant();
-
-/// \brief Known field values land at their documented little-endian byte offsets.
-void byte_layout();
-
-/// \brief Serialize to a byte buffer and back; every field survives unchanged.
-void round_trip();
-
-/// \brief An unknown future snapshot_version still exposes readable header fields.
-void forward_compat_probe();
-
-/// \brief A zeroed/torn record is distinguishable from a valid one by the magic.
-void trailer_magic();
-
-/// \brief Create the FreeRTOS task that runs \ref all.
-BaseType_t task_create();
+///
+/// \brief Run the full device_snapshot test suite to completion.
+///
+/// \details Pure, off-bench checks of the packed wire contract — size
+///          invariant, byte layout, round-trip serialization, forward-compat
+///          probe, trailer magic — returning the pass/fail
+///          \ref sentinel::test::tally. Run-to-completion (#48): no longer
+///          self-schedules as a FreeRTOS task; the serial test orchestrator
+///          calls \ref run_all directly.
+///
+/// \return The suite's pass/fail tally.
+///
+tally run_all() noexcept;
 
 } // namespace sentinel::test::device_snapshot
 
