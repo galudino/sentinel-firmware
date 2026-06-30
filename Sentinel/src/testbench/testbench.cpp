@@ -40,22 +40,13 @@ extern "C" {
 }
 #pragma GCC diagnostic pop
 
-///< Tasks
-#include "sentinel_task_battery_service.hpp"
-#include "sentinel_task_bme280_service.hpp"
+///< Tasks — only the BLE debug stream is created here, before the scheduler
+///< starts (it must be up before any task logs over BLE). The serial test
+///< orchestrator (#48) spawns and starts every other task.
 #include "sentinel_task_debug_stream.hpp"
-#include "sentinel_task_rtc_service.hpp"
-#include "sentinel_task_snapshot_stream.hpp"
 
-///< Tests
-#include "sentinel_test_bme280.hpp"
-#include "sentinel_test_device_snapshot.hpp"
-#include "sentinel_test_snapshot_stream.hpp"
-#include "sentinel_test_ds3231.hpp"
-#include "sentinel_test_post.hpp"
-#include "sentinel_test_record_store.hpp"
-#include "sentinel_test_system_event_log.hpp"
-#include "sentinel_test_w25q128.hpp"
+///< Test orchestrator — one-shot serial bottom-up test driver (#48).
+#include "sentinel_testbench_orchestrator.hpp"
 
 ///< Utilities
 #include "sentinel_firmware_version.hpp"
@@ -71,130 +62,6 @@ extern "C" {
 #include "sentinel_ble_context.hpp"
 
 namespace sentinel::testbench {
-
-///
-/// \brief Create test tasks
-///
-static inline void create_tests() {
-    BaseType_t rtos_result{};
-
-    // NOTE: To exercise a single chip's tests in isolation, comment out
-    // the task_create() calls for the others below. A unified test-
-    // selection menu over the retarget-io UART is planned but not yet
-    // wired up.
-
-#ifdef CYBSP_I2C_HW
-    rtos_result = test::bme280::task_create();
-
-    if (rtos_result != pdPASS) {
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
-                   "BME280 test task creation failed\n");
-    }
-
-    rtos_result = test::ds3231::task_create();
-
-    if (rtos_result != pdPASS) {
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
-                   "DS3231 test task creation failed\n");
-    }
-#endif /* CYBSP_I2C_HW */
-
-#ifdef CYBSP_SPI_HW
-    rtos_result = test::w25q128::task_create();
-
-    if (rtos_result != pdPASS) {
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
-                   "W25Q128 test task creation failed\n");
-    }
-
-    rtos_result = test::record_store::task_create();
-
-    if (rtos_result != pdPASS) {
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
-                   "Record store test task creation failed\n");
-    }
-#endif /* CYBSP_SPI_HW */
-
-    // The System Event Log suite runs against a RAM-backed record store, so it
-    // is independent of the SPI flash being present.
-    rtos_result = test::system_event_log::task_create();
-
-    if (rtos_result != pdPASS) {
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
-                   "System event log test task creation failed\n");
-    }
-
-    // The POST suite drives the probes with fake driver doubles, so it too is
-    // independent of any physical sensor / flash being present.
-    rtos_result = test::post::task_create();
-
-    if (rtos_result != pdPASS) {
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
-                   "POST test task creation failed\n");
-    }
-
-    // The device_snapshot suite (#36) exercises the packed wire layout in RAM,
-    // so it needs no physical sensor either.
-    rtos_result = test::device_snapshot::task_create();
-
-    if (rtos_result != pdPASS) {
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
-                   "device_snapshot test task creation failed\n");
-    }
-
-    // The snapshot stream suite (#46) drives the stream-task singleton created
-    // in create_tasks() through its idle/stream lifecycle with a counting sink;
-    // it needs no physical sensor (populate() is cache-backed).
-    rtos_result = test::snapshot_stream::task_create();
-
-    if (rtos_result != pdPASS) {
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
-                   "Snapshot stream test task creation failed\n");
-    }
-}
-
-///
-/// \brief Create application tasks
-///
-static inline void create_tasks() {
-    BaseType_t rtos_result{};
-
-    rtos_result = sentinel::task::battery_service::instance().task_create();
-
-    if (rtos_result != pdPASS) {
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
-                   "Battery service task creation failed\n");
-    }
-
-    rtos_result = sentinel::task::rtc_service::instance().task_create();
-
-    if (rtos_result != pdPASS) {
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
-                   "RTC service task creation failed\n");
-    }
-
-    // BME280 sample service (#37): caches the latest reading for the device
-    // snapshot populate() and the live BLE characteristic. The driver smoke
-    // test in create_tests() still owns its own instance; the bus arbiter
-    // serializes the two. Comment one out to isolate on-bench.
-    rtos_result = sentinel::task::bme280_service::instance().task_create();
-
-    if (rtos_result != pdPASS) {
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
-                   "BME280 service task creation failed\n");
-    }
-
-    // Live snapshot stream service (#46, lane 2): normally idle, streams the
-    // live device_snapshot to a connected central at ~100 ms once the
-    // SnapshotStream enable characteristic (#6) calls start(). Created here so
-    // the #46 behavioral test in create_tests() can drive the singleton.
-    rtos_result = sentinel::task::snapshot_stream_task::instance().task_create();
-
-    if (rtos_result != pdPASS) {
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
-                   "Snapshot stream service task creation failed\n");
-    }
-}
 
 ///
 /// \brief Initialize system hardware and Bluetooth stack
@@ -292,8 +159,12 @@ static inline void initialize() {
 ///
 /// \brief Application entry point
 ///
-/// Initializes the device hardware, OTA functionality, Bluetooth stack,
-/// creates all tasks, creates all tests, and starts the FreeRTOS scheduler.
+/// Initializes the device hardware, OTA functionality, and Bluetooth stack,
+/// creates the one-shot serial test orchestrator (#48), and starts the
+/// FreeRTOS scheduler. The orchestrator — running after the scheduler starts —
+/// drives every test suite bottom-up and serially, then starts the continuous
+/// reader services. Only the bus arbiters and the BLE debug-stream task are
+/// created before the scheduler (in \c initialize()).
 ///
 /// \return Application exit status (never returns in normal operation)
 ///
@@ -302,8 +173,13 @@ int main(int argc, const char *argv[]) {
     sentinel::unused(argv);
 
     sentinel::testbench::initialize();
-    sentinel::testbench::create_tasks();
-    sentinel::testbench::create_tests();
+
+    // Create the one-shot serial test orchestrator. It is created here, before
+    // the scheduler starts, but its body runs only once scheduling begins — so
+    // the bus arbiters can pump the I/O its driver tests issue (decision #13).
+    auto orchestrator_result =
+        sentinel::testbench::test_orchestrator::instance().task_create();
+    configASSERT(orchestrator_result == pdPASS);
 
     // Start the FreeRTOS scheduler.
     vTaskStartScheduler();
