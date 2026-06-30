@@ -34,6 +34,7 @@ extern "C" {
 
 #include "sentinel_cyhal_i2c_bus_transport.hpp"
 #include "sentinel_debug_print.hpp"
+#include "sentinel_device_context.hpp"
 #include "sentinel_ds3231.hpp"
 #include "sentinel_resource.hpp"
 #include "sentinel_task_rtc_service.hpp"
@@ -187,16 +188,14 @@ void rtc_service::configure_sqw_interrupt() noexcept {
 }
 
 void rtc_service::run() {
-    // Bus transport + driver are task-local: they live for the whole task
-    // lifetime (this loop never returns on the happy path) and are not shared
-    // with other tasks. Routes through sentinel::resource::cybsp_i2c_bus so the
-    // per-second reads serialize cleanly with every other task on the shared
-    // I²C bus.
-    auto rtc_bus = sentinel::cyhal_i2c_bus_transport(
-        sentinel::resource::cybsp_i2c_bus,
-        static_cast<uint16_t>(ds3231_t::slave_address::primary));
-
-    auto rtc = ds3231_t(rtc_bus);
+    // Borrow the shared DS3231 from the application device context (decision
+    // #13): one driver instance serves the RTC service, POST, and the device
+    // snapshot, rather than each task constructing its own. The context is built
+    // by the boot orchestrator (post-scheduler) before this task is started, so
+    // it is live by the time we reach here. Its transport still routes through
+    // sentinel::resource::cybsp_i2c_bus, so the per-second reads serialize
+    // cleanly with every other task on the shared I²C bus.
+    auto &rtc = sentinel::resource::context().rtc;
 
     if (!configure_square_wave(rtc)) {
         loge("rtc_service: 1 Hz SQW config failed (last_err=%d)",

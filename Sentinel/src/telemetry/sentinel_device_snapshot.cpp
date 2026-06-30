@@ -24,6 +24,8 @@ extern "C" {
 }
 #pragma GCC diagnostic pop
 
+#include "sentinel_ble_context.hpp"
+#include "sentinel_device_context.hpp"
 #include "sentinel_device_snapshot.hpp"
 #include "sentinel_firmware_version.hpp"
 #include "sentinel_task_bme280_service.hpp"
@@ -64,14 +66,27 @@ void populate_snapshot(device_snapshot *out) noexcept {
     // rtc_alarm_flags stays 0: Phase I configures no DS3231 alarms. Wire from a
     // status-register cache when the alarm subsystem is used.
 
-    // ---- Storage: 0 until the app record stores exist (boot orchestrator, #38).
-    // ---- BLE: 0 until ble_context publishes cached connection state (#29 / #6).
+    // ---- Storage + POST — shared device context (#38) ----
+    // Only once the boot orchestrator has built the context and scanned the
+    // flash regions; before then the counts are not yet meaningful and stay 0
+    // (their documented sentinel). count() is head-tail arithmetic — no bus I/O.
+    if (sentinel::resource::context_ready()) {
+        auto &ctx = sentinel::resource::context();
+        out->event_log_record_count    = ctx.event_log_record_count();
+        out->snapshot_log_record_count = ctx.snapshot_record_count();
+        out->post_last_status          = ctx.post_last_status;
+    }
+
+    // ---- BLE — live connection state (#29). TX power / RSSI remain 0 until #6
+    // publishes them through ble_context.
+    out->ble_connected =
+        sentinel::ble_context_object.connected() ? uint8_t{1} : uint8_t{0};
 
     // ---- System health ----
     out->uptime_seconds = static_cast<uint32_t>(xTaskGetTickCount()) /
                           static_cast<uint32_t>(configTICK_RATE_HZ);
     out->uptime_seconds_low = static_cast<uint8_t>(out->uptime_seconds & 0xFFu);
-    // cpu_temperature_001c, post_last_status: 0 until wired (#38 orchestrator).
+    // cpu_temperature_001c: 0 until the on-die temp sensor is wired (#6).
 
     // ---- Trailer (written last) ----
     out->trailer_magic = SNAPSHOT_TRAILER_MAGIC;

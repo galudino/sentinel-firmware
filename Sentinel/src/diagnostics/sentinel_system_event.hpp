@@ -104,6 +104,12 @@ enum class system_event : uint8_t {
     fault_cleared            = 0x42,
     user_input               = 0x43,
     sensor_threshold_crossed = 0x44,
+    snapshot_persisted       = 0x45, ///< Periodic snapshot heartbeat (#38): one
+                                     ///< every N flash captures, so the log has
+                                     ///< a "still alive" marker without flooding.
+    pre_fault_snapshot_captured = 0x46, ///< A fault handler captured a snapshot
+                                        ///< via capture_now() just before this;
+                                        ///< correlate by adjacent timestamp.
 
     // Phase II-specific (0x50–0x6F) — fan / motor / thermal placeholders
     fan_rpm_threshold_changed         = 0x50,
@@ -260,6 +266,23 @@ struct post_result_record {
     uint8_t                    reserved[24];
 };
 static_assert(sizeof(post_result_record) == 36);
+
+///
+/// \brief snapshot_persisted / pre_fault_snapshot_captured (#38).
+///
+/// \details Ties a System Event Log entry to the device-snapshot history store:
+///          \c snapshot_count is the snapshot store's record count at the moment
+///          the event was recorded, so a reader can jump from the log heartbeat
+///          to the corresponding snapshot. \c reason distinguishes the periodic
+///          heartbeat from a fault-handler capture.
+///
+struct snapshot_event_record {
+    system_event_record_header header;
+    uint32_t                   snapshot_count; ///< Snapshot store count at event.
+    uint8_t                    reason;         ///< 0=periodic heartbeat, 1=pre-fault.
+    uint8_t                    reserved[23];
+};
+static_assert(sizeof(snapshot_event_record) == 36);
 
 ///
 /// \brief fan_rpm_threshold_changed (Phase II).

@@ -39,10 +39,13 @@ extern "C" {
 }
 #pragma GCC diagnostic pop
 
-///< Tasks
-#include "sentinel_task_battery_service.hpp"
+///< Tasks — only the BLE debug stream is created before the scheduler (it must
+///< be up before any task logs over BLE). The boot orchestrator (#38) spawns and
+///< starts every other task once the scheduler is running.
 #include "sentinel_task_debug_stream.hpp"
-#include "sentinel_task_rtc_service.hpp"
+
+///< Boot orchestrator — one-shot boot sequence + service-task spawner (#38).
+#include "sentinel_app_orchestrator.hpp"
 
 ///< Utilities
 #include "sentinel_firmware_version.hpp"
@@ -60,34 +63,15 @@ extern "C" {
 namespace sentinel::app {
 
 ///
-/// \brief Create application tasks
-///
-static inline void create_tasks() {
-    BaseType_t rtos_result{};
-
-    rtos_result = task::battery_service::instance().task_create();
-
-    if (rtos_result != pdPASS) {
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
-                   "Battery service task creation failed\n");
-    }
-
-#ifdef CYBSP_I2C_HW
-    rtos_result = task::rtc_service::instance().task_create();
-
-    if (rtos_result != pdPASS) {
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
-                   "RTC service task creation failed\n");
-    }
-#endif /* CYBSP_I2C_HW */
-}
-
-///
 /// \brief Initialize system hardware and Bluetooth stack
 ///        Shouldn't have to be modified unless adding new hardware
 ///        initialization.
 ///
-static inline void initialize() {
+/// \return \c true if the BLE stack initialized successfully. POST consumes this
+///         (via the boot orchestrator) and records a BLE-stack failure rather
+///         than bricking the boot — the device runs degraded (decision #12).
+///
+static inline bool initialize() {
     // Initialize the board support package (BSP).
     auto result = cybsp_init();
 
@@ -157,10 +141,13 @@ static inline void initialize() {
     // Register callback and configuration with stack.
     auto wiced_result = ble_context_object.stack_initialize();
 
-    if (wiced_result != wiced_result_t::WICED_BT_SUCCESS) {
+    const auto ble_stack_ok = wiced_result == wiced_result_t::WICED_BT_SUCCESS;
+    if (!ble_stack_ok) {
+        // Do NOT brick the boot: POST records the BLE-stack failure and the
+        // device runs degraded (decision #12). All non-BLE subsystems still come
+        // up through the boot orchestrator.
         cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
                    "*** Bluetooth stack initialization failed! ***\r\n");
-        CY_ASSERT(false);
     }
 
     cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
@@ -172,6 +159,8 @@ static inline void initialize() {
         current_firmware_version.build());
     cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                "================================================\n\n");
+
+    return ble_stack_ok;
 }
 
 } // namespace sentinel::app
@@ -188,8 +177,17 @@ int main(int argc, const char *argv[]) {
     sentinel::unused(argc);
     sentinel::unused(argv);
 
-    sentinel::app::initialize();
-    sentinel::app::create_tasks();
+    const auto ble_stack_ok = sentinel::app::initialize();
+
+    // Create the one-shot boot orchestrator. Created here before the scheduler
+    // starts, but its body runs only once scheduling begins — so the bus
+    // arbiters can pump the I/O its POST probes + device-context construction
+    // issue (decision #13). Phase I has no custom GATT DB yet (#6), so the
+    // GATT-DB-OK argument tracks the stack-init result.
+    auto orchestrator_result =
+        sentinel::app::boot_orchestrator::instance().task_create(ble_stack_ok,
+                                                                ble_stack_ok);
+    configASSERT(orchestrator_result == pdPASS);
 
     // Start the FreeRTOS scheduler.
     vTaskStartScheduler();

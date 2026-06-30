@@ -30,6 +30,9 @@ extern "C" {
 ///< Logging
 #include "sentinel_debug_print.hpp"
 
+///< Shared device context — built before the readers, which now borrow it (#38).
+#include "sentinel_device_context.hpp"
+
 ///< Continuous reader / helper services started by the orchestrator
 #include "sentinel_task_battery_service.hpp"
 #include "sentinel_task_bme280_service.hpp"
@@ -43,6 +46,7 @@ extern "C" {
 #include "sentinel_test_post.hpp"
 #include "sentinel_test_record_store.hpp"
 #include "sentinel_test_result.hpp"
+#include "sentinel_test_snapshot_persistence.hpp"
 #include "sentinel_test_snapshot_stream.hpp"
 #include "sentinel_test_system_event_log.hpp"
 #include "sentinel_test_w25q128.hpp"
@@ -52,9 +56,9 @@ namespace sentinel::testbench {
 namespace {
 
 /// Upper bound on test groups (4 driver/storage + event-log + snapshot +
-/// POST + snapshot-stream = 8); sized to the maximum so the summary array is
-/// fixed-size regardless of which bus-gated groups are compiled in.
-constexpr int kMaxGroups = 8;
+/// POST + snapshot-stream + snapshot-persistence = 9); sized to the maximum so
+/// the summary array is fixed-size regardless of which bus-gated groups compile.
+constexpr int kMaxGroups = 9;
 
 /// One group's name + result, retained for the final per-group summary.
 struct group_result {
@@ -165,6 +169,13 @@ void test_orchestrator::run() {
     run_group("POST", &sentinel::test::post::run_all);
     run_group("snapshot_stream", &sentinel::test::snapshot_stream::run_all);
 
+#ifdef CYBSP_SPI_HW
+    // Lane-1 snapshot persistence drives the real task over a scratch flash
+    // store, so it needs the SPI flash present (#38, decision #15).
+    run_group("snapshot_persistence",
+              &sentinel::test::snapshot_persistence::run_all);
+#endif /* CYBSP_SPI_HW */
+
     // -------- Per-group + overall summary --------
     banner("TEST SUMMARY");
     auto overall = sentinel::test::tally{};
@@ -189,6 +200,13 @@ void test_orchestrator::run() {
     cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                "\nStarting continuous reader services "
                "(rtc_service, bme280_service)...\n");
+
+    // Build the shared device context now (post-scheduler): rtc_service and
+    // bme280_service borrow ctx.rtc / ctx.bme rather than constructing their own
+    // drivers (#38, decision #13). First touch constructs the drivers, so the
+    // BME280 calibration read goes through the running I²C arbiter.
+    (void)sentinel::resource::context();
+
     if (task::rtc_service::instance().task_create() != pdPASS) {
         loge("orchestrator: rtc_service create failed", "");
     }

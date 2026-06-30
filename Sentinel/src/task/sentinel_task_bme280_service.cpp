@@ -39,6 +39,7 @@ extern "C" {
 #include "sentinel_bme280.hpp"
 #include "sentinel_cyhal_i2c_bus_transport.hpp"
 #include "sentinel_debug_print.hpp"
+#include "sentinel_device_context.hpp"
 #include "sentinel_resource.hpp"
 #include "sentinel_task_bme280_service.hpp"
 #include "sentinel_task_rtc_service.hpp"
@@ -185,15 +186,14 @@ void bme280_service::task_trampoline(void *task_parameter) {
 }
 
 void bme280_service::run() {
-    // Bus transport + driver are task-local: they live for the whole task
-    // lifetime (this loop never returns) and are not shared with other tasks.
-    // Routes through sentinel::resource::cybsp_i2c_bus so the periodic reads
-    // serialize cleanly with every other task on the shared I²C bus (notably
-    // the DS3231 RTC service).
-    auto bme280_bus = sentinel::cyhal_i2c_bus_transport(
-        sentinel::resource::cybsp_i2c_bus, BME280_I2C_ADDR_PRIM);
-
-    auto sensor = bme280_t(bme280_bus, BME280_I2C_ADDR_PRIM);
+    // Borrow the shared BME280 from the application device context (decision
+    // #13). One driver instance means the factory-calibration read in the
+    // BME280 constructor happens once (at context construction) rather than
+    // once per consumer. The context is built by the boot orchestrator
+    // (post-scheduler) before this task starts; its transport still routes
+    // through sentinel::resource::cybsp_i2c_bus so the periodic reads serialize
+    // cleanly with every other task on the shared I²C bus (notably the DS3231).
+    auto &sensor = sentinel::resource::context().bme;
 
     // Gate-check the part is present. A failure here is logged but NOT fatal:
     // the loop still runs so the task survives a sensor that is absent at boot

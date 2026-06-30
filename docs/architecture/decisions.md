@@ -242,3 +242,39 @@ decisions at the end, never renumber. Rolled out of `docs/SESSION_HANDOFF.md`
    written OO from the start.** Tasks live in `sentinel::task` (e.g.
    `snapshot_stream_task` from #46, even where an issue sketch said
    `sentinel::app`). When conventions conflict, flag it — don't silently pick one.
+17. **Shared device context is a post-scheduler Meyers singleton, not file-scope
+   inline objects (#38, AS BUILT — amends #13).** Decision #13 sketched the
+   shared drivers as `inline` objects at file scope in `sentinel::resource`,
+   "the same way the cyhal SCB bus handles live there." That cannot work
+   literally: the `bme280` constructor reads factory calibration over I²C, and
+   **all** bus I/O is serviced by the bus-arbiter tasks, which only pump after
+   `vTaskStartScheduler()`. A file-scope object is constructed during C++ static
+   init — before `main()` starts the scheduler — so its calibration read would
+   block forever on an arbiter that never runs. As built, the context is a
+   function-local `static` reached via `sentinel::resource::context()`
+   (`src/resource/sentinel_device_context.hpp`), **first touched from the boot-
+   orchestrator task** (production) / test orchestrator (testbench) — i.e. post-
+   scheduler, on the real arbiter path, exactly like the #48 testbench fixtures.
+   End state matches #13's intent (one instance owned by `resource`, borrowed by
+   reference: `ctx.bme` / `ctx.rtc` / `ctx.flash` / `ctx.event_store` /
+   `ctx.snapshot_store`); only the construction *moment* differs.
+   - `resource::context()` builds the drivers + stores; `initialize_stores()`
+     scans both flash regions, binds the `system_event_log`, and sets
+     `context_ready()` so `populate_snapshot` reads the store counts only when
+     they are meaningful (it never forces a pre-orchestrator construction).
+   - `rtc_service` / `bme280_service` now **borrow** `ctx.rtc` / `ctx.bme` in
+     their `run()` instead of constructing task-local drivers. `battery_service`
+     is BLE-only (no shared driver) and is untouched.
+   - **Flash map finalized** (decision #11 left it provisional): event log
+     `[0x100000..0x180000)` 512 KiB, snapshots `[0x180000..0x280000)` 1 MiB,
+     non-overlapping (`static_assert` in the context header); testbench scratch
+     regions stay high (record_store 0xF00000, snapshot-suite 0xF02000, w25q128
+     0xFFF000).
+   - **Boot-event ordering deviation.** `post::record_results` *enqueues* the
+     POST records (non-blocking); the event-log drain task then runs
+     `run_boot_sequence()` FIRST (direct flash appends) and drains the POST
+     records AFTER. This reads the prior session's last flash record *before*
+     this boot's POST records are persisted, so `shutdown_unexpected` carries the
+     correct prior-crash timestamp — at the cost of POST records landing just
+     after `boot_complete` rather than before it. Correct crash attribution beats
+     #13's literal "POST is the first writer" wording.
