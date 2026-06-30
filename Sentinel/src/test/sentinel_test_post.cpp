@@ -87,7 +87,9 @@ struct fake_store {
     uint32_t head{0};
     uint32_t tail{0};
     uint32_t cap{100};
-    bool     initialize() noexcept { return init_ok; }
+    bool     inited{false};
+    bool     initialize() noexcept { inited = init_ok; return init_ok; }
+    bool     initialized() const noexcept { return inited; }
     uint32_t head_index() const noexcept { return head; }
     uint32_t tail_index() const noexcept { return tail; }
     uint32_t capacity() const noexcept { return cap; }

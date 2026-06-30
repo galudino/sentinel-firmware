@@ -49,10 +49,27 @@ imgtool/`click` signing step fails). New pieces:
   `ble_connected` + POST status. New events `snapshot_persisted` (0x45) /
   `pre_fault_snapshot_captured` (0x46) + `snapshot_event_record`.
 
+**ON-BENCH BRING-UP (this session, CYBLE-416045 + GD25Q128):** happy-path boot
+now validated end-to-end — POST passes (per-probe serial feedback added:
+`post bme280 PASS` … `post ble_stack PASS`), event log + snapshot history scan +
+init, all service tasks start, RTC/BME280 continuous reads + snapshot persistence
+run. **Two on-bench bugs found + fixed:**
+- **Boot hung in `resource::context()`** — first C++ function-local `static`
+  constructed *post-scheduler* dead-locked in `__cxa_guard_acquire` (gthread path
+  unwired in this newlib/wiced port). Fix: **`-fno-threadsafe-statics`** in
+  `CXXFLAGS` (decision **#18**; safe because every singleton is first-touched
+  from the single orchestrator task). Also hardened the I²C transport `exchange()`
+  to fail-fast on a null response queue.
+- **Boot scanned the event-log region twice** (~8.7 s each) — POST's
+  `probe_record_store` re-`initialize()`d an already-scanned store. Fixed: it now
+  trusts an `initialized()` store. Boot flash-scan is still ~17 s (two O(capacity)
+  region scans) → optimization filed as **#49**; unified portable logging facade
+  filed as **#50**.
+
 **STILL TODO for #38 sign-off:** the **six on-bench POST hardware ACs are
 manual** (pull BME280 SDA, swap unknown-JEDEC flash, drain DS3231 battery, scope
-< 100 ms) — not yet eyeballed; the persistence cadence/heartbeat/boot-anchor are
-on-bench observations. Then squash-merge → `develop`, close #38, board → Done.
+< 100 ms) — fault-injection not yet exercised. Then squash-merge → `develop`,
+close #38, board → Done.
 
 **Decisions in play:** #13 (boot orchestrator over a shared `sentinel::resource`
 device context — **realized by #38**), #14 (two-lane snapshot model — **both

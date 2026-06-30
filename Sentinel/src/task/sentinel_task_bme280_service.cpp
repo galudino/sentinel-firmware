@@ -92,7 +92,8 @@ inline void split_centi(int32_t centi, char &sign_out, int32_t &whole_out,
 }
 
 ///
-/// \brief Convert a Bosch compensated reading into the fixed-point cache sample.
+/// \brief Convert a Bosch compensated reading into the fixed-point cache
+/// sample.
 ///
 /// \details The Bosch driver is compiled in double-precision compensation mode,
 ///          so \c temperature / \c humidity / \c pressure arrive as doubles in
@@ -227,7 +228,8 @@ void bme280_service::run() {
                        "BME280 service: read error %d\n",
                        static_cast<int>(sensor.last_error()));
         } else {
-            auto s = build_sample(*data, rtc_service::instance().last_unix_time());
+            auto s =
+                build_sample(*data, rtc_service::instance().last_unix_time());
             publish(s);
 
             if (sample_counter % HEARTBEAT_LOG_EVERY_N == 0) {
@@ -243,14 +245,13 @@ void bme280_service::run() {
                      static_cast<int>(t_whole), static_cast<int>(t_frac),
                      static_cast<int>(s.pressure_pa), static_cast<int>(h_whole),
                      static_cast<int>(h_frac));
-                cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF,
-                           CY_LOG_LEVEL_T::CY_LOG_INFO,
-                           "BME280 service: T=%c%d.%02d C  P=%d Pa  "
-                           "H=%d.%02d %%\n",
-                           t_sign, static_cast<int>(t_whole),
-                           static_cast<int>(t_frac),
-                           static_cast<int>(s.pressure_pa),
-                           static_cast<int>(h_whole), static_cast<int>(h_frac));
+                cy_log_msg(
+                    CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
+                    "BME280 service: T=%c%d.%02d C  P=%d Pa  "
+                    "H=%d.%02d %%\n",
+                    t_sign, static_cast<int>(t_whole), static_cast<int>(t_frac),
+                    static_cast<int>(s.pressure_pa), static_cast<int>(h_whole),
+                    static_cast<int>(h_frac));
             }
 
             ++sample_counter;

@@ -278,3 +278,33 @@ decisions at the end, never renumber. Rolled out of `docs/SESSION_HANDOFF.md`
      correct prior-crash timestamp — at the cost of POST records landing just
      after `boot_complete` rather than before it. Correct crash attribution beats
      #13's literal "POST is the first writer" wording.
+18. **`-fno-threadsafe-statics`: C++ function-local statics are constructed
+   single-task, guard-free (#38, AS BUILT).** A normal function-local `static`
+   with a non-trivial constructor emits a `__cxa_guard_acquire/release` pair.
+   Pre-scheduler (`__gthread_active_p() == false`) that guard is a trivial byte
+   check; **once the FreeRTOS scheduler is running it switches to a gthread-mutex
+   path this newlib/wiced port never wires up, so the first such static
+   constructed post-scheduler dead-locks.** Observed on-bench in #38: the boot
+   orchestrator hung forever constructing `resource::context()` (a Meyers
+   singleton whose BME280 ctor also yields to the I²C arbiter mid-construction).
+   Every pre-#38 singleton (`rtc_service`, `battery_service`, the bus arbiters)
+   dodged this only because `create_tasks()` first-touched them *before*
+   `vTaskStartScheduler()`. The orchestrator is the first to construct singletons
+   *after* the scheduler starts. Fix: build with **`-fno-threadsafe-statics`**
+   (added to `CXXFLAGS`), dropping the guard program-wide.
+   - **Why it's safe (the invariant):** we never rely on the guard's concurrency
+     protection — **every singleton's first construction happens from a single,
+     well-defined point** (the boot/test orchestrator) before any dependent task
+     runs, so two tasks can never race to first-init the same singleton. Honor
+     this when adding singletons: first-touch them from the orchestrator, not
+     from two tasks concurrently.
+   - **Root cause is not OO.** The trap is *implicit lazy init* (the magic
+     static), not classes. A C-style `static struct + ctx_init()` would avoid it
+     only because C forces explicit init. Decision #16 (OO tasks) stands; the
+     lesson is "lazy-constructed C++ statics + a running scheduler need
+     `-fno-threadsafe-statics` (or explicit init)."
+   - **Boot-time follow-ups filed:** #49 (record_store `initialize()` is
+     O(capacity) → ~17 s of flash scanning at boot) and #50 (unified portable
+     logging facade). The redundant third event-store scan POST used to do was
+     removed here: `post::probe_record_store` now trusts an already-`initialized()`
+     store and only re-verifies geometry.

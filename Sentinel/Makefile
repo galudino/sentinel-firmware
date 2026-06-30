@@ -133,7 +133,17 @@ CFLAGS=-std=c17
 #
 # NOTE: Includes and defines should use the INCLUDES and DEFINES variable
 # above.
-CXXFLAGS=-std=c++17 -fno-exceptions -fno-rtti -pedantic-errors -Wall -Werror -Wextra
+# -fno-threadsafe-statics: function-local `static` initialization normally emits
+# a __cxa_guard_acquire/release pair. Once the FreeRTOS scheduler is running
+# (__gthread_active_p() == true) that guard takes a gthread-mutex path this
+# newlib/wiced port does not wire up, so the FIRST function-local static
+# constructed post-scheduler dead-locks (observed on-bench in #38: the boot
+# orchestrator hung constructing resource::context()). We never rely on the
+# guard's concurrency protection — every singleton is first-touched from a
+# single task (the boot/test orchestrator) before its dependents run — so it is
+# safe to drop it, and doing so is the standard fix for C++ singletons on
+# bare-metal FreeRTOS.
+CXXFLAGS=-std=c++17 -fno-exceptions -fno-rtti -fno-threadsafe-statics -pedantic-errors -Wall -Werror -Wextra
 
 # Additional / custom assembler flags.
 #

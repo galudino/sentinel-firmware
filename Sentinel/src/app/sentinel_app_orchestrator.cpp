@@ -68,6 +68,36 @@ uint8_t first_failure_id(
     return 0u;
 }
 
+/// \brief Human-readable POST subsystem name for the serial / BLE feedback.
+const char *subsystem_name(sentinel::diagnostics::post_subsystem s) noexcept {
+    using ps = sentinel::diagnostics::post_subsystem;
+    switch (s) {
+    case ps::bme280:         return "bme280";
+    case ps::ds3231:         return "ds3231";
+    case ps::w25q128:        return "w25q128";
+    case ps::record_store:   return "record_store";
+    case ps::ble_stack:      return "ble_stack";
+    case ps::rotary_encoder: return "rotary_encoder";
+    case ps::display:        return "display";
+    case ps::invalid:        return "invalid";
+    }
+    return "?";
+}
+
+/// \brief Human-readable POST result code (PASS or the failure reason).
+const char *result_name(sentinel::diagnostics::post_result r) noexcept {
+    using pr = sentinel::diagnostics::post_result;
+    switch (r) {
+    case pr::pass:           return "PASS";
+    case pr::fail_no_ack:    return "fail_no_ack";
+    case pr::fail_wrong_id:  return "fail_wrong_id";
+    case pr::fail_self_test: return "fail_self_test";
+    case pr::fail_timeout:   return "fail_timeout";
+    case pr::fail_init:      return "fail_init";
+    }
+    return "?";
+}
+
 /// \brief Start a service task, logging on failure (boot continues regardless).
 void start_task(const char *name, BaseType_t rc) noexcept {
     if (rc != pdPASS) {
@@ -101,25 +131,63 @@ void boot_orchestrator::run() {
     namespace res  = sentinel::resource;
     namespace diag = sentinel::diagnostics;
 
-    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
+    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                "\nboot orchestrator: starting boot sequence\n");
 
     // ---- 1. Build the shared device context + scan the flash stores. ----
     // First touch of context() constructs the drivers here, post-scheduler, so
-    // the BME280 calibration read goes through the running I²C arbiter.
+    // the BME280 calibration read goes through the running I²C arbiter. The two
+    // region scans are O(capacity) (~8 k SPI reads each — slow; see issue #49),
+    // so the progress lines below matter: without them a healthy boot looks hung.
+    cy_log_msg(CYLF_DEF, CY_LOG_INFO, "boot: building device context...\n");
     auto &ctx = res::context();
-    if (!res::initialize_stores()) {
+    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
+               "boot: device context built (BME280 init err=%d)\n",
+               static_cast<int>(ctx.bme.last_error()));
+
+    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
+               "boot: scanning event-log region (%u slots)...\n",
+               static_cast<unsigned>(ctx.event_store.capacity()));
+    const auto event_ok = ctx.event_store.initialize();
+    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
+               "boot: event log ready (ok=%d, %u records)\n",
+               static_cast<int>(event_ok),
+               static_cast<unsigned>(ctx.event_store.count()));
+
+    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
+               "boot: scanning snapshot region (%u slots)...\n",
+               static_cast<unsigned>(ctx.snapshot_store.capacity()));
+    const auto snapshot_ok = ctx.snapshot_store.initialize();
+    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
+               "boot: snapshot history ready (ok=%d, %u records)\n",
+               static_cast<int>(snapshot_ok),
+               static_cast<unsigned>(ctx.snapshot_store.count()));
+
+    const auto log_ok = res::event_log_t::instance().initialize(
+        ctx.event_store, &res::now_unix_seconds);
+    res::g_context_ready = event_ok && snapshot_ok && log_ok;
+    if (!res::g_context_ready) {
         loge("orchestrator: flash store init failed (event/snapshot scan)", "");
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
-                   "boot orchestrator: flash store init failed\n");
         // Continue regardless — POST will record the record-store failure and
         // the device runs degraded (decision #12).
     }
 
-    // ---- 2. POST against the real drivers; cache + record the results. ----
+    // ---- 2. POST against the real drivers; log + record each probe. ----
+    // probe_record_store now reuses the already-initialized event store (no
+    // redundant rescan), so POST is fast and the per-probe lines print promptly.
+    cy_log_msg(CYLF_DEF, CY_LOG_INFO, "\n---- [ POST ] ----\n");
     const auto summary = diag::post::run(ctx.bme, ctx.rtc, ctx.flash,
                                          ctx.event_store, m_ble_stack_ok,
                                          m_gatt_db_ok);
+    for (auto i = uint8_t{0}; i < summary.count; ++i) {
+        const auto &r = summary.results[i];
+        logi("post %s %s", subsystem_name(r.subsystem), result_name(r.result));
+        cy_log_msg(CYLF_DEF, CY_LOG_INFO, "post %s %s\n",
+                   subsystem_name(r.subsystem), result_name(r.result));
+    }
+    cy_log_msg(CYLF_DEF, CY_LOG_INFO, "---- [ POST ] done: %s ----\n",
+               summary.all_passed ? "all subsystems passed"
+                                  : "failures recorded");
     ctx.post_last_status = first_failure_id(summary);
     diag::post::record_results(ctx.event_log(), summary); // enqueues records
 
@@ -130,6 +198,7 @@ void boot_orchestrator::run() {
     start_task("event log", ctx.event_log().task_create());
 
     // ---- 4. Start the service tasks. ----
+    cy_log_msg(CYLF_DEF, CY_LOG_INFO, "boot: starting service tasks...\n");
     start_task("rtc service", task::rtc_service::instance().task_create());
     start_task("bme280 service", task::bme280_service::instance().task_create());
     start_task("snapshot persistence",

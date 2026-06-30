@@ -4,11 +4,12 @@
 ///
 /// \details Implements the persistence task declared in
 ///          \c sentinel_task_snapshot_persistence.hpp. The task loops
-///          \c populate_snapshot() → \c store.append() at the configured cadence;
-///          \c populate_snapshot() is cache-backed (decision #14) so the only bus
-///          traffic on this path is the flash write itself, serialized with the
-///          event-log writer by the shared W25Q128 device mutex (decision #4).
-///          The first capture lands immediately on task start, giving the
+///          \c populate_snapshot() → \c store.append() at the configured
+///          cadence;
+///          \c populate_snapshot() is cache-backed (decision #14) so the only
+///          bus traffic on this path is the flash write itself, serialized with
+///          the event-log writer by the shared W25Q128 device mutex (decision
+///          #4). The first capture lands immediately on task start, giving the
 ///          history a "first snapshot of this boot" anchor aligned with the
 ///          event log's \c boot_complete (issue #38 implementation note).
 ///
@@ -59,9 +60,10 @@ void snapshot_persistence_task::bind_store(
     m_store = store;
 }
 
-bool snapshot_persistence_task::set_period_seconds(uint32_t period_seconds) noexcept {
-    m_period_seconds =
-        period_seconds < MIN_PERIOD_SECONDS ? MIN_PERIOD_SECONDS : period_seconds;
+bool snapshot_persistence_task::set_period_seconds(
+    uint32_t period_seconds) noexcept {
+    m_period_seconds = period_seconds < MIN_PERIOD_SECONDS ? MIN_PERIOD_SECONDS
+                                                           : period_seconds;
     return true;
 }
 
@@ -92,19 +94,34 @@ bool snapshot_persistence_task::read_range(
     return true;
 }
 
-bool snapshot_persistence_task::erase_all() noexcept { return store().erase_all(); }
+bool snapshot_persistence_task::erase_all() noexcept {
+    return store().erase_all();
+}
 
 bool snapshot_persistence_task::capture_now() noexcept {
     auto snap = sentinel::telemetry::device_snapshot{};
     sentinel::telemetry::populate_snapshot(&snap);
 
     if (!store().append(snap)) {
+        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
+                   "Snapshot persistence: append failed (store err=%d)\n",
+                   static_cast<int>(store().last_error()));
+
         loge("snapshot_persistence: append failed (store err=%d)",
              static_cast<int>(store().last_error()));
         return false;
     }
 
     ++m_capture_count;
+
+    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
+               "Snapshot persistence: captured #%u (store count=%u)\n",
+               static_cast<unsigned>(m_capture_count),
+               static_cast<unsigned>(store().count()));
+
+    logi("snapshot_persistence: captured #%u (store count=%u)",
+         static_cast<unsigned>(m_capture_count),
+         static_cast<unsigned>(store().count()));
 
     // Heartbeat only on the production (context-store) path: it references the
     // shared event log, which pairs with the context store — not a bound test
@@ -118,9 +135,10 @@ bool snapshot_persistence_task::capture_now() noexcept {
     return true;
 }
 
-BaseType_t snapshot_persistence_task::task_create(UBaseType_t priority,
-                                                  uint16_t    stack_words,
-                                                  uint32_t period_seconds) noexcept {
+BaseType_t
+snapshot_persistence_task::task_create(UBaseType_t priority,
+                                       uint16_t stack_words,
+                                       uint32_t period_seconds) noexcept {
     set_period_seconds(period_seconds);
     return xTaskCreate(&snapshot_persistence_task::task_trampoline,
                        "Snapshot Persistence Task", stack_words, this, priority,
