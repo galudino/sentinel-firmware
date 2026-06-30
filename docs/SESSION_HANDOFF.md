@@ -20,29 +20,36 @@ than letting them accumulate here.
 
 ---
 
-**Last updated:** 2026-06-29 (session: #46). **Merged to `main` this session:**
-**#46 live snapshot stream task (lane 2)** — squash `5bfccc9` on `develop`,
-merge `61b7d1d` on `main`, tag `snapshot-stream-history`; #46 closed, board →
-Done. New `sentinel::task::snapshot_stream_task` (OO/class singleton, decision
-#16): normally idle (blocks on `ulTaskNotifyTake`, zero CPU), woken by `start()`
-to loop `populate_snapshot()` → notify sink at ~100 ms while
-`streaming() && central_connected()`, auto-stops on `stop()` or disconnect.
-Producer/GATT split — `set_notify_sink(notify_fn)` for #6's `wiced_bt_gatt`
-notify; connection via a `connected_fn` predicate (default
-`ble_context_object.connected()`, overridable for off-bench tests). Off-bench
-behavioral suite covers all 5 ACs; on-bench BLE-central AC owned by #6. (This
-session also rotated the durable sections of this handoff into
-[`docs/architecture/`](architecture/).) **Deviation from #46's sketch:** class
-is in `sentinel::task`, not the sketch's `sentinel::app` — every task lives there
-(decision #16).
+**Last updated:** 2026-06-30 (session: #48). **Merged to `develop` this
+session:** **#48 testbench serial bottom-up test orchestrator** — squash
+`52b7586` on `develop`, tag
+`48-testbench-serial-bottom-up-test-orchestrator-history`; #48 closed, board →
+Done. New `sentinel::testbench::test_orchestrator` (OO one-shot singleton,
+decision #16): created pre-scheduler but running post-scheduler so the bus
+arbiters pump its I/O, it drives each suite's synchronous `run_all()` bottom-up
+(BME280 → DS3231 → W25Q128 → record_store → system_event_log → device_snapshot →
+POST → snapshot_stream) with per-group banners, prints a per-group + total
+pass/fail tally, **then** starts the continuous readers (`rtc_service`,
+`bme280_service`) and self-deletes. Every suite is now run-to-completion
+returning a `sentinel::test::tally` (new header-only helper, reusable by #38)
+instead of self-scheduling a task: the four hardware suites moved their
+anon-namespace bus globals into a TU-local fixture (GoogleTest `TEST_F` shape),
+the four stateless suites fold `run_one`/`report` into the tally, and the
+infinite continuous-read loops were dropped from the orchestrated path. Builds
+clean under `-Werror -Wall -Wextra -pedantic-errors`; production app
+(`TESTBENCH=0`) unaffected. **`serial_order`/`banners_and_tally` are satisfied
+by construction + build; the actual top-to-bottom serial log is an on-bench
+observation not yet eyeballed.** This is the testbench twin of #38's boot
+orchestrator (decision #13) — **#38 now inherits the proven pattern.**
 
 **Decisions in play:** #13 (boot orchestrator over a shared `sentinel::resource`
-device context), #14 (two-lane snapshot model — **lane 2 now realized by #46**),
-#15 (testbench tests REAL components), #16 (all FreeRTOS tasks are OO/class
-style). Full text in [`architecture/decisions.md`](architecture/decisions.md).
+device context — **testbench twin realized by #48**), #14 (two-lane snapshot
+model — lane 2 realized by #46), #15 (testbench tests REAL components), #16 (all
+FreeRTOS tasks — and now the test orchestrator — are OO/class style). Full text
+in [`architecture/decisions.md`](architecture/decisions.md).
 
-**NEXT: #48 (testbench serial orchestrator) → #38 (boot orchestrator + device
-context + lane-1 persistence) → #6 (GATT).**
+**NEXT: #38 (boot orchestrator + device context + lane-1 persistence) → #6
+(GATT).**
 
 ---
 
@@ -91,31 +98,23 @@ default.
   Log**, **#35 — POST** (fake-driven suite; hardware ACs owned by #38),
   **#37 — BME280 sample service task + cache**, **#36 — `device_snapshot`
   struct + `populate()`** (80-byte packed, cache-backed), **#47 — all FreeRTOS
-  tasks are OO/class singletons**, and **#46 — live snapshot stream task
-  (lane 2)** (`snapshot_stream_task`, idle-until-enabled, ~100 ms; off-bench
-  suite passes, on-bench BLE-central AC owned by #6).
+  tasks are OO/class singletons**, **#46 — live snapshot stream task (lane 2)**
+  (`snapshot_stream_task`, idle-until-enabled, ~100 ms; off-bench suite passes,
+  on-bench BLE-central AC owned by #6), and **#48 — testbench serial bottom-up
+  test orchestrator** (`test_orchestrator`; every suite is run-to-completion
+  `run_all() → tally`, fixture-owned bus transports, readers started after the
+  one-shot suite; on-bench serial-log observation still pending).
 - **What's next (open, dependency-ordered):**
-  1. **#48** — testbench serial orchestrator (bottom-up run-to-completion test
-     sequence; pioneers #38's one-shot-orchestrator pattern) ← **NEXT**
-  2. **#38** — boot orchestrator + shared device context + periodic snapshot
+  1. **#38** — boot orchestrator + shared device context + periodic snapshot
      persistence (lane 1, ~5 min flash); also wires #34/#35 boot-path + carries
-     POST's on-bench hardware ACs. Inherits #48's orchestrator pattern.
-  3. **#6** — BLE GATT services Phase I (wires producer notify-sinks →
+     POST's on-bench hardware ACs. **Inherits #48's proven one-shot-orchestrator
+     pattern** (decision #13) and reuses `sentinel::test::tally`'s shape. ← **NEXT**
+  2. **#6** — BLE GATT services Phase I (wires producer notify-sinks →
      characteristics, incl. attaching `snapshot_stream_task`'s notify sink +
      driving `start()`/`stop()` from the `SnapshotStream` enable char; assigns
      UUIDs) — *On Hold/Blocked until #38* (its lane-2 dep #46 is now done).
 
 ---
-
-## #48 — testbench serial orchestrator (immediate next)
-
-Standalone, sequenced *before* #38. Make the testbench run bottom-up + serially
-(inits → bus tasks → per-driver prelim tests → service/event-log/snapshot/POST
-tests → THEN start continuous readers) so the serial log reads top-to-bottom as
-a diagnostic. Testbench twin of the #38 boot orchestrator (decision #13); needs
-the test modules turned into run-to-completion `run()` calls invoked by one
-high-priority one-shot orchestrator task (post-scheduler — I/O tests can't run
-pre-scheduler). #38 then inherits the proven pattern.
 
 ## #38 — boot orchestrator + device context + lane-1 persistence
 
