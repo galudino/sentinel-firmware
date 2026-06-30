@@ -1,52 +1,44 @@
 ///
 /// \file    sentinel_test_driver_file_template.hpp
-/// \brief   Hardware driver test function declarations
+/// \brief   Hardware driver test suite template (run-to-completion)
 ///
-/// \details This header provides test function declarations for hardware
-///          driver validation. These functions are intended for use in
-///          testbench builds to verify driver functionality.
+/// \details Copy-me scaffold for a new driver test suite. Mirrors the
+///          run-to-completion convention every suite follows (#48): a single
+///          synchronous \ref run_all entry that the serial test orchestrator
+///          calls directly, returning a \ref sentinel::test::tally. The suite
+///          does \b not self-schedule as a FreeRTOS task and does \b not own a
+///          continuous read loop — continuous reading belongs in a service task
+///          (\c sentinel::task::*), started by the orchestrator after the
+///          one-shot suite finishes.
+///
+///          The bus-arbitrated transport the tests share lives in a TU-local
+///          fixture in the \c .cpp (the canonical "fixture holds the shared
+///          resource" shape, like a GoogleTest \c TEST_F), not a file-static
+///          global.
 ///
 /// \author  galudino
 /// \date    2026-05-15
-/// \version 1.0 - Test template
+/// \version 2.0 - Run-to-completion suite template (#48)
 ///
 
 #ifndef SENTINEL_TEST_DRIVER_FILE_TEMPLATE_HPP
 #define SENTINEL_TEST_DRIVER_FILE_TEMPLATE_HPP
 
+#include "sentinel_test_result.hpp"
+
 namespace sentinel::test::driver {
 
 ///
-/// \brief Test driver basic functionality
+/// \brief Run the full driver test suite to completion.
 ///
-/// Main test function that exercises driver initialization and basic
-/// operations. Add specific test steps as needed for the driver being tested.
+/// \details Constructs the fixture, runs each individual test in dependency
+///          order, folds every pass/fail outcome into a
+///          \ref sentinel::test::tally, and returns it. Intended to be called
+///          by the testbench serial orchestrator (#48).
 ///
-void all();
-
+/// \return The suite's pass/fail tally.
 ///
-/// \brief Test driver chip ID read operation
-///
-/// Validates that the chip ID can be successfully read from the device and
-/// matches expected values.
-///
-void chip_id_read();
-
-///
-/// \brief Test driver read operations
-///
-/// Validates data read operations from the driver, including register reads
-/// and sensor data acquisition.
-///
-void read();
-
-///
-/// \brief Test driver write operations
-///
-/// Validates data write operations to the driver, including register writes
-/// and configuration updates.
-///
-void write();
+tally run_all() noexcept;
 
 } // namespace sentinel::test::driver
 
