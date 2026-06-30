@@ -43,46 +43,24 @@
 #ifndef SENTINEL_TEST_SYSTEM_EVENT_LOG_HPP
 #define SENTINEL_TEST_SYSTEM_EVENT_LOG_HPP
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wpedantic"
-extern "C" {
-#include "FreeRTOS.h"
-#include "portmacro.h"
-#include "task.h"
-}
-#pragma GCC diagnostic pop
+#include "sentinel_test_result.hpp"
 
 namespace sentinel::test::system_event_log {
 
-/// \brief Run the full System Event Log test suite.
-void all();
-
-/// \brief A fresh log over a freshly-erased store reports empty.
-void presence_check();
-
-/// \brief The boot sequence records one readable boot_complete.
-void record_and_read();
-
-/// \brief A typed firmware_update_record round-trips through the store.
-void typed_round_trip();
-
-/// \brief 1000 mixed events are all persisted without loss.
-void record_burst();
-
-/// \brief Records and ordering survive a simulated warm reboot.
-void survive_reset();
-
-/// \brief An unclean reboot synthesizes a shutdown_unexpected.
-void unexpected_shutdown_synthesis();
-
-/// \brief erase_all() empties the log and appends still work afterwards.
-void erase_all();
-
-/// \brief Filling past capacity wraps: oldest overwritten, newest readable.
-void crossing_size_threshold();
-
-/// \brief Create the FreeRTOS task that runs \ref all.
-BaseType_t task_create();
+///
+/// \brief Run the full System Event Log test suite to completion.
+///
+/// \details Validates the log over the RAM-backed
+///          \ref sentinel::ram_record_store across all eight acceptance
+///          criteria — presence, record/read, typed round-trip, burst, warm
+///          reboot, unexpected-shutdown synthesis, erase, and wrap — and
+///          returns the pass/fail \ref sentinel::test::tally. Run-to-completion
+///          (#48): no longer self-schedules as a FreeRTOS task; the serial test
+///          orchestrator calls \ref run_all directly.
+///
+/// \return The suite's pass/fail tally.
+///
+tally run_all() noexcept;
 
 } // namespace sentinel::test::system_event_log
 

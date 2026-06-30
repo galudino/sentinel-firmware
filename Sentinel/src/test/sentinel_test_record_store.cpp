@@ -1,8 +1,8 @@
 ///
 /// \file    sentinel_test_record_store.cpp
-/// \brief   Flash-backed circular record store test implementations
+/// \brief   Flash-backed circular record store test suite implementation
 ///
-/// \details Implements the testbench tests declared in
+/// \details Implements the run-to-completion testbench suite declared in
 ///          \c sentinel_test_record_store.hpp. The tests exercise the
 ///          \ref sentinel::record_store storage primitive (firmware #33)
 ///          against a physical W25Q128JV attached to
@@ -15,9 +15,16 @@
 ///          and of any plausible application data, so the suites do not
 ///          interfere with one another.
 ///
+///          Structure (#48): the individual tests are members of a TU-local
+///          \c fixture that owns the bus-arbitrated SPI transport, mirroring a
+///          GoogleTest \c TEST_F fixture — the shared resource lives in the
+///          fixture, not a file-static global. Each test returns \c true on
+///          pass / \c false on fail; \ref run_all constructs the fixture, folds
+///          every outcome into a \ref sentinel::test::tally, and returns it.
+///
 /// \author  galudino
 /// \date    2026-06-28
-/// \version 1.0 - record_store test implementation
+/// \version 2.0 - Run-to-completion fixture suite (#48)
 ///
 
 #pragma GCC diagnostic push
@@ -37,6 +44,7 @@ extern "C" {
 #include "sentinel_record_store.hpp"
 #include "sentinel_resource.hpp"
 #include "sentinel_test_record_store.hpp"
+#include "sentinel_test_result.hpp"
 #include "sentinel_utilities.hpp"
 #include "sentinel_w25q128.hpp"
 
@@ -45,15 +53,6 @@ extern "C" {
 #include <cstring>
 
 namespace {
-
-///
-/// \brief Bus-arbitrated SPI transport for the record_store test.
-///
-/// \details Constructed once at TU scope, targeting the same flash CS line
-///          (\c CYBSP_SPI_FLASH_CS / SS0) as the W25Q128 driver test.
-///
-sentinel::cyhal_spi_bus_transport flash_bus{sentinel::resource::cybsp_spi_bus,
-                                            CYBSP_SPI_FLASH_CS};
 
 using flash_t = sentinel::w25q128<sentinel::cyhal_spi_bus_transport>;
 
@@ -102,40 +101,34 @@ inline bool records_equal(const test_record &a, const test_record &b) noexcept {
     return a.value == b.value && std::memcmp(a.tag, b.tag, sizeof(a.tag)) == 0;
 }
 
+///
+/// \brief Test fixture: owns the bus-arbitrated SPI transport every test shares.
+///
+/// \details Targets the same flash CS line (\c CYBSP_SPI_FLASH_CS / SS0) as the
+///          W25Q128 driver suite. Constructed fresh by \ref run_all (like a
+///          GoogleTest \c SetUp), so there is no file-static bus global. The
+///          transport is inert until \c peripheral_initialize() has spawned the
+///          arbiter, which the orchestrator guarantees by running post-scheduler.
+///
+struct fixture {
+    sentinel::cyhal_spi_bus_transport flash_bus{
+        sentinel::resource::cybsp_spi_bus, CYBSP_SPI_FLASH_CS};
+
+    bool presence_check() noexcept;
+    bool append_round_trip() noexcept;
+    bool many_append() noexcept;
+    bool wrap_around() noexcept;
+    bool power_loss_simulation() noexcept;
+    bool survive_reset() noexcept;
+};
+
 } // namespace
 
 // ============================================================================
-// sentinel::test::record_store::all
+// fixture::presence_check
 // ============================================================================
 
-void sentinel::test::record_store::all() {
-    presence_check();
-    yield_for_debug_drain(200);
-
-    append_round_trip();
-    yield_for_debug_drain(200);
-
-    many_append();
-    yield_for_debug_drain(200);
-
-    wrap_around();
-    yield_for_debug_drain(200);
-
-    power_loss_simulation();
-    yield_for_debug_drain(200);
-
-    survive_reset();
-    yield_for_debug_drain(200);
-
-    logi("record_store: all tests complete", "");
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO, "record_store: all tests complete\n");
-}
-
-// ============================================================================
-// presence_check
-// ============================================================================
-
-void sentinel::test::record_store::presence_check() {
+bool fixture::presence_check() noexcept {
     auto flash = flash_t(flash_bus, sentinel::resource::flash_device_mutex);
     auto store = store_t(flash, kRegionOffset, kRegionSize);
     logi("record_store presence_check: SLOT_SIZE=%u capacity=%u",
@@ -149,7 +142,7 @@ void sentinel::test::record_store::presence_check() {
         cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                    "record_store presence_check FAIL: erase_all %d\n",
                    static_cast<int>(store.last_error()));
-        return;
+        return false;
     }
 
     auto fresh = store_t(flash, kRegionOffset, kRegionSize);
@@ -159,7 +152,7 @@ void sentinel::test::record_store::presence_check() {
         cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                    "record_store presence_check FAIL: initialize %d\n",
                    static_cast<int>(fresh.last_error()));
-        return;
+        return false;
     }
 
     if (fresh.count() != 0 || fresh.head_index() != 0 ||
@@ -171,18 +164,19 @@ void sentinel::test::record_store::presence_check() {
              static_cast<unsigned>(fresh.tail_index()));
         cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                    "record_store presence_check FAIL: not empty\n");
-        return;
+        return false;
     }
 
     logi("presence_check PASS: fresh store reports empty", "");
     cy_log_msg(CYLF_DEF, CY_LOG_INFO, "record_store presence_check PASS\n");
+    return true;
 }
 
 // ============================================================================
-// append_round_trip
+// fixture::append_round_trip
 // ============================================================================
 
-void sentinel::test::record_store::append_round_trip() {
+bool fixture::append_round_trip() noexcept {
     auto flash = flash_t(flash_bus, sentinel::resource::flash_device_mutex);
     auto store = store_t(flash, kRegionOffset, kRegionSize);
     yield_for_debug_drain(200);
@@ -193,7 +187,7 @@ void sentinel::test::record_store::append_round_trip() {
         cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                    "record_store append_round_trip FAIL: erase_all %d\n",
                    static_cast<int>(store.last_error()));
-        return;
+        return false;
     }
 
     auto in = make_record(0x42u);
@@ -203,14 +197,14 @@ void sentinel::test::record_store::append_round_trip() {
         cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                    "record_store append_round_trip FAIL: append %d\n",
                    static_cast<int>(store.last_error()));
-        return;
+        return false;
     }
     if (store.count() != 1) {
         loge("append_round_trip FAIL: count=%u expected 1",
              static_cast<unsigned>(store.count()));
         cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                    "record_store append_round_trip FAIL: count != 1\n");
-        return;
+        return false;
     }
 
     auto out = test_record{};
@@ -220,25 +214,26 @@ void sentinel::test::record_store::append_round_trip() {
         cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                    "record_store append_round_trip FAIL: read %d\n",
                    static_cast<int>(store.last_error()));
-        return;
+        return false;
     }
     if (!records_equal(in, out)) {
         loge("append_round_trip FAIL: readback mismatch (value=%u)",
              static_cast<unsigned>(out.value));
         cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                    "record_store append_round_trip FAIL: mismatch\n");
-        return;
+        return false;
     }
 
     logi("append_round_trip PASS: single record round-tripped", "");
     cy_log_msg(CYLF_DEF, CY_LOG_INFO, "record_store append_round_trip PASS\n");
+    return true;
 }
 
 // ============================================================================
-// many_append
+// fixture::many_append
 // ============================================================================
 
-void sentinel::test::record_store::many_append() {
+bool fixture::many_append() noexcept {
     auto flash = flash_t(flash_bus, sentinel::resource::flash_device_mutex);
     auto store = store_t(flash, kRegionOffset, kRegionSize);
     yield_for_debug_drain(200);
@@ -251,7 +246,7 @@ void sentinel::test::record_store::many_append() {
         cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                    "record_store many_append FAIL: erase_all %d\n",
                    static_cast<int>(store.last_error()));
-        return;
+        return false;
     }
 
     for (auto i = uint32_t{0}; i < kCount; i++) {
@@ -262,7 +257,7 @@ void sentinel::test::record_store::many_append() {
             cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                        "record_store many_append FAIL: append %u\n",
                        static_cast<unsigned>(i));
-            return;
+            return false;
         }
     }
     if (store.count() != kCount) {
@@ -271,7 +266,7 @@ void sentinel::test::record_store::many_append() {
              static_cast<unsigned>(kCount));
         cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                    "record_store many_append FAIL: count mismatch\n");
-        return;
+        return false;
     }
 
     for (auto i = uint32_t{0}; i < kCount; i++) {
@@ -282,7 +277,7 @@ void sentinel::test::record_store::many_append() {
             cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                        "record_store many_append FAIL: read %u\n",
                        static_cast<unsigned>(i));
-            return;
+            return false;
         }
         if (!records_equal(make_record(1000u + i), out)) {
             loge("many_append FAIL: record %u mismatch (value=%u)",
@@ -290,7 +285,7 @@ void sentinel::test::record_store::many_append() {
             cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                        "record_store many_append FAIL: mismatch at %u\n",
                        static_cast<unsigned>(i));
-            return;
+            return false;
         }
     }
 
@@ -299,13 +294,14 @@ void sentinel::test::record_store::many_append() {
     cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                "record_store many_append PASS: %u records\n",
                static_cast<unsigned>(kCount));
+    return true;
 }
 
 // ============================================================================
-// wrap_around
+// fixture::wrap_around
 // ============================================================================
 
-void sentinel::test::record_store::wrap_around() {
+bool fixture::wrap_around() noexcept {
     auto flash = flash_t(flash_bus, sentinel::resource::flash_device_mutex);
     auto store = store_t(flash, kRegionOffset, kRegionSize);
     yield_for_debug_drain(200);
@@ -316,7 +312,7 @@ void sentinel::test::record_store::wrap_around() {
         cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                    "record_store wrap_around FAIL: erase_all %d\n",
                    static_cast<int>(store.last_error()));
-        return;
+        return false;
     }
 
     const auto cap = store.capacity();
@@ -330,7 +326,7 @@ void sentinel::test::record_store::wrap_around() {
             cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                        "record_store wrap_around FAIL: fill %u\n",
                        static_cast<unsigned>(i));
-            return;
+            return false;
         }
     }
     if (store.count() != cap || store.tail_index() != 0) {
@@ -340,7 +336,7 @@ void sentinel::test::record_store::wrap_around() {
              static_cast<unsigned>(cap));
         cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                    "record_store wrap_around FAIL: bad full state\n");
-        return;
+        return false;
     }
 
     // One more append forces a wrap: the head re-enters sector 0, which is
@@ -351,7 +347,7 @@ void sentinel::test::record_store::wrap_around() {
         cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                    "record_store wrap_around FAIL: wrap append %d\n",
                    static_cast<int>(store.last_error()));
-        return;
+        return false;
     }
 
     if (store.head_index() != cap + 1u || store.tail_index() == 0u) {
@@ -362,7 +358,7 @@ void sentinel::test::record_store::wrap_around() {
              static_cast<unsigned>(cap + 1u));
         cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                    "record_store wrap_around FAIL: tail did not advance\n");
-        return;
+        return false;
     }
 
     // Newest record must still be readable; the oldest (index 0) must now be
@@ -372,13 +368,13 @@ void sentinel::test::record_store::wrap_around() {
         loge("wrap_around FAIL: newest record not readable after wrap", "");
         cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                    "record_store wrap_around FAIL: newest unreadable\n");
-        return;
+        return false;
     }
     if (store.read(0, &out)) {
         loge("wrap_around FAIL: overwritten record 0 still readable", "");
         cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                    "record_store wrap_around FAIL: stale record readable\n");
-        return;
+        return false;
     }
 
     // Recovery from flash must reproduce the in-RAM head/tail/count.
@@ -394,7 +390,7 @@ void sentinel::test::record_store::wrap_around() {
              static_cast<unsigned>(store.tail_index()));
         cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                    "record_store wrap_around FAIL: recovery mismatch\n");
-        return;
+        return false;
     }
 
     logi("wrap_around PASS: wrapped at cap=%u, tail->%u, newest readable",
@@ -403,13 +399,14 @@ void sentinel::test::record_store::wrap_around() {
                "record_store wrap_around PASS: cap=%u tail=%u\n",
                static_cast<unsigned>(cap),
                static_cast<unsigned>(store.tail_index()));
+    return true;
 }
 
 // ============================================================================
-// power_loss_simulation
+// fixture::power_loss_simulation
 // ============================================================================
 
-void sentinel::test::record_store::power_loss_simulation() {
+bool fixture::power_loss_simulation() noexcept {
     auto flash = flash_t(flash_bus, sentinel::resource::flash_device_mutex);
     auto store = store_t(flash, kRegionOffset, kRegionSize);
     yield_for_debug_drain(200);
@@ -422,7 +419,7 @@ void sentinel::test::record_store::power_loss_simulation() {
         cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                    "record_store power_loss FAIL: erase_all %d\n",
                    static_cast<int>(store.last_error()));
-        return;
+        return false;
     }
 
     for (auto i = uint32_t{0}; i < kCommitted; i++) {
@@ -433,7 +430,7 @@ void sentinel::test::record_store::power_loss_simulation() {
             cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                        "record_store power_loss FAIL: append %u\n",
                        static_cast<unsigned>(i));
-            return;
+            return false;
         }
     }
 
@@ -445,7 +442,7 @@ void sentinel::test::record_store::power_loss_simulation() {
         cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                    "record_store power_loss FAIL: uncommitted write %d\n",
                    static_cast<int>(store.last_error()));
-        return;
+        return false;
     }
 
     // Re-scan from flash (warm boot). The partial record must be skipped.
@@ -456,7 +453,7 @@ void sentinel::test::record_store::power_loss_simulation() {
         cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                    "record_store power_loss FAIL: recovery init %d\n",
                    static_cast<int>(recovered.last_error()));
-        return;
+        return false;
     }
 
     if (recovered.count() != kCommitted ||
@@ -466,7 +463,7 @@ void sentinel::test::record_store::power_loss_simulation() {
              static_cast<unsigned>(recovered.head_index()));
         cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                    "record_store power_loss FAIL: partial not skipped\n");
-        return;
+        return false;
     }
 
     auto out = test_record{};
@@ -475,7 +472,7 @@ void sentinel::test::record_store::power_loss_simulation() {
              static_cast<unsigned>(kCommitted));
         cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                    "record_store power_loss FAIL: partial readable\n");
-        return;
+        return false;
     }
 
     logi("power_loss PASS: partial record skipped, count=%u preserved",
@@ -483,13 +480,14 @@ void sentinel::test::record_store::power_loss_simulation() {
     cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                "record_store power_loss PASS: count=%u preserved\n",
                static_cast<unsigned>(kCommitted));
+    return true;
 }
 
 // ============================================================================
-// survive_reset
+// fixture::survive_reset
 // ============================================================================
 
-void sentinel::test::record_store::survive_reset() {
+bool fixture::survive_reset() noexcept {
     auto flash = flash_t(flash_bus, sentinel::resource::flash_device_mutex);
     auto store = store_t(flash, kRegionOffset, kRegionSize);
     yield_for_debug_drain(200);
@@ -503,7 +501,7 @@ void sentinel::test::record_store::survive_reset() {
         cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                    "record_store survive_reset FAIL: erase_all %d\n",
                    static_cast<int>(store.last_error()));
-        return;
+        return false;
     }
 
     for (auto i = uint32_t{0}; i < kCount; i++) {
@@ -514,7 +512,7 @@ void sentinel::test::record_store::survive_reset() {
             cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                        "record_store survive_reset FAIL: append %u\n",
                        static_cast<unsigned>(i));
-            return;
+            return false;
         }
     }
 
@@ -527,7 +525,7 @@ void sentinel::test::record_store::survive_reset() {
         cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                    "record_store survive_reset FAIL: re-init %d\n",
                    static_cast<int>(rebooted.last_error()));
-        return;
+        return false;
     }
 
     if (rebooted.count() != kCount || rebooted.head_index() != kCount) {
@@ -537,7 +535,7 @@ void sentinel::test::record_store::survive_reset() {
              static_cast<unsigned>(kCount));
         cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                    "record_store survive_reset FAIL: bad post-boot state\n");
-        return;
+        return false;
     }
 
     auto last = test_record{};
@@ -549,7 +547,7 @@ void sentinel::test::record_store::survive_reset() {
         loge("survive_reset FAIL: post-boot read/verify failed", "");
         cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                    "record_store survive_reset FAIL: post-boot read\n");
-        return;
+        return false;
     }
 
     logi("survive_reset PASS: %u records recovered after warm boot",
@@ -557,25 +555,34 @@ void sentinel::test::record_store::survive_reset() {
     cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                "record_store survive_reset PASS: %u records\n",
                static_cast<unsigned>(kCount));
+    return true;
 }
 
 // ============================================================================
-// task_create
+// sentinel::test::record_store::run_all
 // ============================================================================
 
-BaseType_t sentinel::test::record_store::task_create() {
-    constexpr auto stack_words = configMINIMAL_STACK_SIZE * 4;
-    constexpr auto priority =
-        static_cast<UBaseType_t>(configMAX_PRIORITIES - 3);
+sentinel::test::tally sentinel::test::record_store::run_all() noexcept {
+    auto fx = fixture{};
+    auto t  = sentinel::test::tally{};
 
-    return xTaskCreate(
-        [](void *) -> void {
-            sentinel::test::record_store::all();
-            // The record_store suite is one-shot: all() runs the six tests
-            // and returns. A FreeRTOS task must not fall off the end of its
-            // entry function (that traps in prvTaskExitError with interrupts
-            // disabled, freezing the scheduler), so delete it explicitly.
-            vTaskDelete(nullptr);
-        },
-        "Record Store Test Task", stack_words, nullptr, priority, nullptr);
+    t.record(fx.presence_check());
+    yield_for_debug_drain(200);
+
+    t.record(fx.append_round_trip());
+    yield_for_debug_drain(200);
+
+    t.record(fx.many_append());
+    yield_for_debug_drain(200);
+
+    t.record(fx.wrap_around());
+    yield_for_debug_drain(200);
+
+    t.record(fx.power_loss_simulation());
+    yield_for_debug_drain(200);
+
+    t.record(fx.survive_reset());
+    yield_for_debug_drain(200);
+
+    return t;
 }

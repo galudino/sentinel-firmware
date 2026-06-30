@@ -1,16 +1,23 @@
 ///
 /// \file    sentinel_test_w25q128.cpp
-/// \brief   W25Q128 flash driver test implementations
+/// \brief   W25Q128 flash driver test suite implementation
 ///
-/// \details Implements the testbench smoke tests declared in
-///          \c sentinel_test_w25q128.hpp. The tests exercise every
-///          public member of \ref sentinel::w25q128 against a physical
-///          W25Q128JV attached to \c sentinel::resource::cybsp_spi via
-///          the bus arbiter \c sentinel::resource::cybsp_spi_bus.
+/// \details Implements the run-to-completion testbench suite declared in
+///          \c sentinel_test_w25q128.hpp. The tests exercise every public
+///          member of \ref sentinel::w25q128 against a physical W25Q128JV
+///          attached to \c sentinel::resource::cybsp_spi via the bus arbiter
+///          \c sentinel::resource::cybsp_spi_bus.
+///
+///          Structure (#48): the individual tests are members of a TU-local
+///          \c fixture that owns the bus-arbitrated SPI transport, mirroring a
+///          GoogleTest \c TEST_F fixture — the shared resource lives in the
+///          fixture, not a file-static global. Each test returns \c true on
+///          pass / \c false on fail; \ref run_all constructs the fixture, folds
+///          every outcome into a \ref sentinel::test::tally, and returns it.
 ///
 /// \author  galudino
 /// \date    2026-05-18
-/// \version 1.0 - W25Q128 test implementation
+/// \version 2.0 - Run-to-completion fixture suite (#48)
 ///
 
 #pragma GCC diagnostic push
@@ -29,6 +36,7 @@ extern "C" {
 #include "sentinel_debug_print.hpp"
 #include "sentinel_resource.hpp"
 #include "sentinel_span.hpp"
+#include "sentinel_test_result.hpp"
 #include "sentinel_test_w25q128.hpp"
 #include "sentinel_utilities.hpp"
 #include "sentinel_w25q128.hpp"
@@ -38,18 +46,6 @@ extern "C" {
 #include <optional>
 
 namespace {
-
-///
-/// \brief Bus-arbitrated SPI transport for the W25Q128 test.
-///
-/// \details Constructed once at TU scope. Targets the SCB's SS0 line
-///          (\c CYBSP_SPI_CS, P9[3]) — the only configured slave on the
-///          bus today. When BME280-on-SPI lands in issue #2, that
-///          test will construct its own \c cyhal_spi_bus_transport
-///          with SS1.
-///
-sentinel::cyhal_spi_bus_transport w25q128_bus{sentinel::resource::cybsp_spi_bus,
-                                              CYBSP_SPI_FLASH_CS};
 
 ///
 /// \brief Yield long enough for the BLE debug ring buffer to drain.
@@ -93,37 +89,35 @@ inline bool region_is_blank(w25q128_t &flash, uint32_t address,
     return true;
 }
 
+///
+/// \brief Test fixture: owns the bus-arbitrated SPI transport every test shares.
+///
+/// \details Targets the SCB's flash chip-select line (\c CYBSP_SPI_FLASH_CS).
+///          Constructed fresh by \ref run_all (like a GoogleTest \c SetUp), so
+///          there is no file-static bus global. The transport is inert until
+///          \c peripheral_initialize() has spawned the arbiter, which the
+///          orchestrator guarantees by running post-scheduler. When
+///          BME280-on-SPI lands in issue #2, that suite will own its own
+///          \c cyhal_spi_bus_transport with SS1.
+///
+struct fixture {
+    sentinel::cyhal_spi_bus_transport w25q128_bus{
+        sentinel::resource::cybsp_spi_bus, CYBSP_SPI_FLASH_CS};
+
+    bool presence_check() noexcept;
+    bool status_register_round_trip() noexcept;
+    bool erase_program_read() noexcept;
+    bool security_register_round_trip() noexcept;
+    bool power_down_release() noexcept;
+};
+
 } // namespace
 
 // ============================================================================
-// sentinel::test::w25q128::all
+// fixture::presence_check
 // ============================================================================
 
-void sentinel::test::w25q128::all() {
-    presence_check();
-    yield_for_debug_drain(200);
-
-    status_register_round_trip();
-    yield_for_debug_drain(200);
-
-    erase_program_read();
-    yield_for_debug_drain(200);
-
-    security_register_round_trip();
-    yield_for_debug_drain(200);
-
-    power_down_release();
-    yield_for_debug_drain(200);
-
-    // Never returns — 1 Hz status poll forever.
-    continuous_status_poll();
-}
-
-// ============================================================================
-// presence_check
-// ============================================================================
-
-void sentinel::test::w25q128::presence_check() {
+bool fixture::presence_check() noexcept {
     auto flash = w25q128_t(w25q128_bus, sentinel::resource::flash_device_mutex);
     logi("W25Q128 presence_check: driver constructed", "");
     yield_for_debug_drain(200);
@@ -136,7 +130,7 @@ void sentinel::test::w25q128::presence_check() {
         cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "W25Q128 presence_check FAIL: JEDEC error %d\n",
                    static_cast<int>(flash.last_error()));
-        return;
+        return false;
     }
 
     cy_log_msg(CYLF_DEF, CY_LOG_INFO,
@@ -162,7 +156,7 @@ void sentinel::test::w25q128::presence_check() {
                    static_cast<int>(jedec->manufacturer),
                    static_cast<int>(jedec->memory_type),
                    static_cast<int>(jedec->capacity));
-        return;
+        return false;
     }
 
     // Bonus diagnostics — manufacturer+device ID and unique ID.
@@ -200,13 +194,14 @@ void sentinel::test::w25q128::presence_check() {
                static_cast<int>(jedec->manufacturer),
                static_cast<int>(jedec->memory_type),
                static_cast<int>(jedec->capacity));
+    return true;
 }
 
 // ============================================================================
-// status_register_round_trip
+// fixture::status_register_round_trip
 // ============================================================================
 
-void sentinel::test::w25q128::status_register_round_trip() {
+bool fixture::status_register_round_trip() noexcept {
     auto flash = w25q128_t(w25q128_bus, sentinel::resource::flash_device_mutex);
     logi("W25Q128 status_register_round_trip: driver constructed", "");
     yield_for_debug_drain(200);
@@ -218,7 +213,7 @@ void sentinel::test::w25q128::status_register_round_trip() {
         cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "W25Q128 status_round_trip FAIL: initial SR1 %d\n",
                    static_cast<int>(flash.last_error()));
-        return;
+        return false;
     }
     logi("status_round_trip: original SR1 = 0x%02X",
          static_cast<int>(*original));
@@ -234,7 +229,7 @@ void sentinel::test::w25q128::status_register_round_trip() {
         cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "W25Q128 status_round_trip FAIL: SR1 write %d\n",
                    static_cast<int>(flash.last_error()));
-        return;
+        return false;
     }
 
     auto readback = flash.read_status_register_1();
@@ -244,12 +239,13 @@ void sentinel::test::w25q128::status_register_round_trip() {
         cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "W25Q128 status_round_trip FAIL: SR1 readback %d\n",
                    static_cast<int>(flash.last_error()));
-        return;
+        return false;
     }
 
     // The volatile mask cannot affect read-only bits (BUSY, WEL); compare
     // only writable bits to avoid spurious mismatch.
     constexpr uint8_t writable_mask = 0xFCu; // bits 2..7 are writable
+    auto ok = bool{};
     if ((static_cast<uint8_t>(*readback) & writable_mask) !=
         (target & writable_mask)) {
         loge("status_round_trip FAIL: readback 0x%02X != target 0x%02X",
@@ -258,12 +254,14 @@ void sentinel::test::w25q128::status_register_round_trip() {
             CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
             "W25Q128 status_round_trip FAIL: readback 0x%02X != 0x%02X\n",
             static_cast<int>(*readback), static_cast<int>(target));
+        ok = false;
     } else {
         logi("status_round_trip PASS: SR1 round-tripped 0x%02X -> 0x%02X",
              static_cast<int>(*original), static_cast<int>(*readback));
         cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                    "W25Q128 status_round_trip PASS: SR1 0x%02X -> 0x%02X\n",
                    static_cast<int>(*original), static_cast<int>(*readback));
+        ok = true;
     }
 
     // Restore original (volatile write again).
@@ -271,13 +269,15 @@ void sentinel::test::w25q128::status_register_round_trip() {
         logw("status_round_trip: restore error %d",
              static_cast<int>(flash.last_error()));
     }
+
+    return ok;
 }
 
 // ============================================================================
-// erase_program_read
+// fixture::erase_program_read
 // ============================================================================
 
-void sentinel::test::w25q128::erase_program_read() {
+bool fixture::erase_program_read() noexcept {
     auto flash = w25q128_t(w25q128_bus, sentinel::resource::flash_device_mutex);
     logi("W25Q128 erase_program_read: driver constructed", "");
     yield_for_debug_drain(200);
@@ -299,7 +299,7 @@ void sentinel::test::w25q128::erase_program_read() {
         cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "W25Q128 erase_program_read FAIL: erase %d\n",
                    static_cast<int>(flash.last_error()));
-        return;
+        return false;
     }
     yield_for_debug_drain(50);
 
@@ -310,7 +310,7 @@ void sentinel::test::w25q128::erase_program_read() {
              static_cast<int>(flash.last_error()));
         cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "W25Q128 erase_program_read FAIL: not blank after erase\n");
-        return;
+        return false;
     }
     logi("erase_program_read: post-erase region is blank", "");
 
@@ -323,7 +323,7 @@ void sentinel::test::w25q128::erase_program_read() {
         cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "W25Q128 erase_program_read FAIL: program %d\n",
                    static_cast<int>(flash.last_error()));
-        return;
+        return false;
     }
     logi("erase_program_read: programmed 256 bytes", "");
 
@@ -336,7 +336,7 @@ void sentinel::test::w25q128::erase_program_read() {
         cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "W25Q128 erase_program_read FAIL: read %d\n",
                    static_cast<int>(flash.last_error()));
-        return;
+        return false;
     }
 
     for (auto i = uint32_t{0}; i < verify_length; i++) {
@@ -348,7 +348,7 @@ void sentinel::test::w25q128::erase_program_read() {
             cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                        "W25Q128 erase_program_read FAIL: mismatch at %u\n",
                        static_cast<unsigned>(i));
-            return;
+            return false;
         }
     }
 
@@ -357,13 +357,14 @@ void sentinel::test::w25q128::erase_program_read() {
     cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                "W25Q128 erase_program_read PASS: 256 B at 0x%06X\n",
                test_address);
+    return true;
 }
 
 // ============================================================================
-// security_register_round_trip
+// fixture::security_register_round_trip
 // ============================================================================
 
-void sentinel::test::w25q128::security_register_round_trip() {
+bool fixture::security_register_round_trip() noexcept {
     auto flash = w25q128_t(w25q128_bus, sentinel::resource::flash_device_mutex);
     logi("W25Q128 security_register_round_trip: driver constructed", "");
     yield_for_debug_drain(200);
@@ -378,7 +379,7 @@ void sentinel::test::w25q128::security_register_round_trip() {
         cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "W25Q128 security_round_trip FAIL: erase %d\n",
                    static_cast<int>(flash.last_error()));
-        return;
+        return false;
     }
 
     // 2. Confirm blank — read the first 16 bytes.
@@ -391,7 +392,7 @@ void sentinel::test::w25q128::security_register_round_trip() {
         cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "W25Q128 security_round_trip FAIL: post-erase read %d\n",
                    static_cast<int>(flash.last_error()));
-        return;
+        return false;
     }
     for (auto i = size_t{0}; i < blank_check.size(); i++) {
         if (blank_check[i] != 0xFF) {
@@ -399,7 +400,7 @@ void sentinel::test::w25q128::security_register_round_trip() {
                  static_cast<unsigned>(i), static_cast<int>(blank_check[i]));
             cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                        "W25Q128 security_round_trip FAIL: not blank\n");
-            return;
+            return false;
         }
     }
 
@@ -415,7 +416,7 @@ void sentinel::test::w25q128::security_register_round_trip() {
         cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "W25Q128 security_round_trip FAIL: program %d\n",
                    static_cast<int>(flash.last_error()));
-        return;
+        return false;
     }
 
     // 4. Read back and verify.
@@ -428,7 +429,7 @@ void sentinel::test::w25q128::security_register_round_trip() {
         cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "W25Q128 security_round_trip FAIL: readback %d\n",
                    static_cast<int>(flash.last_error()));
-        return;
+        return false;
     }
     for (auto i = size_t{0}; i < pattern.size(); i++) {
         if (readback[i] != pattern[i]) {
@@ -439,7 +440,7 @@ void sentinel::test::w25q128::security_register_round_trip() {
             cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                        "W25Q128 security_round_trip FAIL: mismatch at %u\n",
                        static_cast<unsigned>(i));
-            return;
+            return false;
         }
     }
 
@@ -454,13 +455,14 @@ void sentinel::test::w25q128::security_register_round_trip() {
     cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                "W25Q128 security_round_trip PASS: reg %u, 16 B\n",
                static_cast<unsigned>(reg_index));
+    return true;
 }
 
 // ============================================================================
-// power_down_release
+// fixture::power_down_release
 // ============================================================================
 
-void sentinel::test::w25q128::power_down_release() {
+bool fixture::power_down_release() noexcept {
     auto flash = w25q128_t(w25q128_bus, sentinel::resource::flash_device_mutex);
     logi("W25Q128 power_down_release: driver constructed", "");
     yield_for_debug_drain(200);
@@ -472,7 +474,7 @@ void sentinel::test::w25q128::power_down_release() {
         cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "W25Q128 power_down_release FAIL: power_down %d\n",
                    static_cast<int>(flash.last_error()));
-        return;
+        return false;
     }
 
     // tDP (CS high to power-down) = 3 µs typical. Wait a bit longer.
@@ -498,7 +500,7 @@ void sentinel::test::w25q128::power_down_release() {
         cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "W25Q128 power_down_release FAIL: release %d\n",
                    static_cast<int>(flash.last_error()));
-        return;
+        return false;
     }
     if (*device_id != w25q128_t::RELEASE_POWER_DOWN_DEVICE_ID) {
         loge("power_down_release FAIL: device_id 0x%02X != expected 0x%02X",
@@ -507,7 +509,7 @@ void sentinel::test::w25q128::power_down_release() {
         cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "W25Q128 power_down_release FAIL: device_id 0x%02X\n",
                    static_cast<int>(*device_id));
-        return;
+        return false;
     }
     logi("power_down_release: release returned device_id 0x%02X",
          static_cast<int>(*device_id));
@@ -518,61 +520,36 @@ void sentinel::test::w25q128::power_down_release() {
         loge("power_down_release FAIL: post-release JEDEC mismatch", "");
         cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
                    "W25Q128 power_down_release FAIL: post-release JEDEC\n");
-        return;
+        return false;
     }
 
     logi("power_down_release PASS: PD -> release -> JEDEC round-trip OK", "");
     cy_log_msg(CYLF_DEF, CY_LOG_INFO, "W25Q128 power_down_release PASS\n");
+    return true;
 }
 
 // ============================================================================
-// continuous_status_poll
+// sentinel::test::w25q128::run_all
 // ============================================================================
 
-[[noreturn]] void sentinel::test::w25q128::continuous_status_poll() {
-    auto flash = w25q128_t(w25q128_bus, sentinel::resource::flash_device_mutex);
-    logi("W25Q128 continuous_status_poll: entering 1 Hz loop", "");
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-               "W25Q128 continuous_status_poll: entering 1 Hz loop\n");
+sentinel::test::tally sentinel::test::w25q128::run_all() noexcept {
+    auto fx = fixture{};
+    auto t  = sentinel::test::tally{};
+
+    t.record(fx.presence_check());
     yield_for_debug_drain(200);
 
-    while (true) {
-        auto sr1 = flash.read_status_register_1();
-        auto sr2 = flash.read_status_register_2();
-        auto sr3 = flash.read_status_register_3();
+    t.record(fx.status_register_round_trip());
+    yield_for_debug_drain(200);
 
-        if (!sr1 || !sr2 || !sr3) {
-            loge("continuous_status_poll: read error %d",
-                 static_cast<int>(flash.last_error()));
-            cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                       "W25Q128 continuous_status_poll: read error %d\n",
-                       static_cast<int>(flash.last_error()));
-        } else {
-            auto busy =
-                (*sr1 & (1u << w25q128_t::status_register_1::BUSY_BIT)) != 0;
-            logi("W25Q128 SR1=0x%02X SR2=0x%02X SR3=0x%02X busy=%d",
-                 static_cast<int>(*sr1), static_cast<int>(*sr2),
-                 static_cast<int>(*sr3), busy ? 1 : 0);
-            cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-                       "W25Q128 SR1=0x%02X SR2=0x%02X SR3=0x%02X busy=%d\n",
-                       static_cast<int>(*sr1), static_cast<int>(*sr2),
-                       static_cast<int>(*sr3), busy ? 1 : 0);
-        }
+    t.record(fx.erase_program_read());
+    yield_for_debug_drain(200);
 
-        vTaskDelay(pdMS_TO_TICKS(1000));
-    }
-}
+    t.record(fx.security_register_round_trip());
+    yield_for_debug_drain(200);
 
-// ============================================================================
-// task_create
-// ============================================================================
+    t.record(fx.power_down_release());
+    yield_for_debug_drain(200);
 
-BaseType_t sentinel::test::w25q128::task_create() {
-    constexpr auto stack_words = configMINIMAL_STACK_SIZE * 4;
-    constexpr auto priority =
-        static_cast<UBaseType_t>(configMAX_PRIORITIES - 3);
-
-    return xTaskCreate([](void *) -> void { sentinel::test::w25q128::all(); },
-                       "W25Q128 Test Task", stack_words, nullptr, priority,
-                       nullptr);
+    return t;
 }

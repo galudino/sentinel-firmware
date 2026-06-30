@@ -38,6 +38,7 @@ extern "C" {
 #include "sentinel_debug_print.hpp"
 #include "sentinel_post.hpp"
 #include "sentinel_test_post.hpp"
+#include "sentinel_test_result.hpp"
 
 #include <array>
 #include <cstdint>
@@ -321,86 +322,42 @@ bool body_record_store_fallback(const char **why) {
     return true;
 }
 
-void run_one(const char *name, bool (*body)(const char **)) noexcept {
+bool run_one(const char *name, bool (*body)(const char **)) noexcept {
     const char *why = "assertion";
     const auto  ok  = body(&why);
     report(name, ok, why);
+    return ok;
 }
 
 } // namespace
 
 // ============================================================================
-// Public entry points
+// sentinel::test::post::run_all
 // ============================================================================
 
-void sentinel::test::post::all_pass_path() {
-    run_one("all_pass_path", body_all_pass_path);
-}
+sentinel::test::tally sentinel::test::post::run_all() noexcept {
+    auto t = sentinel::test::tally{};
 
-void sentinel::test::post::bme280_disconnect() {
-    run_one("bme280_disconnect", body_bme280_disconnect);
-}
-
-void sentinel::test::post::w25q128_unknown_jedec() {
-    run_one("w25q128_unknown_jedec", body_w25q128_unknown_jedec);
-}
-
-void sentinel::test::post::oscillator_stop() {
-    run_one("oscillator_stop", body_oscillator_stop);
-}
-
-void sentinel::test::post::degraded_operation() {
-    run_one("degraded_operation", body_degraded_operation);
-}
-
-void sentinel::test::post::records_failures() {
-    run_one("records_failures", body_records_failures);
-}
-
-void sentinel::test::post::record_store_fallback() {
-    run_one("record_store_fallback", body_record_store_fallback);
-}
-
-void sentinel::test::post::all() {
-    all_pass_path();
+    t.record(run_one("all_pass_path", body_all_pass_path));
     yield_for_debug_drain(200);
 
-    bme280_disconnect();
+    t.record(run_one("bme280_disconnect", body_bme280_disconnect));
     yield_for_debug_drain(200);
 
-    w25q128_unknown_jedec();
+    t.record(run_one("w25q128_unknown_jedec", body_w25q128_unknown_jedec));
     yield_for_debug_drain(200);
 
-    oscillator_stop();
+    t.record(run_one("oscillator_stop", body_oscillator_stop));
     yield_for_debug_drain(200);
 
-    degraded_operation();
+    t.record(run_one("degraded_operation", body_degraded_operation));
     yield_for_debug_drain(200);
 
-    records_failures();
+    t.record(run_one("records_failures", body_records_failures));
     yield_for_debug_drain(200);
 
-    record_store_fallback();
+    t.record(run_one("record_store_fallback", body_record_store_fallback));
     yield_for_debug_drain(200);
 
-    logi("post: all tests complete", "");
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO, "post: all tests complete\n");
-}
-
-// ============================================================================
-// task_create
-// ============================================================================
-
-BaseType_t sentinel::test::post::task_create() {
-    constexpr auto stack_words = configMINIMAL_STACK_SIZE * 4;
-    constexpr auto priority =
-        static_cast<UBaseType_t>(configMAX_PRIORITIES - 3);
-
-    return xTaskCreate(
-        [](void *) -> void {
-            sentinel::test::post::all();
-            // One-shot suite: a FreeRTOS task must not return, so delete it.
-            vTaskDelete(nullptr);
-        },
-        "POST Test Task", stack_words, nullptr, priority, nullptr);
+    return t;
 }
