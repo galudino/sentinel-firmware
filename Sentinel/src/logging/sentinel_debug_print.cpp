@@ -21,6 +21,7 @@ extern "C" {
 #include "sentinel_debug_print.hpp"
 #include "sentinel_format_string.hpp"
 #include "sentinel_resource.hpp"
+#include "sentinel_task_rtc_service.hpp"
 
 #include <cstdio>
 
@@ -64,11 +65,14 @@ void sentinel::logging::enqueue_log_for_debug_stream(const char *file, int line,
     // Use critical section to protect the static g_log_buffer
     taskENTER_CRITICAL();
 
-    /// TODO: Initialize RTC and get real timestamp for log messages
-
-    // uint64_t unix_ms = sensor.unix_time();
-    uint64_t unix_ms = 0; // 1970-01-01T00:00:00Z in milliseconds - placeholder
-                          // until RTC is implemented
+    // Real wall-clock timestamp from the DS3231, via the rtc_service cache
+    // (#5/#38). last_unix_time() is a lock-free read of a latched, aligned
+    // 32-bit value — safe inside this critical section — and returns 0 until the
+    // first 1 Hz SQW tick, which the client renders as the epoch.
+    const uint64_t unix_ms =
+        static_cast<uint64_t>(
+            sentinel::task::rtc_service::instance().last_unix_time()) *
+        1000ull;
 
     va_list args;
     va_start(args, fmt);
