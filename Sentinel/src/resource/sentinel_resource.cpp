@@ -3,9 +3,9 @@
 /// \brief   Shared system bring-up (resource::system_initialize)
 ///
 /// \details Defines \ref sentinel::resource::system_initialize, hoisted out of
-///          the two previously near-identical target entry points
-///          (\c src/app/main.cpp and \c src/testbench/testbench.cpp) so the boot
-///          bring-up sequence has a single source of truth. Kept in a \c .cpp
+///          the target entry point (now the single \c src/main.cpp, #51) so the
+///          boot bring-up sequence has a single source of truth shared by both
+///          the main-firmware and testbench builds. Kept in a \c .cpp
 ///          (not the header) because it depends on the BLE stack, OTA, and
 ///          retarget-IO headers, which must not leak into every translation unit
 ///          that includes \c sentinel_resource.hpp (transitively, that is nearly

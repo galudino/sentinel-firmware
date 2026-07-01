@@ -203,10 +203,13 @@ endif
 #
 # Main app vs Testbench
 #
-# TESTBENCH=0 builds the main application (src/app/main.cpp).
-# TESTBENCH=1 builds the testbench application (src/testbench/testbench.cpp).
-# Only one of the two source dirs is included in the build; the other is
-# excluded via CY_IGNORE so the linker sees exactly one main().
+# One shared entry point (src/main.cpp) serves both targets; the two source
+# dirs now hold only the per-target orchestrator, each defining the common
+# sentinel::create_orchestrator() symbol (see sentinel_orchestrator_entry.hpp).
+# TESTBENCH=0 builds the main application (src/app/ boot orchestrator).
+# TESTBENCH=1 builds the testbench application (src/testbench/ test orchestrator).
+# CY_IGNORE excludes the other dir so the linker resolves exactly one
+# create_orchestrator() — no #ifdef in the shared main.cpp (#51).
 #
 ###############################################################################
 ifeq ($(TESTBENCH), 1)

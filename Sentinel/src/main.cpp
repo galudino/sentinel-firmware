@@ -1,18 +1,20 @@
 ///
-/// \file    testbench.cpp
-/// \brief   Testbench entry point (sentinel-testbench target)
+/// \file    main.cpp
+/// \brief   Shared entry point for both firmware targets (#51)
 ///
-/// \details Thin entry point: run the shared system bring-up
-///          (\ref sentinel::resource::system_initialize), create the one-shot
-///          serial test orchestrator (#48), and start the scheduler. All
-///          boot-time bring-up is shared with the main-firmware target via
-///          \c system_initialize; the only thing that differs between the two
-///          targets is which orchestrator is created here (and the
-///          \c APP_NAME_STRING banner, handled inside \c system_initialize).
+/// \details One entry point serves the main-firmware and testbench builds: run
+///          the shared system bring-up (\ref sentinel::resource::system_initialize),
+///          create this target's one-shot orchestrator via the common
+///          \ref sentinel::create_orchestrator symbol, and start the scheduler.
+///          The symbol is defined per-target in that target's orchestrator TU
+///          (\c src/app → boot orchestrator #38; \c src/testbench → test
+///          orchestrator #48); the Makefile \c CY_IGNORE's the other dir, so the
+///          linker resolves exactly one definition with \b no \c #ifdef here.
+///          See \ref sentinel_orchestrator_entry.hpp.
 ///
 /// \author  galudino
 /// \date    2026-05-15
-/// \version 2.0 - Shared system_initialize; serial test orchestrator (#48)
+/// \version 3.0 - Unified app/testbench entry point (#51)
 ///
 
 // Always wrap C includes in diagnostic push/pop, in an extern "C" block, to
@@ -37,12 +39,10 @@ extern "C" {
 #include "sentinel_utilities.hpp"
 
 ///
-/// \brief Testbench entry point.
+/// \brief Application entry point.
 ///
-/// Runs shared system bring-up, creates the one-shot serial test orchestrator,
-/// and starts the FreeRTOS scheduler (never returns in normal operation). The
-/// orchestrator — running after the scheduler starts — drives every test suite
-/// bottom-up and serially, then starts the continuous reader services.
+/// Runs shared system bring-up, creates the one-shot boot orchestrator, and
+/// starts the FreeRTOS scheduler (never returns in normal operation).
 ///
 int main(int argc, const char *argv[]) {
     sentinel::unused(argc);
