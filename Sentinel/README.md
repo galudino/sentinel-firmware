@@ -67,13 +67,15 @@ Sentinel/
 
 ### Two build configurations from one tree
 
-The Makefile uses a `TESTBENCH` variable to swap between two top-level entry
-points without two separate projects:
+One shared entry point (`src/main.cpp`) serves both builds; the Makefile's
+`TESTBENCH` variable selects which per-target orchestrator compiles. The entry
+point calls the common `sentinel::create_orchestrator()` symbol, defined once
+per target and resolved at link time — no `#ifdef` in `main.cpp`:
 
-| `TESTBENCH` | App name              | Entry point             | Excluded |
-| :---------- | :-------------------- | :---------------------- | :------- |
-| `0` (default) | `sentinel-firmware`  | `src/app/main.cpp`      | `src/testbench/` is ignored |
-| `1`         | `sentinel-testbench` | `src/testbench/testbench.cpp` | `src/app/` is ignored |
+| `TESTBENCH` | App name              | Orchestrator compiled                     | Excluded |
+| :---------- | :-------------------- | :---------------------------------------- | :------- |
+| `0` (default) | `sentinel-firmware`  | `src/app/sentinel_boot_orchestrator.*`    | `src/testbench/` is ignored |
+| `1`         | `sentinel-testbench` | `src/testbench/sentinel_test_orchestrator.*` | `src/app/` is ignored |
 
 `src/test/` is compiled in both configurations but only referenced from
 `src/testbench/`. The build also defines `SENTINEL_APP=1` or
