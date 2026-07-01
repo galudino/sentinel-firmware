@@ -202,6 +202,33 @@ inline void peripheral_initialize() noexcept {
 }
 
 ///
+/// \brief One-time system bring-up shared by both firmware targets.
+///
+/// \details The layer above \ref peripheral_initialize: BSP init, retarget-IO +
+///          cy_log, OTA validation/QSPI, the watchdog kick, \ref
+///          peripheral_initialize, the BLE debug-stream task, and the BLE stack.
+///          Hoisted out of the (previously near-identical) \c main.cpp /
+///          \c testbench.cpp so the boot bring-up has a \b single definition and
+///          cannot drift between the two targets; each target's entry point now
+///          only calls this, then creates its orchestrator. The serial banner
+///          interpolates the \c APP_NAME_STRING build define
+///          (\c "sentinel-firmware" vs \c "sentinel-testbench").
+///
+///          Declared here (in the \c resource namespace, alongside
+///          \ref peripheral_initialize) but \b defined in
+///          \c sentinel_resource.cpp: the body pulls the BLE stack / OTA /
+///          retarget-IO headers, and this header is included transitively by
+///          \c sentinel_device_context.hpp, so a header-only definition would
+///          drag those heavy dependencies into every translation unit that
+///          touches the device context.
+///
+/// \return \c true if the BLE stack initialized successfully. The boot
+///         orchestrator forwards this to POST, which records a BLE-stack failure
+///         rather than bricking the boot (degraded operation, decision #12).
+///
+bool system_initialize() noexcept;
+
+///
 /// \brief Release peripheral resources from Device Configurator.
 ///
 inline void peripheral_deinitialize() noexcept {

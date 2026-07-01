@@ -1,187 +1,59 @@
 ///
 /// \file    testbench.cpp
-/// \brief   Testbench application entry point
+/// \brief   Testbench entry point (sentinel-testbench target)
 ///
-/// \details This file contains only the main() function which initializes the
-///          system hardware, OTA functionality, Bluetooth stack, and starts
-///          the FreeRTOS scheduler. Test tasks are created here to validate IC
-///          functionality.
+/// \details Thin entry point: run the shared system bring-up
+///          (\ref sentinel::resource::system_initialize), create the one-shot
+///          serial test orchestrator (#48), and start the scheduler. All
+///          boot-time bring-up is shared with the main-firmware target via
+///          \c system_initialize; the only thing that differs between the two
+///          targets is which orchestrator is created here (and the
+///          \c APP_NAME_STRING banner, handled inside \c system_initialize).
 ///
 /// \author  galudino
 /// \date    2026-05-15
-/// \version 1.0 - Simplified main with modular architecture
+/// \version 2.0 - Shared system_initialize; serial test orchestrator (#48)
 ///
 
-// Always wrap C includes in diagnostic push/pop,
-// along with an extern "C" block -- to avoid pedantic warnings.
-
+// Always wrap C includes in diagnostic push/pop, in an extern "C" block, to
+// avoid pedantic warnings.
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
 extern "C" {
-///< Cypress/Infineon
-#include "cy_log.h"
-#include "cy_ota_api.h"
-#include "cy_retarget_io.h"
-#include "cyabs_rtos.h"
-#include "cybsp.h"
-#include "cybt_platform_trace.h"
-#include "cycfg_bt_settings.h"
-#include "cycfg_pins.h"
-#include "cyhal_wdt.h"
-
-#ifdef OTA_USE_EXTERNAL_FLASH
-#include "ota_serial_flash.h"
-#endif
-
-///< FreeRTOS
-#include "portmacro.h"
+#include "cybsp.h" ///< CY_ASSERT
 #include <FreeRTOS.h>
 #include <task.h>
 }
 #pragma GCC diagnostic pop
 
-///< Tasks — only the BLE debug stream is created here, before the scheduler
-///< starts (it must be up before any task logs over BLE). The serial test
-///< orchestrator (#48) spawns and starts every other task.
-#include "sentinel_task_debug_stream.hpp"
-
 ///< Test orchestrator — one-shot serial bottom-up test driver (#48).
 #include "sentinel_testbench_orchestrator.hpp"
 
-///< Utilities
-#include "sentinel_firmware_version.hpp"
-#include "sentinel_utilities.hpp"
-
-///< Drivers
-#include "sentinel_led_pwm.hpp"
-
-///< Device Configurator Resources
+///< Shared system bring-up + Device Configurator resources.
 #include "sentinel_resource.hpp"
 
-///< Bluetooth LE
-#include "sentinel_ble_context.hpp"
-
-namespace sentinel::testbench {
+///< Utilities
+#include "sentinel_utilities.hpp"
 
 ///
-/// \brief Initialize system hardware and Bluetooth stack
-///        Shouldn't have to be modified unless adding new hardware
-///        initialization.
+/// \brief Testbench entry point.
 ///
-static inline bool initialize() {
-    // Initialize the board support package (BSP).
-    auto result = cybsp_init();
-
-    if (result != CY_RSLT_SUCCESS) {
-        CY_ASSERT(false);
-    }
-
-    // Enable global interrupts.
-    __enable_irq();
-
-    // Initialize retarget-io to use the debug UART port.
-    cy_retarget_io_init(CYBSP_DEBUG_UART_TX, CYBSP_DEBUG_UART_RX,
-                        CY_RETARGET_IO_BAUDRATE);
-
-    // default for all logging to WARNING.
-    cy_log_init(CY_LOG_LEVEL_T::CY_LOG_INFO, nullptr, nullptr);
-
-    // Set default log levels.
-    cy_ota_set_log_level(CY_LOG_LEVEL_T::CY_LOG_INFO);
-
-    // Initialize QuadSPI if using external flash.
-#if defined(OTA_USE_EXTERNAL_FLASH)
-    // We need to init from every ext flash write
-    // See ota_serial_flash.h
-    if (ota_smif_initialize() != CY_RSLT_SUCCESS) {
-        CY_ASSERT(0 == 1);
-    }
-#endif
-
-    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-               "sentinel-testbench =============================\r\n");
-    cy_log_msg(
-        CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-        "Application version: %d.%d.%d.%d\n", current_firmware_version.major(),
-        current_firmware_version.minor(), current_firmware_version.patch(),
-        current_firmware_version.build());
-    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-               "================================================\n\n");
-
-#ifdef TEST_REVERT
-    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-               "======================TESTING "
-               "REVERT==========================\r\n");
-    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-               "==========================================================="
-               "====\r\n");
-    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-               "==========================================================="
-               "====\r\n");
-    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-               "=========================== Rebooting "
-               "!!!======================\r\n");
-    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-               "==========================================================="
-               "====\r\n");
-    NVIC_SystemReset();
-#else
-    // Validate the update so we do not revert on reboot.
-    cy_ota_storage_validated();
-#endif
-
-    auto wdt_obj = cyhal_wdt_t{};
-    cyhal_wdt_init(&wdt_obj, cyhal_wdt_get_max_timeout_ms());
-
-    // Clear watchdog so it doesn't reboot on us.
-    cyhal_wdt_free(&wdt_obj);
-
-    // Initialize resources.
-    resource::peripheral_initialize();
-
-    // Start the BLE debug output stream task. Must be running before any
-    // task tries to send log messages over BLE notifications.
-    auto debug_stream_result = task::debug_stream::instance().task_create();
-    configASSERT(debug_stream_result == pdPASS);
-
-    // Initialize Bluetooth LE stack and services
-    // Register callback and configuration with stack.
-    auto wiced_result = ble_context_object.stack_initialize();
-
-    const auto ble_stack_ok = wiced_result == wiced_result_t::WICED_BT_SUCCESS;
-    if (!ble_stack_ok) {
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
-                   "*** Bluetooth stack initialization failed! ***\r\n");
-        CY_ASSERT(false);
-    }
-
-    return ble_stack_ok;
-}
-} // namespace sentinel::testbench
-
-///
-/// \brief Application entry point
-///
-/// Initializes the device hardware, OTA functionality, and Bluetooth stack,
-/// creates the one-shot serial test orchestrator (#48), and starts the
-/// FreeRTOS scheduler. The orchestrator — running after the scheduler starts —
-/// drives every test suite bottom-up and serially, then starts the continuous
-/// reader services. Only the bus arbiters and the BLE debug-stream task are
-/// created before the scheduler (in \c initialize()).
-///
-/// \return Application exit status (never returns in normal operation)
+/// Runs shared system bring-up, creates the one-shot serial test orchestrator,
+/// and starts the FreeRTOS scheduler (never returns in normal operation). The
+/// orchestrator — running after the scheduler starts — drives every test suite
+/// bottom-up and serially, then starts the continuous reader services.
 ///
 int main(int argc, const char *argv[]) {
     sentinel::unused(argc);
     sentinel::unused(argv);
 
-    const auto ble_stack_ok = sentinel::testbench::initialize();
+    const auto ble_stack_ok = sentinel::resource::system_initialize();
 
-    // Create the one-shot serial test orchestrator. It is created here, before
-    // the scheduler starts, but its body runs only once scheduling begins — so
-    // the bus arbiters can pump the I/O its driver tests issue (decision #13).
-    // Phase I has no custom GATT DB yet (#6), so the GATT-DB-OK argument
-    // tracks the stack-init result.
+    // Create the one-shot serial test orchestrator. Created here before the
+    // scheduler starts, but its body runs only once scheduling begins — so the
+    // bus arbiters can pump the I/O its driver tests issue (decision #13). The
+    // BLE-status args mirror the main firmware so the POST group probes the same
+    // way; Phase I has no custom GATT DB yet (#6).
     auto orchestrator_result =
         sentinel::testbench::test_orchestrator::instance().task_create(
             ble_stack_ok, ble_stack_ok);
