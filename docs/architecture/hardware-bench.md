@@ -32,6 +32,14 @@ CY_TOOLS_PATHS=/Applications/ModusToolbox/tools_3.8 make build TESTBENCH=0   # m
   `src/testbench/` (test orchestrator); `TESTBENCH=0` compiles `src/app/` (boot
   orchestrator). The other directory is excluded via `CY_IGNORE`; all other
   `src/` sources (tasks, tests, drivers) compile into **both** builds.
+- **Switching `TESTBENCH` forces a one-time full rebuild** (#52). The Makefile
+  auto-cleans `./build` when the target changes from the last build (tracked via
+  `build/.last_testbench`). This is required: mtbninja aggregates every
+  `build/**/local/*.o` into the link regardless of build location, so two
+  coexisting target trees would cross-link into ~2000 duplicate-symbol errors (or,
+  before #51's single `main()`, a *silently mislabeled* binary). Rebuilding the
+  **same** target stays incremental; only the firmware↔testbench switch pays the
+  rebuild.
 - The `imgtool` `click` `ModuleNotFoundError` at the postbuild signing step is
   **benign** — the ELF + HEX are already produced; only the MCUBoot signing
   wrapper fails for lack of a Python `click` module. A clean link with that as
