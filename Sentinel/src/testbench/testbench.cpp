@@ -68,7 +68,7 @@ namespace sentinel::testbench {
 ///        Shouldn't have to be modified unless adding new hardware
 ///        initialization.
 ///
-static inline void initialize() {
+static inline bool initialize() {
     // Initialize the board support package (BSP).
     auto result = cybsp_init();
 
@@ -97,6 +97,16 @@ static inline void initialize() {
         CY_ASSERT(0 == 1);
     }
 #endif
+
+    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
+               "sentinel-testbench =============================\r\n");
+    cy_log_msg(
+        CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
+        "Application version: %d.%d.%d.%d\n", current_firmware_version.major(),
+        current_firmware_version.minor(), current_firmware_version.patch(),
+        current_firmware_version.build());
+    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
+               "================================================\n\n");
 
 #ifdef TEST_REVERT
     cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
@@ -138,21 +148,14 @@ static inline void initialize() {
     // Register callback and configuration with stack.
     auto wiced_result = ble_context_object.stack_initialize();
 
-    if (wiced_result != wiced_result_t::WICED_BT_SUCCESS) {
+    const auto ble_stack_ok = wiced_result == wiced_result_t::WICED_BT_SUCCESS;
+    if (!ble_stack_ok) {
         cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
-                   "Bluetooth Stack Initialization failed!! \r\n");
+                   "*** Bluetooth stack initialization failed! ***\r\n");
         CY_ASSERT(false);
     }
 
-    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-               "sentinel-testbench =============================\r\n");
-    cy_log_msg(
-        CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-        "Application version: %d.%d.%d.%d\n", current_firmware_version.major(),
-        current_firmware_version.minor(), current_firmware_version.patch(),
-        current_firmware_version.build());
-    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-               "================================================\n\n");
+    return ble_stack_ok;
 }
 } // namespace sentinel::testbench
 
@@ -172,13 +175,16 @@ int main(int argc, const char *argv[]) {
     sentinel::unused(argc);
     sentinel::unused(argv);
 
-    sentinel::testbench::initialize();
+    const auto ble_stack_ok = sentinel::testbench::initialize();
 
     // Create the one-shot serial test orchestrator. It is created here, before
     // the scheduler starts, but its body runs only once scheduling begins — so
     // the bus arbiters can pump the I/O its driver tests issue (decision #13).
+    // Phase I has no custom GATT DB yet (#6), so the GATT-DB-OK argument
+    // tracks the stack-init result.
     auto orchestrator_result =
-        sentinel::testbench::test_orchestrator::instance().task_create();
+        sentinel::testbench::test_orchestrator::instance().task_create(
+            ble_stack_ok, ble_stack_ok);
     configASSERT(orchestrator_result == pdPASS);
 
     // Start the FreeRTOS scheduler.

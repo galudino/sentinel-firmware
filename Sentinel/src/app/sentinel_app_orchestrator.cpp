@@ -176,16 +176,23 @@ void boot_orchestrator::run() {
     // probe_record_store now reuses the already-initialized event store (no
     // redundant rescan), so POST is fast and the per-probe lines print promptly.
     cy_log_msg(CYLF_DEF, CY_LOG_INFO, "\n---- [ POST ] ----\n");
+    // Time only the probe phase (no interleaved logging inside run()), so the
+    // reported duration is the true POST timing for #35's "< 100 ms" hardware AC
+    // — the multi-second flash scans above are NOT part of POST.
+    const auto post_start_ticks = xTaskGetTickCount();
     const auto summary = diag::post::run(ctx.bme, ctx.rtc, ctx.flash,
                                          ctx.event_store, m_ble_stack_ok,
                                          m_gatt_db_ok);
+    const auto post_ms = static_cast<unsigned>(
+        (xTaskGetTickCount() - post_start_ticks) * portTICK_PERIOD_MS);
     for (auto i = uint8_t{0}; i < summary.count; ++i) {
         const auto &r = summary.results[i];
         logi("post %s %s", subsystem_name(r.subsystem), result_name(r.result));
         cy_log_msg(CYLF_DEF, CY_LOG_INFO, "post %s %s\n",
                    subsystem_name(r.subsystem), result_name(r.result));
     }
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO, "---- [ POST ] done: %s ----\n",
+    cy_log_msg(CYLF_DEF, CY_LOG_INFO, "---- [ POST ] done in %u ms: %s ----\n",
+               post_ms,
                summary.all_passed ? "all subsystems passed"
                                   : "failures recorded");
     ctx.post_last_status = first_failure_id(summary);

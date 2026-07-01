@@ -91,11 +91,18 @@ public:
     ///
     /// \brief Create the one-shot orchestrator task.
     ///
+    /// \param ble_stack_ok \c true if \c stack_initialize() succeeded (captured
+    ///                     in \c initialize()).
+    /// \param gatt_db_ok   \c true if the GATT database registered. Phase I has
+    ///                     no custom GATT DB yet (#6), so the caller passes the
+    ///                     stack-init result; #6 threads the real value.
     /// \param priority    FreeRTOS task priority.
     /// \param stack_words Stack depth in words.
+    ///
     /// \return \c pdPASS on success, otherwise the \c xTaskCreate failure code.
     ///
-    BaseType_t task_create(UBaseType_t priority = DEFAULT_PRIORITY,
+    BaseType_t task_create(bool ble_stack_ok, bool gatt_db_ok,
+                           UBaseType_t priority = DEFAULT_PRIORITY,
                            uint16_t stack_words = DEFAULT_STACK_WORDS) noexcept;
 
 private:
@@ -109,6 +116,8 @@ private:
     ///
     void run();
 
+    bool m_ble_stack_ok{false};     ///< Captured BLE stack-init result.
+    bool m_gatt_db_ok{false};       ///< Captured GATT-DB registration result.
     TaskHandle_t m_handle{nullptr}; ///< FreeRTOS task handle.
 };
 

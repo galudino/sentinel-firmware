@@ -130,7 +130,7 @@ inline void peripheral_initialize() noexcept {
         cyhal_pwm_init_cfg(&led1, &CYBSP_LED1_PWM_hal_config);
     configASSERT(led1_config_result == CY_RSLT_SUCCESS);
     cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-               "LED1 PWM init result: %d\n",
+               "CYBSP_LED1_PWM init result: %d\n",
                static_cast<int>(led1_config_result));
 #endif /* CYBSP_LED1_PWM_HW */
 
@@ -139,7 +139,7 @@ inline void peripheral_initialize() noexcept {
         cyhal_pwm_init_cfg(&led2, &CYBSP_LED2_PWM_hal_config);
     configASSERT(led2_config_result == CY_RSLT_SUCCESS);
     cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-               "LED2 PWM init result: %d\n",
+               "CYBSP_LED2_PWM init result: %d\n",
                static_cast<int>(led2_config_result));
 #endif /* CYBSP_LED2_PWM_HW */
 
@@ -148,7 +148,7 @@ inline void peripheral_initialize() noexcept {
         cyhal_pwm_init_cfg(&led3, &CYBSP_LED3_PWM_hal_config);
     configASSERT(led3_config_result == CY_RSLT_SUCCESS);
     cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-               "LED3 PWM init result: %d\n",
+               "CYBSP_LED3_PWM init result: %d\n",
                static_cast<int>(led3_config_result));
 #endif /* CYBSP_LED3_PWM_HW */
 
@@ -157,7 +157,8 @@ inline void peripheral_initialize() noexcept {
         cyhal_i2c_init_cfg(&cybsp_i2c, &CYBSP_I2C_hal_config);
     configASSERT(i2c_config_result == CY_RSLT_SUCCESS);
     cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-               "I2C init result: %d\n", static_cast<int>(i2c_config_result));
+               "CYBSP_I2C init result: %d\n",
+               static_cast<int>(i2c_config_result));
 #endif /* CYBSP_I2C_HW */
 
 #ifdef CYBSP_SPI_HW
@@ -165,7 +166,8 @@ inline void peripheral_initialize() noexcept {
         cyhal_spi_init_cfg(&cybsp_spi, &CYBSP_SPI_hal_config);
     configASSERT(spi_config_result == CY_RSLT_SUCCESS);
     cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-               "SPI init result: %d\n", static_cast<int>(spi_config_result));
+               "CYBSP_SPI init result: %d\n",
+               static_cast<int>(spi_config_result));
 #endif /* CYBSP_SPI_HW */
 
 #ifdef CYBSP_I2C_HW
@@ -175,7 +177,7 @@ inline void peripheral_initialize() noexcept {
     auto i2c_bus_task_create_return_code = cybsp_i2c_bus.task_create();
     configASSERT(i2c_bus_task_create_return_code == pdPASS);
     cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-               "I2C bus task create result passed: %s\n",
+               "CYBSP_I2C bus task create result passed: %s\n",
                static_cast<int>(i2c_bus_task_create_return_code) ? "true"
                                                                  : "false");
 #endif /* CYBSP_I2C_HW */
@@ -187,12 +189,12 @@ inline void peripheral_initialize() noexcept {
     auto spi_bus_task_create_return_code = cybsp_spi_bus.task_create();
     configASSERT(spi_bus_task_create_return_code == pdPASS);
     cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-               "SPI bus task create result passed: %s\n",
+               "CYBSP_SPI bus task create result passed: %s\n",
                static_cast<int>(spi_bus_task_create_return_code) ? "true"
                                                                  : "false");
 
     // Create the W25Q128 device mutex before any task can construct a flash
-    // driver instance. Every w25q128 sharing the physical chip is handed this
+    // driver instance. Every W25Q128 sharing the physical chip is handed this
     // handle so their logical operations are mutually exclusive.
     flash_device_mutex = xSemaphoreCreateRecursiveMutex();
     configASSERT(flash_device_mutex != nullptr);

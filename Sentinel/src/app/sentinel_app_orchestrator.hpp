@@ -5,13 +5,13 @@
 /// \details Declares the application's boot orchestrator: a single highest-
 ///          priority, one-shot FreeRTOS task that stands up the real boot path
 ///          in dependency order, then hands off to the long-running service
-///          tasks and self-deletes. It is the production twin of the testbench's
-///          serial test orchestrator (#48); both exist because the only things
-///          that can be created before \c vTaskStartScheduler() are the bus
-///          arbiters and the BLE debug-stream task — everything that does bus
-///          I/O (POST probes, the BME280 calibration read in the shared device
-///          context, the flash-region scans) needs the arbiters pumping, which
-///          only happens once the scheduler runs.
+///          tasks and self-deletes. It is the production twin of the
+///          testbench's serial test orchestrator (#48); both exist because the
+///          only things that can be created before \c vTaskStartScheduler() are
+///          the bus arbiters and the BLE debug-stream task — everything that
+///          does bus I/O (POST probes, the BME280 calibration read in the
+///          shared device context, the flash-region scans) needs the arbiters
+///          pumping, which only happens once the scheduler runs.
 ///
 ///          In order, \ref run:
 ///            1. builds the shared device context (\c resource::context()) and
@@ -21,7 +21,8 @@
 ///            3. starts the event-log drain task — whose boot sequence appends
 ///               \c shutdown_unexpected / \c boot_complete;
 ///            4. starts the service tasks (RTC, BME280 sample, snapshot
-///               persistence (lane 1), snapshot stream (lane 2, idle), battery);
+///               persistence (lane 1), snapshot stream (lane 2, idle),
+///               battery);
 ///            5. self-deletes.
 ///
 ///          OO/class style (decision #16); use the \ref instance singleton.
@@ -47,7 +48,8 @@ namespace sentinel::app {
 ///
 /// \brief Single-owner one-shot task that runs the production boot sequence.
 ///
-/// \details Created (idle) by \c create_tasks() before the scheduler starts; its
+/// \details Created (idle) by \c create_tasks() before the scheduler starts;
+/// its
 ///          \ref run body executes once the scheduler is running, then the task
 ///          self-deletes. Non-copyable, non-movable.
 ///
@@ -70,7 +72,9 @@ public:
     static constexpr uint16_t DEFAULT_STACK_WORDS =
         static_cast<uint16_t>(configMINIMAL_STACK_SIZE * 6);
 
-    /// \brief The single boot-orchestrator instance.
+    ///
+    /// \brief The single orchestrator instance.
+    ///
     static boot_orchestrator &instance() noexcept;
 
     boot_orchestrator(const boot_orchestrator &) = delete;
@@ -91,20 +95,22 @@ public:
     /// \return \c pdPASS on success, otherwise the \c xTaskCreate failure code.
     ///
     BaseType_t task_create(bool ble_stack_ok, bool gatt_db_ok,
-                           UBaseType_t priority    = DEFAULT_PRIORITY,
-                           uint16_t    stack_words = DEFAULT_STACK_WORDS) noexcept;
+                           UBaseType_t priority = DEFAULT_PRIORITY,
+                           uint16_t stack_words = DEFAULT_STACK_WORDS) noexcept;
 
 private:
     boot_orchestrator() = default;
 
     static void task_trampoline(void *task_parameter);
 
+    ///
     /// \brief Run the boot sequence, start the service tasks, self-delete.
+    ///
     void run();
 
-    bool         m_ble_stack_ok{false}; ///< Captured BLE stack-init result.
-    bool         m_gatt_db_ok{false};   ///< Captured GATT-DB registration result.
-    TaskHandle_t m_handle{nullptr};     ///< FreeRTOS task handle.
+    bool m_ble_stack_ok{false};     ///< Captured BLE stack-init result.
+    bool m_gatt_db_ok{false};       ///< Captured GATT-DB registration result.
+    TaskHandle_t m_handle{nullptr}; ///< FreeRTOS task handle.
 };
 
 } // namespace sentinel::app

@@ -90,8 +90,11 @@ test_orchestrator &test_orchestrator::instance() noexcept {
 // test_orchestrator::task_create
 // ============================================================================
 
-BaseType_t test_orchestrator::task_create(UBaseType_t priority,
+BaseType_t test_orchestrator::task_create(bool ble_stack_ok, bool gatt_db_ok,
+                                          UBaseType_t priority,
                                           uint16_t stack_words) noexcept {
+    m_ble_stack_ok = ble_stack_ok;
+    m_gatt_db_ok = gatt_db_ok;
     return xTaskCreate(&test_orchestrator::task_trampoline, "Test Orchestrator",
                        stack_words, this, priority, &m_handle);
 }

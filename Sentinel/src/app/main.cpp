@@ -40,8 +40,8 @@ extern "C" {
 #pragma GCC diagnostic pop
 
 ///< Tasks — only the BLE debug stream is created before the scheduler (it must
-///< be up before any task logs over BLE). The boot orchestrator (#38) spawns and
-///< starts every other task once the scheduler is running.
+///< be up before any task logs over BLE). The boot orchestrator (#38) spawns
+///< and starts every other task once the scheduler is running.
 #include "sentinel_task_debug_stream.hpp"
 
 ///< Boot orchestrator — one-shot boot sequence + service-task spawner (#38).
@@ -67,7 +67,8 @@ namespace sentinel::app {
 ///        Shouldn't have to be modified unless adding new hardware
 ///        initialization.
 ///
-/// \return \c true if the BLE stack initialized successfully. POST consumes this
+/// \return \c true if the BLE stack initialized successfully. POST consumes
+/// this
 ///         (via the boot orchestrator) and records a BLE-stack failure rather
 ///         than bricking the boot — the device runs degraded (decision #12).
 ///
@@ -100,6 +101,16 @@ static inline bool initialize() {
         CY_ASSERT(0 == 1);
     }
 #endif
+
+    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
+               "sentinel-firmware ==============================\r\n");
+    cy_log_msg(
+        CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
+        "Application version: %d.%d.%d.%d\n", current_firmware_version.major(),
+        current_firmware_version.minor(), current_firmware_version.patch(),
+        current_firmware_version.build());
+    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
+               "================================================\n\n");
 
 #ifdef TEST_REVERT
     cy_log_msg(
@@ -144,21 +155,11 @@ static inline bool initialize() {
     const auto ble_stack_ok = wiced_result == wiced_result_t::WICED_BT_SUCCESS;
     if (!ble_stack_ok) {
         // Do NOT brick the boot: POST records the BLE-stack failure and the
-        // device runs degraded (decision #12). All non-BLE subsystems still come
-        // up through the boot orchestrator.
+        // device runs degraded (decision #12). All non-BLE subsystems still
+        // come up through the boot orchestrator.
         cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
                    "*** Bluetooth stack initialization failed! ***\r\n");
     }
-
-    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-               "sentinel-firmware ==============================\r\n");
-    cy_log_msg(
-        CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-        "Application version: %d.%d.%d.%d\n", current_firmware_version.major(),
-        current_firmware_version.minor(), current_firmware_version.patch(),
-        current_firmware_version.build());
-    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-               "================================================\n\n");
 
     return ble_stack_ok;
 }
@@ -186,7 +187,7 @@ int main(int argc, const char *argv[]) {
     // GATT-DB-OK argument tracks the stack-init result.
     auto orchestrator_result =
         sentinel::app::boot_orchestrator::instance().task_create(ble_stack_ok,
-                                                                ble_stack_ok);
+                                                                 ble_stack_ok);
     configASSERT(orchestrator_result == pdPASS);
 
     // Start the FreeRTOS scheduler.
