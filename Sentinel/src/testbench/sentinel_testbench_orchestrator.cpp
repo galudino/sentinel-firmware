@@ -30,6 +30,9 @@ extern "C" {
 ///< Logging
 #include "sentinel_debug_print.hpp"
 
+///< Shared device context — built once here before the readers borrow it (#38).
+#include "sentinel_device_context.hpp"
+
 ///< Continuous reader / helper services started by the orchestrator
 #include "sentinel_task_battery_service.hpp"
 #include "sentinel_task_bme280_service.hpp"
@@ -193,6 +196,17 @@ void test_orchestrator::run() {
     cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                "\nStarting continuous reader services "
                "(rtc_service, bme280_service)...\n");
+
+    // Build the shared device context HERE — a single first-touch from this one
+    // task — before either reader starts. With -fno-threadsafe-statics (decision
+    // #18) the Meyers-singleton guard is gone, so if rtc_service and
+    // bme280_service each first-touched context() from their own task they would
+    // RACE to construct it (the BME280 calibration read yields mid-construction,
+    // letting the second task enter with the guard byte still clear → double
+    // construction). Constructing it once here, up front, preserves decision
+    // #18's invariant and is why the app boot orchestrator does the same.
+    (void)sentinel::resource::context();
+
     if (task::rtc_service::instance().task_create() != pdPASS) {
         loge("orchestrator: rtc_service create failed", "");
     }
