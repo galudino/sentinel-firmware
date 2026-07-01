@@ -1,5 +1,5 @@
 ///
-/// \file    sentinel_testbench_orchestrator.cpp
+/// \file    sentinel_test_orchestrator.cpp
 /// \brief   One-shot serial test orchestrator task implementation (#48)
 ///
 /// \details Implements \ref sentinel::testbench::test_orchestrator. The task
@@ -25,7 +25,7 @@ extern "C" {
 }
 #pragma GCC diagnostic pop
 
-#include "sentinel_testbench_orchestrator.hpp"
+#include "sentinel_test_orchestrator.hpp"
 
 ///< Logging
 #include "sentinel_debug_print.hpp"

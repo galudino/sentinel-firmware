@@ -1,5 +1,5 @@
 ///
-/// \file    sentinel_app_orchestrator.cpp
+/// \file    sentinel_boot_orchestrator.cpp
 /// \brief   Production boot orchestrator task implementation (#38)
 ///
 /// \details Implements \ref sentinel::app::boot_orchestrator. See the header and
@@ -35,7 +35,7 @@ extern "C" {
 }
 #pragma GCC diagnostic pop
 
-#include "sentinel_app_orchestrator.hpp"
+#include "sentinel_boot_orchestrator.hpp"
 
 #include "sentinel_debug_print.hpp"
 #include "sentinel_orchestrator_entry.hpp"

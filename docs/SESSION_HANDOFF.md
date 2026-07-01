@@ -32,7 +32,7 @@ imgtool/`click` signing step fails). New pieces:
   first-constructed inside the orchestrator (post-scheduler). `initialize_stores()`
   scans both flash regions, binds the event log, sets `context_ready()`.
   `rtc_service`/`bme280_service` now **borrow** `ctx.rtc`/`ctx.bme`.
-- **Production boot orchestrator** (`src/app/sentinel_app_orchestrator.cpp`) —
+- **Production boot orchestrator** (`src/app/sentinel_boot_orchestrator.cpp`) —
   one-shot highest-prio task (twin of #48): build context → `initialize_stores`
   → `post::run` (real drivers) → cache first-fail status → `record_results`
   (enqueue) → start event-log drain task (runs boot sequence, then drains POST
