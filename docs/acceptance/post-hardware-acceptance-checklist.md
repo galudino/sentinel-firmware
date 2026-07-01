@@ -112,8 +112,25 @@ bme280=0x01, ds3231=0x02, w25q128=0x03, record_store=0x04, ble_stack=0x05).
 
 ---
 
+## Results — on-bench run (2026-07-01, CYBLE-416045 + GD25Q128)
+
+| AC | Result | Evidence |
+|----|--------|----------|
+| 1 `all_pass_path` | ✅ PASS | all five probes `PASS`; `---- [ POST ] done in 2 ms: all subsystems passed ----`; boot → `starting service tasks…`, continuous BME280 (`T=+24.76 C P=63600 Pa H=87.73 %`) + RTC (`2026-07-01 Wed 06:55:00`) reads begin. |
+| 2 `bme280_disconnect` | ✅ PASS | BME280 SDA/module pulled (DS3231 left on bus): `post bme280 fail_no_ack`, other four `PASS`; BME280 service degrades cleanly (`chip ID 0xFF at start`, `read error -2`), no crash. Extra check: pulling **SCL** at the board killed the whole SCB → both `bme280` and `ds3231` `fail_no_ack`, confirming chip-vs-bus fault isolation. |
+| 3 `w25q128_unknown_jedec` | 📋 bench-infeasible | No swappable non-accept-listed SPI-NOR part available (the GD25Q128 can't be substituted without MISO contention, and the only spare SPI part on hand was a BME280, which has no JEDEC `0x9F` path so it can't validate an unknown *flash* vendor). Logic covered off-bench by #35 `fake_flash` (`fail_wrong_id` + `record_store_fallback`), decision #15. Documented per this AC's ⚠ Feasibility clause rather than faked in firmware. |
+| 4 `oscillator_stop` | ✅ PASS | CR2032 removed + power cut so OSF latched. **Boot A:** `post ds3231 fail_self_test` (others PASS), boot completes. **Boot B** (reset, no power loss): `post ds3231 PASS` — Boot A's probe cleared OSF. Self-healing across two boots confirmed. |
+| 5 `degraded_operation` | ✅ PASS | With AC 2's single failure in place: `done in 6 ms: failures recorded` → `boot: starting service tasks…` → `boot complete, POST reported failures`; surviving subsystems keep running (RTC SQW armed, snapshot persistence captured #1, count=74). Device runs degraded, not bricked. |
+| 6 `timing < 100 ms` | ✅ PASS | `---- [ POST ] done in 2 ms … ----` (2 ms ≪ 100 ms); pre-POST flash-region scans (~8.7 s ×2, lines 0013–0016) excluded per #49. |
+
 ## Sign-off
 
-When AC 1, 2, 4, 5, 6 pass (and AC 3 passes or is documented as bench-infeasible),
-#38 is done: squash-merge → `develop`, close #38, board → Done. #35 stays closed
-on its off-bench green; this checklist is its on-bench sign-off record.
+**SIGNED OFF — 2026-07-01** (CYBLE-416045 + GD25Q128, main firmware `TESTBENCH=0`,
+app version 0.0.0.1). AC 1, 2, 4, 5, 6 **PASS on-bench**; AC 3 documented
+**bench-infeasible** (logic covered off-bench by #35 `fake_flash`, decision #15).
+Per the sign-off rule below this satisfies #38: squash-merge → `develop`, close
+#38, board → Done. #35 stays closed on its off-bench green; this checklist is its
+on-bench sign-off record.
+
+Sign-off rule: when AC 1, 2, 4, 5, 6 pass (and AC 3 passes or is documented as
+bench-infeasible), #38 is done.

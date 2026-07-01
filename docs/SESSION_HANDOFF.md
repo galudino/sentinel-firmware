@@ -86,11 +86,13 @@ run. **Two on-bench bugs found + fixed:**
   entry symbol; both mains now target-agnostic), remainder = manual MTB config
   move. Depends on #38 — rebase onto `develop` after #38 merges.
 
-**STILL TODO for #38 sign-off:** the **six on-bench POST hardware ACs are
-manual** — work through
+**#38 SIGNED OFF (2026-07-01):** all six on-bench POST hardware ACs resolved —
 [`docs/acceptance/post-hardware-acceptance-checklist.md`](acceptance/post-hardware-acceptance-checklist.md)
-(AC 3 unknown-JEDEC may be bench-infeasible if the flash is soldered; document if
-so). Then squash-merge → `develop`, close #38, board → Done.
+carries the evidence. **AC 1/2/4/5/6 PASS on-bench** (nominal all-pass +
+`done in 2 ms`; bme280 `fail_no_ack` + degraded boot; ds3231 `fail_self_test` →
+self-clears across two boots); **AC 3 documented bench-infeasible** (no swappable
+non-accept-listed SPI-NOR part; logic covered off-bench by #35 `fake_flash`,
+decision #15). Squash-merged → `develop`, #38 closed, board → Done.
 
 **Decisions in play:** #13 (boot orchestrator over a shared `sentinel::resource`
 device context — **realized by #38**), #14 (two-lane snapshot model — **both
