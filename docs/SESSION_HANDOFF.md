@@ -157,8 +157,8 @@ default.
   `run_all() → tally`, fixture-owned bus transports), and **#38 — boot
   orchestrator + shared device context + lane-1 snapshot persistence**
   (`resource::context()`, `app::boot_orchestrator`, `snapshot_persistence_task`;
-  decision #17; both builds clean; **on branch, on-bench POST ACs pending →
-  not yet merged**).
+  decision #17; both builds clean; **merged to `develop` 2026-07-01, on-bench
+  POST hardware ACs signed off — AC 1/2/4/5/6 PASS, AC 3 bench-infeasible**).
 - **What's next (open, dependency-ordered):**
   1. **#6** — BLE GATT services Phase I (wires producer notify-sinks →
      characteristics, incl. attaching `snapshot_stream_task`'s notify sink +
