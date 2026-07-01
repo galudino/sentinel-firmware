@@ -95,11 +95,16 @@ run. **Two on-bench bugs found + fixed:**
   Both targets link + boot on-bench (firmware boot sequence; testbench test
   tally). Also fixed a pre-existing bug: `build-sentinel-testbench-release.sh`
   had `testbench_mode=0` (built the app under the testbench name) → set to `1`.
-  **Known footgun (open, unfiled):** toggling `TESTBENCH` within one `CONFIG`
-  without a clean makes ninja reuse the stale build graph and silently emit the
-  wrong binary; the unified `main.cpp` removed the old duplicate-`main()` guard
-  that used to catch it. Candidate follow-up: per-target build subdirs or
-  force-clean on toggle.
+- **#52 DONE (merged 2026-07-01):** the `TESTBENCH`-toggle footgun surfaced during
+  #51. mtbninja aggregates every `build/**/local/*.o` into the link regardless of
+  `CY_BUILD_LOCATION`, so coexisting firmware+testbench trees cross-link (~2000
+  dup-symbol errors; pre-#51 it *silently* emitted a mislabeled binary). Per-target
+  build dirs (the first idea) are impossible — mtbninja scans them all (verified
+  shared/sibling/unique-parent layouts). Fix: a Makefile parse-time guard cleans
+  `./build` when `TESTBENCH` changes from the last build (`build/.last_testbench`),
+  gated on build/program goals. Same-target rebuilds stay incremental; only the
+  firmware↔testbench switch pays a one-time rebuild. Scripts inherit it (all call
+  `make build|program`).
 
 **#38 SIGNED OFF (2026-07-01):** all six on-bench POST hardware ACs resolved —
 [`docs/acceptance/post-hardware-acceptance-checklist.md`](acceptance/post-hardware-acceptance-checklist.md)
