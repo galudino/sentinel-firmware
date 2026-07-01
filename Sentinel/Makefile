@@ -223,6 +223,37 @@ endif
 
 ###############################################################################
 #
+# Clean-on-toggle guard (#52)
+#
+# The mtbninja build aggregates every ./build/**/local/*.o under the project into
+# the link, ignoring CY_BUILD_LOCATION. So if a firmware build tree and a
+# testbench build tree ever coexist, the link pulls in BOTH targets' objects and
+# fails with ~2000 duplicate-symbol errors (pre-#51 this instead SILENTLY emitted
+# a mislabeled binary, because each target had its own main() and the stale graph
+# was simply re-linked). Per-target build dirs can't fix this — mtbninja scans
+# them all — so we ensure only ONE target's tree exists at a time: force a clean
+# whenever the target (TESTBENCH) changes from the last build.
+#
+# Runs at parse time, gated on the build/program goals so IDE queries
+# (get_app_info, etc.) don't wipe anything. Incremental builds WITHIN a target
+# are untouched (marker matches → no clean); only switching firmware<->testbench
+# pays a one-time full rebuild. All build/program scripts call `make build|program`,
+# so they inherit this automatically — no per-script duplication.
+###############################################################################
+ifneq ($(filter build program,$(MAKECMDGOALS)),)
+_MTB_TB_MARKER := ./build/.last_testbench
+_MTB_LAST_TB := $(strip $(shell cat $(_MTB_TB_MARKER) 2>/dev/null))
+ifneq ($(_MTB_LAST_TB),)
+ifneq ($(_MTB_LAST_TB),$(TESTBENCH))
+$(info === [#52] TESTBENCH changed ($(_MTB_LAST_TB) -> $(TESTBENCH)); cleaning ./build to avoid stale-object cross-link ===)
+_MTB_TB_CLEAN := $(shell rm -rf ./build)
+endif
+endif
+_MTB_TB_WRITE := $(shell mkdir -p ./build && printf '%s' '$(TESTBENCH)' > $(_MTB_TB_MARKER))
+endif
+
+###############################################################################
+#
 # App name string as directive
 #
 ###############################################################################
