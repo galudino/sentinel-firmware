@@ -65,11 +65,32 @@ run. **Two on-bench bugs found + fixed:**
   trusts an `initialized()` store. Boot flash-scan is still ~17 s (two O(capacity)
   region scans) → optimization filed as **#49**; unified portable logging facade
   filed as **#50**.
+- **Testbench: only rtc_service ran, not bme280_service** — with the guard gone
+  (decision #18), the two reader tasks raced to first-construct `context()`. Fixed
+  (`d2a02fb`): the test orchestrator builds `context()` once up front before
+  starting the readers (same single-first-touch the app already did). **Confirmed
+  fixed on-bench.**
+
+**Also this session (not #38-blocking):**
+- **Hoisted `resource::system_initialize()`** (`sentinel_resource.cpp`) out of the
+  two near-identical `main.cpp`/`testbench.cpp` bodies; banner uses
+  `APP_NAME_STRING` (stringized). POST reports measured duration for the <100 ms
+  AC. POST prints per-probe `post <subsystem> <PASS|fail_*>`.
+- **`docs/acceptance/post-hardware-acceptance-checklist.md`** — the on-bench
+  fault-injection checklist for #35's six ACs (this is #38's sign-off record).
+- **Build via `Sentinel/scripts/build-sentinel-{firmware,testbench}-debug.sh`**
+  (venv → signing works; no more `click` error). **BLE needs the Release config**
+  for `sentinel-firmware`. See [[reference_local_firmware_build]].
+- **#51** (unify entry points + dedup BT/OTA config, Phase I backlog): code half
+  staged on branch `feature/51-unify-entry-points` (common `create_orchestrator`
+  entry symbol; both mains now target-agnostic), remainder = manual MTB config
+  move. Depends on #38 — rebase onto `develop` after #38 merges.
 
 **STILL TODO for #38 sign-off:** the **six on-bench POST hardware ACs are
-manual** (pull BME280 SDA, swap unknown-JEDEC flash, drain DS3231 battery, scope
-< 100 ms) — fault-injection not yet exercised. Then squash-merge → `develop`,
-close #38, board → Done.
+manual** — work through
+[`docs/acceptance/post-hardware-acceptance-checklist.md`](acceptance/post-hardware-acceptance-checklist.md)
+(AC 3 unknown-JEDEC may be bench-infeasible if the flash is soldered; document if
+so). Then squash-merge → `develop`, close #38, board → Done.
 
 **Decisions in play:** #13 (boot orchestrator over a shared `sentinel::resource`
 device context — **realized by #38**), #14 (two-lane snapshot model — **both
