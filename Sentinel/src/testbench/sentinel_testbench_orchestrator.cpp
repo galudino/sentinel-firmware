@@ -30,6 +30,9 @@ extern "C" {
 ///< Logging
 #include "sentinel_debug_print.hpp"
 
+///< Shared device context — built once here before the readers borrow it (#38).
+#include "sentinel_device_context.hpp"
+
 ///< Continuous reader / helper services started by the orchestrator
 #include "sentinel_task_battery_service.hpp"
 #include "sentinel_task_bme280_service.hpp"
@@ -46,8 +49,6 @@ extern "C" {
 #include "sentinel_test_snapshot_stream.hpp"
 #include "sentinel_test_system_event_log.hpp"
 #include "sentinel_test_w25q128.hpp"
-
-namespace sentinel::testbench {
 
 namespace {
 
@@ -77,6 +78,8 @@ void banner(const char *title) noexcept {
 
 } // namespace
 
+namespace sentinel::testbench {
+
 // ============================================================================
 // test_orchestrator::instance
 // ============================================================================
@@ -90,8 +93,11 @@ test_orchestrator &test_orchestrator::instance() noexcept {
 // test_orchestrator::task_create
 // ============================================================================
 
-BaseType_t test_orchestrator::task_create(UBaseType_t priority,
+BaseType_t test_orchestrator::task_create(bool ble_stack_ok, bool gatt_db_ok,
+                                          UBaseType_t priority,
                                           uint16_t stack_words) noexcept {
+    m_ble_stack_ok = ble_stack_ok;
+    m_gatt_db_ok = gatt_db_ok;
     return xTaskCreate(&test_orchestrator::task_trampoline, "Test Orchestrator",
                        stack_words, this, priority, &m_handle);
 }
@@ -114,9 +120,11 @@ void test_orchestrator::run() {
     // Idle helper tasks the orchestrator owns (everything beyond the bus
     // arbiters + debug stream, per decision #13). Both are silent until
     // triggered, so creating them up front is harmless:
-    //   - snapshot_stream_task: the snapshot_stream suite drives this singleton,
+    //   - snapshot_stream_task: the snapshot_stream suite drives this
+    //   singleton,
     //     so it must exist before that group runs; idle until #6 calls start().
-    //   - battery_service: only acts when BLE-connected + notifications enabled.
+    //   - battery_service: only acts when BLE-connected + notifications
+    //   enabled.
     if (task::snapshot_stream_task::instance().task_create() != pdPASS) {
         loge("orchestrator: snapshot_stream_task create failed", "");
     }
@@ -129,8 +137,7 @@ void test_orchestrator::run() {
 
     // Run one group to completion: print its header, call the suite's
     // synchronous run_all(), print its result line, and retain the tally.
-    auto run_group = [&](const char *name,
-                         sentinel::test::tally (*run_all)() noexcept) {
+    auto run_group = [&](const char *name, sentinel::test::tally (*run_all)()) {
         cy_log_msg(CYLF_DEF, CY_LOG_INFO, "\n---- [ %s ] ----\n", name);
         logi("---- [ %s ] ----", name);
 
@@ -189,6 +196,17 @@ void test_orchestrator::run() {
     cy_log_msg(CYLF_DEF, CY_LOG_INFO,
                "\nStarting continuous reader services "
                "(rtc_service, bme280_service)...\n");
+
+    // Build the shared device context HERE — a single first-touch from this one
+    // task — before either reader starts. With -fno-threadsafe-statics (decision
+    // #18) the Meyers-singleton guard is gone, so if rtc_service and
+    // bme280_service each first-touched context() from their own task they would
+    // RACE to construct it (the BME280 calibration read yields mid-construction,
+    // letting the second task enter with the guard byte still clear → double
+    // construction). Constructing it once here, up front, preserves decision
+    // #18's invariant and is why the app boot orchestrator does the same.
+    (void)sentinel::resource::context();
+
     if (task::rtc_service::instance().task_create() != pdPASS) {
         loge("orchestrator: rtc_service create failed", "");
     }

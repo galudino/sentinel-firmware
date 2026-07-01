@@ -13,11 +13,10 @@
 ///          \c continuous_read loop: instead of printing each sample to the
 ///          debug stream, it caches the value behind a mutex and, when a BLE
 ///          handler has subscribed, pushes each new sample to that handler's
-///          queue so the handler can issue a GATT notification. The task owns
-///          its own driver instance, mirroring \ref sentinel::task::rtc_service;
-///          the shared-device-context refactor (drivers as
-///          \c sentinel::resource singletons) lands later with the boot
-///          orchestrator (#38).
+///          queue so the handler can issue a GATT notification. The task borrows
+///          the shared BME280 from \c sentinel::resource::context() (decision
+///          #13, #38) rather than constructing its own, so the factory-
+///          calibration read in the driver constructor happens exactly once.
 ///
 /// \author  galudino
 /// \date    2026-06-29

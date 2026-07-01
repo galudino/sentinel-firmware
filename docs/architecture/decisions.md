@@ -242,3 +242,69 @@ decisions at the end, never renumber. Rolled out of `docs/SESSION_HANDOFF.md`
    written OO from the start.** Tasks live in `sentinel::task` (e.g.
    `snapshot_stream_task` from #46, even where an issue sketch said
    `sentinel::app`). When conventions conflict, flag it — don't silently pick one.
+17. **Shared device context is a post-scheduler Meyers singleton, not file-scope
+   inline objects (#38, AS BUILT — amends #13).** Decision #13 sketched the
+   shared drivers as `inline` objects at file scope in `sentinel::resource`,
+   "the same way the cyhal SCB bus handles live there." That cannot work
+   literally: the `bme280` constructor reads factory calibration over I²C, and
+   **all** bus I/O is serviced by the bus-arbiter tasks, which only pump after
+   `vTaskStartScheduler()`. A file-scope object is constructed during C++ static
+   init — before `main()` starts the scheduler — so its calibration read would
+   block forever on an arbiter that never runs. As built, the context is a
+   function-local `static` reached via `sentinel::resource::context()`
+   (`src/resource/sentinel_device_context.hpp`), **first touched from the boot-
+   orchestrator task** (production) / test orchestrator (testbench) — i.e. post-
+   scheduler, on the real arbiter path, exactly like the #48 testbench fixtures.
+   End state matches #13's intent (one instance owned by `resource`, borrowed by
+   reference: `ctx.bme` / `ctx.rtc` / `ctx.flash` / `ctx.event_store` /
+   `ctx.snapshot_store`); only the construction *moment* differs.
+   - `resource::context()` builds the drivers + stores; `initialize_stores()`
+     scans both flash regions, binds the `system_event_log`, and sets
+     `context_ready()` so `populate_snapshot` reads the store counts only when
+     they are meaningful (it never forces a pre-orchestrator construction).
+   - `rtc_service` / `bme280_service` now **borrow** `ctx.rtc` / `ctx.bme` in
+     their `run()` instead of constructing task-local drivers. `battery_service`
+     is BLE-only (no shared driver) and is untouched.
+   - **Flash map finalized** (decision #11 left it provisional): event log
+     `[0x100000..0x180000)` 512 KiB, snapshots `[0x180000..0x280000)` 1 MiB,
+     non-overlapping (`static_assert` in the context header); testbench scratch
+     regions stay high (record_store 0xF00000, snapshot-suite 0xF02000, w25q128
+     0xFFF000).
+   - **Boot-event ordering deviation.** `post::record_results` *enqueues* the
+     POST records (non-blocking); the event-log drain task then runs
+     `run_boot_sequence()` FIRST (direct flash appends) and drains the POST
+     records AFTER. This reads the prior session's last flash record *before*
+     this boot's POST records are persisted, so `shutdown_unexpected` carries the
+     correct prior-crash timestamp — at the cost of POST records landing just
+     after `boot_complete` rather than before it. Correct crash attribution beats
+     #13's literal "POST is the first writer" wording.
+18. **`-fno-threadsafe-statics`: C++ function-local statics are constructed
+   single-task, guard-free (#38, AS BUILT).** A normal function-local `static`
+   with a non-trivial constructor emits a `__cxa_guard_acquire/release` pair.
+   Pre-scheduler (`__gthread_active_p() == false`) that guard is a trivial byte
+   check; **once the FreeRTOS scheduler is running it switches to a gthread-mutex
+   path this newlib/wiced port never wires up, so the first such static
+   constructed post-scheduler dead-locks.** Observed on-bench in #38: the boot
+   orchestrator hung forever constructing `resource::context()` (a Meyers
+   singleton whose BME280 ctor also yields to the I²C arbiter mid-construction).
+   Every pre-#38 singleton (`rtc_service`, `battery_service`, the bus arbiters)
+   dodged this only because `create_tasks()` first-touched them *before*
+   `vTaskStartScheduler()`. The orchestrator is the first to construct singletons
+   *after* the scheduler starts. Fix: build with **`-fno-threadsafe-statics`**
+   (added to `CXXFLAGS`), dropping the guard program-wide.
+   - **Why it's safe (the invariant):** we never rely on the guard's concurrency
+     protection — **every singleton's first construction happens from a single,
+     well-defined point** (the boot/test orchestrator) before any dependent task
+     runs, so two tasks can never race to first-init the same singleton. Honor
+     this when adding singletons: first-touch them from the orchestrator, not
+     from two tasks concurrently.
+   - **Root cause is not OO.** The trap is *implicit lazy init* (the magic
+     static), not classes. A C-style `static struct + ctx_init()` would avoid it
+     only because C forces explicit init. Decision #16 (OO tasks) stands; the
+     lesson is "lazy-constructed C++ statics + a running scheduler need
+     `-fno-threadsafe-statics` (or explicit init)."
+   - **Boot-time follow-ups filed:** #49 (record_store `initialize()` is
+     O(capacity) → ~17 s of flash scanning at boot) and #50 (unified portable
+     logging facade). The redundant third event-store scan POST used to do was
+     removed here: `post::probe_record_store` now trusts an already-`initialized()`
+     store and only re-verifies geometry.

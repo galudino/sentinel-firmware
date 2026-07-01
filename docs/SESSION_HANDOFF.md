@@ -20,36 +20,88 @@ than letting them accumulate here.
 
 ---
 
-**Last updated:** 2026-06-30 (session: #48). **Merged to `develop` this
-session:** **#48 testbench serial bottom-up test orchestrator** — squash
-`52b7586` on `develop`, tag
-`48-testbench-serial-bottom-up-test-orchestrator-history`; #48 closed, board →
-Done. New `sentinel::testbench::test_orchestrator` (OO one-shot singleton,
-decision #16): created pre-scheduler but running post-scheduler so the bus
-arbiters pump its I/O, it drives each suite's synchronous `run_all()` bottom-up
-(BME280 → DS3231 → W25Q128 → record_store → system_event_log → device_snapshot →
-POST → snapshot_stream) with per-group banners, prints a per-group + total
-pass/fail tally, **then** starts the continuous readers (`rtc_service`,
-`bme280_service`) and self-deletes. Every suite is now run-to-completion
-returning a `sentinel::test::tally` (new header-only helper, reusable by #38)
-instead of self-scheduling a task: the four hardware suites moved their
-anon-namespace bus globals into a TU-local fixture (GoogleTest `TEST_F` shape),
-the four stateless suites fold `run_one`/`report` into the tally, and the
-infinite continuous-read loops were dropped from the orchestrated path. Builds
-clean under `-Werror -Wall -Wextra -pedantic-errors`; production app
-(`TESTBENCH=0`) unaffected. **`serial_order`/`banners_and_tally` are satisfied
-by construction + build; the actual top-to-bottom serial log is an on-bench
-observation not yet eyeballed.** This is the testbench twin of #38's boot
-orchestrator (decision #13) — **#38 now inherits the proven pattern.**
+**Last updated:** 2026-06-30 (session: #38). **Implemented on branch
+`feature/38-boot-orchestrator-device-context` (off `develop`, not yet merged):**
+**#38 boot orchestrator + shared device context + lane-1 snapshot persistence.**
+Both configs build clean under `-Werror -Wall -Wextra -pedantic-errors`
+(`TESTBENCH=1` and `TESTBENCH=0` both reach `Linking … .elf`; only the benign
+imgtool/`click` signing step fails). New pieces:
+- **Shared device context** (`src/resource/sentinel_device_context.hpp`) —
+  `resource::context()` Meyers singleton (decision **#17**, amends #13): holds
+  the shared `bme`/`rtc`/`flash` drivers + `event_store`/`snapshot_store`,
+  first-constructed inside the orchestrator (post-scheduler). `initialize_stores()`
+  scans both flash regions, binds the event log, sets `context_ready()`.
+  `rtc_service`/`bme280_service` now **borrow** `ctx.rtc`/`ctx.bme`.
+- **Production boot orchestrator** (`src/app/sentinel_app_orchestrator.cpp`) —
+  one-shot highest-prio task (twin of #48): build context → `initialize_stores`
+  → `post::run` (real drivers) → cache first-fail status → `record_results`
+  (enqueue) → start event-log drain task (runs boot sequence, then drains POST
+  records) → start service tasks (rtc, bme280, snapshot-persistence, snapshot-
+  stream, battery) → self-delete. `main()` no longer hard-asserts on BLE-stack
+  failure (POST records it; degraded boot, decision #12).
+- **Lane-1 persistence** (`src/task/sentinel_task_snapshot_persistence.cpp`) —
+  OO singleton, ~5 min cadence, `populate→append`, `capture_now`/`count`/`read`/
+  `read_range`/`erase_all`, `snapshot_persisted` heartbeat every N captures,
+  first capture = boot anchor. New testbench suite drives the **real** task over
+  a scratch store (decision #15); wired as the 9th orchestrator group.
+- **Flash map finalized:** event log `[0x100000..0x180000)`, snapshots
+  `[0x180000..0x280000)`; `populate_snapshot` now sources storage counts +
+  `ble_connected` + POST status. New events `snapshot_persisted` (0x45) /
+  `pre_fault_snapshot_captured` (0x46) + `snapshot_event_record`.
+
+**ON-BENCH BRING-UP (this session, CYBLE-416045 + GD25Q128):** happy-path boot
+now validated end-to-end — POST passes (per-probe serial feedback added:
+`post bme280 PASS` … `post ble_stack PASS`), event log + snapshot history scan +
+init, all service tasks start, RTC/BME280 continuous reads + snapshot persistence
+run. **Two on-bench bugs found + fixed:**
+- **Boot hung in `resource::context()`** — first C++ function-local `static`
+  constructed *post-scheduler* dead-locked in `__cxa_guard_acquire` (gthread path
+  unwired in this newlib/wiced port). Fix: **`-fno-threadsafe-statics`** in
+  `CXXFLAGS` (decision **#18**; safe because every singleton is first-touched
+  from the single orchestrator task). Also hardened the I²C transport `exchange()`
+  to fail-fast on a null response queue.
+- **Boot scanned the event-log region twice** (~8.7 s each) — POST's
+  `probe_record_store` re-`initialize()`d an already-scanned store. Fixed: it now
+  trusts an `initialized()` store. Boot flash-scan is still ~17 s (two O(capacity)
+  region scans) → optimization filed as **#49**; unified portable logging facade
+  filed as **#50**.
+- **Testbench: only rtc_service ran, not bme280_service** — with the guard gone
+  (decision #18), the two reader tasks raced to first-construct `context()`. Fixed
+  (`d2a02fb`): the test orchestrator builds `context()` once up front before
+  starting the readers (same single-first-touch the app already did). **Confirmed
+  fixed on-bench.**
+
+**Also this session (not #38-blocking):**
+- **Hoisted `resource::system_initialize()`** (`sentinel_resource.cpp`) out of the
+  two near-identical `main.cpp`/`testbench.cpp` bodies; banner uses
+  `APP_NAME_STRING` (stringized). POST reports measured duration for the <100 ms
+  AC. POST prints per-probe `post <subsystem> <PASS|fail_*>`.
+- **`docs/acceptance/post-hardware-acceptance-checklist.md`** — the on-bench
+  fault-injection checklist for #35's six ACs (this is #38's sign-off record).
+- **Build via `Sentinel/scripts/build-sentinel-{firmware,testbench}-debug.sh`**
+  (venv → signing works; no more `click` error). **BLE needs the Release config**
+  for `sentinel-firmware`. See [[reference_local_firmware_build]].
+- **#51** (unify entry points + dedup BT/OTA config, Phase I backlog): code half
+  staged on branch `feature/51-unify-entry-points` (common `create_orchestrator`
+  entry symbol; both mains now target-agnostic), remainder = manual MTB config
+  move. Depends on #38 — rebase onto `develop` after #38 merges.
+
+**#38 SIGNED OFF (2026-07-01):** all six on-bench POST hardware ACs resolved —
+[`docs/acceptance/post-hardware-acceptance-checklist.md`](acceptance/post-hardware-acceptance-checklist.md)
+carries the evidence. **AC 1/2/4/5/6 PASS on-bench** (nominal all-pass +
+`done in 2 ms`; bme280 `fail_no_ack` + degraded boot; ds3231 `fail_self_test` →
+self-clears across two boots); **AC 3 documented bench-infeasible** (no swappable
+non-accept-listed SPI-NOR part; logic covered off-bench by #35 `fake_flash`,
+decision #15). Squash-merged → `develop`, #38 closed, board → Done.
 
 **Decisions in play:** #13 (boot orchestrator over a shared `sentinel::resource`
-device context — **testbench twin realized by #48**), #14 (two-lane snapshot
-model — lane 2 realized by #46), #15 (testbench tests REAL components), #16 (all
-FreeRTOS tasks — and now the test orchestrator — are OO/class style). Full text
-in [`architecture/decisions.md`](architecture/decisions.md).
+device context — **realized by #38**), #14 (two-lane snapshot model — **both
+lanes now built**: lane 2 #46, lane 1 #38), #15 (testbench tests REAL
+components), #16 (all FreeRTOS tasks OO/class), **#17 (device context = post-
+scheduler Meyers singleton, amends #13)**. Full text in
+[`architecture/decisions.md`](architecture/decisions.md).
 
-**NEXT: #38 (boot orchestrator + device context + lane-1 persistence) → #6
-(GATT).**
+**NEXT: #6 (BLE GATT services Phase I) — its deps #38 + #46 are now done.**
 
 ---
 
@@ -100,49 +152,40 @@ default.
   struct + `populate()`** (80-byte packed, cache-backed), **#47 — all FreeRTOS
   tasks are OO/class singletons**, **#46 — live snapshot stream task (lane 2)**
   (`snapshot_stream_task`, idle-until-enabled, ~100 ms; off-bench suite passes,
-  on-bench BLE-central AC owned by #6), and **#48 — testbench serial bottom-up
+  on-bench BLE-central AC owned by #6), **#48 — testbench serial bottom-up
   test orchestrator** (`test_orchestrator`; every suite is run-to-completion
-  `run_all() → tally`, fixture-owned bus transports, readers started after the
-  one-shot suite; on-bench serial-log observation still pending).
+  `run_all() → tally`, fixture-owned bus transports), and **#38 — boot
+  orchestrator + shared device context + lane-1 snapshot persistence**
+  (`resource::context()`, `app::boot_orchestrator`, `snapshot_persistence_task`;
+  decision #17; both builds clean; **on branch, on-bench POST ACs pending →
+  not yet merged**).
 - **What's next (open, dependency-ordered):**
-  1. **#38** — boot orchestrator + shared device context + periodic snapshot
-     persistence (lane 1, ~5 min flash); also wires #34/#35 boot-path + carries
-     POST's on-bench hardware ACs. **Inherits #48's proven one-shot-orchestrator
-     pattern** (decision #13) and reuses `sentinel::test::tally`'s shape. ← **NEXT**
-  2. **#6** — BLE GATT services Phase I (wires producer notify-sinks →
+  1. **#6** — BLE GATT services Phase I (wires producer notify-sinks →
      characteristics, incl. attaching `snapshot_stream_task`'s notify sink +
-     driving `start()`/`stop()` from the `SnapshotStream` enable char; assigns
-     UUIDs) — *On Hold/Blocked until #38* (its lane-2 dep #46 is now done).
+     driving `start()`/`stop()` from the `SnapshotStream` enable char, exposing
+     `snapshot_persistence_task` history reads, threading the real `gatt_db_ok`
+     into the orchestrator's POST, and publishing BLE tx-power/RSSI + CPU temp
+     into `populate_snapshot`; assigns UUIDs). Deps #38 + #46 now done. ← **NEXT**
 
 ---
 
-## #38 — boot orchestrator + device context + lane-1 persistence
+## #6 — BLE GATT services Phase I (next)
 
-The big one: stands up the real app boot path (decision #13) + the always-on
-~5 min flash persistence (lane 1, decision #14), and carries the **two deferred
-boot-wiring items** owed from #34 + #35. Both #34 (event-log) and #35 (POST)
-shipped with app boot-wiring deferred — the testbenches validate the logic over
-RAM/fake doubles, but nothing calls them from the real boot path yet. Per
-decision #13 they land together inside the single high-priority one-shot
-**boot-orchestrator task** (over the shared `sentinel::resource` device context),
-once #36's flash map is final — NOT pre-scheduler in `main()`, and NOT gated on
-#6:
+With #38 merged, the producer side is complete and #6 is pure GATT wiring
+(decision #8 chip-named services, #9 one-shot-sample rule):
 
-1. **POST** — `post::run(ctx.bme, ctx.rtc, ctx.flash, ctx.event_store,
-   ble_stack_ok, gatt_db_ok)` then `post::record_results(ctx.event_log, summary)`.
-   The BLE-status args come from `stack_initialize()` + GATT-db registration.
-2. **Event-log task** — clock wrapper over `rtc_service::last_unix_time`, the app
-   event-log `record_store` over the final region constants, the drain task, and
-   `event_log.run_boot_sequence()` (the orchestrator calls this right after POST
-   records, since POST is the log's first writer).
+- Attach `snapshot_stream_task::set_notify_sink` + drive `start()`/`stop()` from
+  the `SnapshotStream` enable characteristic (lane 2).
+- Expose `snapshot_persistence_task::read`/`read_range`/`count` as the
+  `SnapshotHistory` paged-read service (lane 1), mirroring the `SystemEventLog`
+  retrieval shape.
+- Thread the **real GATT-DB-registration result** into
+  `boot_orchestrator::task_create(ble_stack_ok, gatt_db_ok)` (Phase I currently
+  passes the stack-init result for both).
+- Publish BLE tx-power / peer RSSI (and the on-die CPU temp) so the remaining
+  zero `device_snapshot` fields fill in.
+- Assign the 128-bit service/characteristic UUIDs; client #9 mirrors 1:1.
 
-Also still owed by #36 / wired here: `device_snapshot`'s storage counts, BLE
-state, CPU temp, and POST status fields are currently 0 — they source from the
-shared device context + `ble_context` cache here / in #6.
-
-**On-bench POST hardware ACs remain manual** (pull the BME280 SDA pin, swap in an
-unknown-JEDEC flash, drain the DS3231 battery, scope the < 100 ms timing).
-
-The as-built API detail for the System Event Log (record format, non-blocking
-`record_*()`, `run_boot_sequence()`) and POST live in decisions #11/#12 of
+The as-built API detail for the System Event Log, POST, and the shared device
+context / boot orchestrator lives in decisions #11/#12/#13/#17 of
 [`architecture/decisions.md`](architecture/decisions.md).

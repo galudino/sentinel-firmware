@@ -1,195 +1,60 @@
 ///
 /// \file    main.cpp
-/// \brief   Main application entry point
+/// \brief   Main firmware entry point (sentinel-firmware target)
 ///
-/// \details This file contains only the main() function which initializes the
-///          system hardware, OTA functionality, Bluetooth stack, and starts
-///          the FreeRTOS scheduler.
+/// \details Thin entry point: run the shared system bring-up
+///          (\ref sentinel::resource::system_initialize), create the one-shot
+///          boot orchestrator (#38), and start the scheduler. All boot-time
+///          bring-up is shared with the testbench target via
+///          \c system_initialize; the only thing that differs between the two
+///          targets is which orchestrator is created here.
 ///
 /// \author  galudino
 /// \date    2026-05-15
-/// \version 1.0 - Simplified main with modular architecture
+/// \version 2.0 - Shared system_initialize; boot orchestrator (#38)
 ///
 
-// Always wrap C includes in diagnostic push/pop,
-// along with an extern "C" block -- to avoid pedantic warnings.
-
+// Always wrap C includes in diagnostic push/pop, in an extern "C" block, to
+// avoid pedantic warnings.
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
 extern "C" {
-///< Cypress/Infineon
-#include "cy_log.h"
-#include "cy_ota_api.h"
-#include "cy_retarget_io.h"
-#include "cyabs_rtos.h"
-#include "cybsp.h"
-#include "cybt_platform_trace.h"
-#include "cycfg_bt_settings.h"
-#include "cycfg_pins.h"
-#include "cyhal_wdt.h"
-
-#ifdef OTA_USE_EXTERNAL_FLASH
-#include "ota_serial_flash.h"
-#endif
-
-///< FreeRTOS
-#include "portmacro.h"
+#include "cybsp.h" ///< CY_ASSERT
 #include <FreeRTOS.h>
 #include <task.h>
 }
 #pragma GCC diagnostic pop
 
-///< Tasks
-#include "sentinel_task_battery_service.hpp"
-#include "sentinel_task_debug_stream.hpp"
-#include "sentinel_task_rtc_service.hpp"
+///< Boot orchestrator — one-shot boot sequence + service-task spawner (#38).
+#include "sentinel_app_orchestrator.hpp"
 
-///< Utilities
-#include "sentinel_firmware_version.hpp"
-#include "sentinel_utilities.hpp"
-
-///< Drivers
-#include "sentinel_led_pwm.hpp"
-
-///< Device Configurator Resources
+///< Shared system bring-up + Device Configurator resources.
 #include "sentinel_resource.hpp"
 
-///< Bluetooth LE
-#include "sentinel_ble_context.hpp"
-
-namespace sentinel::app {
+///< Utilities
+#include "sentinel_utilities.hpp"
 
 ///
-/// \brief Create application tasks
+/// \brief Application entry point.
 ///
-static inline void create_tasks() {
-    BaseType_t rtos_result{};
-
-    rtos_result = task::battery_service::instance().task_create();
-
-    if (rtos_result != pdPASS) {
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
-                   "Battery service task creation failed\n");
-    }
-
-#ifdef CYBSP_I2C_HW
-    rtos_result = task::rtc_service::instance().task_create();
-
-    if (rtos_result != pdPASS) {
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
-                   "RTC service task creation failed\n");
-    }
-#endif /* CYBSP_I2C_HW */
-}
-
-///
-/// \brief Initialize system hardware and Bluetooth stack
-///        Shouldn't have to be modified unless adding new hardware
-///        initialization.
-///
-static inline void initialize() {
-    // Initialize the board support package (BSP).
-    auto result = cybsp_init();
-
-    if (result != CY_RSLT_SUCCESS) {
-        CY_ASSERT(false);
-    }
-
-    // Enable global interrupts.
-    __enable_irq();
-
-    // Initialize retarget-io to use the debug UART port.
-    cy_retarget_io_init(CYBSP_DEBUG_UART_TX, CYBSP_DEBUG_UART_RX,
-                        CY_RETARGET_IO_BAUDRATE);
-
-    // default for all logging to WARNING.
-    cy_log_init(CY_LOG_LEVEL_T::CY_LOG_INFO, nullptr, nullptr);
-
-    // Set default log levels.
-    cy_ota_set_log_level(CY_LOG_LEVEL_T::CY_LOG_INFO);
-
-    // Initialize QuadSPI if using external flash.
-#if defined(OTA_USE_EXTERNAL_FLASH)
-    // We need to init from every ext flash write
-    // See ota_serial_flash.h
-    if (ota_smif_initialize() != CY_RSLT_SUCCESS) {
-        CY_ASSERT(0 == 1);
-    }
-#endif
-
-#ifdef TEST_REVERT
-    cy_log_msg(
-        CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-        "======================TESTING REVERT==========================\r\n");
-    cy_log_msg(
-        CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-        "===============================================================\r\n");
-    cy_log_msg(
-        CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-        "===============================================================\r\n");
-    cy_log_msg(
-        CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-        "=========================== Rebooting !!!======================\r\n");
-    cy_log_msg(
-        CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-        "===============================================================\r\n");
-    NVIC_SystemReset();
-#else
-    // Validate the update so we do not revert on reboot.
-    cy_ota_storage_validated();
-#endif
-
-    auto wdt_obj = cyhal_wdt_t{};
-    cyhal_wdt_init(&wdt_obj, cyhal_wdt_get_max_timeout_ms());
-
-    // Clear watchdog so it doesn't reboot on us.
-    cyhal_wdt_free(&wdt_obj);
-
-    // Initialize resources.
-    resource::peripheral_initialize();
-
-    // Start the BLE debug output stream task. Must be running before any
-    // task tries to send log messages over BLE notifications.
-    auto debug_stream_result = task::debug_stream::instance().task_create();
-    configASSERT(debug_stream_result == pdPASS);
-
-    // Initialize Bluetooth LE stack and services
-    // Register callback and configuration with stack.
-    auto wiced_result = ble_context_object.stack_initialize();
-
-    if (wiced_result != wiced_result_t::WICED_BT_SUCCESS) {
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
-                   "*** Bluetooth stack initialization failed! ***\r\n");
-        CY_ASSERT(false);
-    }
-
-    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-               "sentinel-firmware ==============================\r\n");
-    cy_log_msg(
-        CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-        "Application version: %d.%d.%d.%d\n", current_firmware_version.major(),
-        current_firmware_version.minor(), current_firmware_version.patch(),
-        current_firmware_version.build());
-    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-               "================================================\n\n");
-}
-
-} // namespace sentinel::app
-
-///
-/// \brief Application entry point
-///
-/// Initializes the device hardware, OTA functionality, Bluetooth stack,
-/// creates all tasks, and starts the FreeRTOS scheduler.
-///
-/// \return Application exit status (never returns in normal operation)
+/// Runs shared system bring-up, creates the one-shot boot orchestrator, and
+/// starts the FreeRTOS scheduler (never returns in normal operation).
 ///
 int main(int argc, const char *argv[]) {
     sentinel::unused(argc);
     sentinel::unused(argv);
 
-    sentinel::app::initialize();
-    sentinel::app::create_tasks();
+    const auto ble_stack_ok = sentinel::resource::system_initialize();
+
+    // Create the one-shot boot orchestrator. Created here before the scheduler
+    // starts, but its body runs only once scheduling begins — so the bus
+    // arbiters can pump the I/O its POST probes + device-context construction
+    // issue (decision #13). Phase I has no custom GATT DB yet (#6), so the
+    // GATT-DB-OK argument tracks the stack-init result.
+    auto orchestrator_result =
+        sentinel::app::boot_orchestrator::instance().task_create(ble_stack_ok,
+                                                                 ble_stack_ok);
+    configASSERT(orchestrator_result == pdPASS);
 
     // Start the FreeRTOS scheduler.
     vTaskStartScheduler();

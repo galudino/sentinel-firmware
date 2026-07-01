@@ -130,7 +130,7 @@ inline void peripheral_initialize() noexcept {
         cyhal_pwm_init_cfg(&led1, &CYBSP_LED1_PWM_hal_config);
     configASSERT(led1_config_result == CY_RSLT_SUCCESS);
     cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-               "LED1 PWM init result: %d\n",
+               "CYBSP_LED1_PWM init result: %d\n",
                static_cast<int>(led1_config_result));
 #endif /* CYBSP_LED1_PWM_HW */
 
@@ -139,7 +139,7 @@ inline void peripheral_initialize() noexcept {
         cyhal_pwm_init_cfg(&led2, &CYBSP_LED2_PWM_hal_config);
     configASSERT(led2_config_result == CY_RSLT_SUCCESS);
     cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-               "LED2 PWM init result: %d\n",
+               "CYBSP_LED2_PWM init result: %d\n",
                static_cast<int>(led2_config_result));
 #endif /* CYBSP_LED2_PWM_HW */
 
@@ -148,7 +148,7 @@ inline void peripheral_initialize() noexcept {
         cyhal_pwm_init_cfg(&led3, &CYBSP_LED3_PWM_hal_config);
     configASSERT(led3_config_result == CY_RSLT_SUCCESS);
     cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-               "LED3 PWM init result: %d\n",
+               "CYBSP_LED3_PWM init result: %d\n",
                static_cast<int>(led3_config_result));
 #endif /* CYBSP_LED3_PWM_HW */
 
@@ -157,7 +157,8 @@ inline void peripheral_initialize() noexcept {
         cyhal_i2c_init_cfg(&cybsp_i2c, &CYBSP_I2C_hal_config);
     configASSERT(i2c_config_result == CY_RSLT_SUCCESS);
     cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-               "I2C init result: %d\n", static_cast<int>(i2c_config_result));
+               "CYBSP_I2C init result: %d\n",
+               static_cast<int>(i2c_config_result));
 #endif /* CYBSP_I2C_HW */
 
 #ifdef CYBSP_SPI_HW
@@ -165,7 +166,8 @@ inline void peripheral_initialize() noexcept {
         cyhal_spi_init_cfg(&cybsp_spi, &CYBSP_SPI_hal_config);
     configASSERT(spi_config_result == CY_RSLT_SUCCESS);
     cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-               "SPI init result: %d\n", static_cast<int>(spi_config_result));
+               "CYBSP_SPI init result: %d\n",
+               static_cast<int>(spi_config_result));
 #endif /* CYBSP_SPI_HW */
 
 #ifdef CYBSP_I2C_HW
@@ -175,7 +177,7 @@ inline void peripheral_initialize() noexcept {
     auto i2c_bus_task_create_return_code = cybsp_i2c_bus.task_create();
     configASSERT(i2c_bus_task_create_return_code == pdPASS);
     cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-               "I2C bus task create result passed: %s\n",
+               "CYBSP_I2C bus task create result passed: %s\n",
                static_cast<int>(i2c_bus_task_create_return_code) ? "true"
                                                                  : "false");
 #endif /* CYBSP_I2C_HW */
@@ -187,17 +189,44 @@ inline void peripheral_initialize() noexcept {
     auto spi_bus_task_create_return_code = cybsp_spi_bus.task_create();
     configASSERT(spi_bus_task_create_return_code == pdPASS);
     cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-               "SPI bus task create result passed: %s\n",
+               "CYBSP_SPI bus task create result passed: %s\n",
                static_cast<int>(spi_bus_task_create_return_code) ? "true"
                                                                  : "false");
 
     // Create the W25Q128 device mutex before any task can construct a flash
-    // driver instance. Every w25q128 sharing the physical chip is handed this
+    // driver instance. Every W25Q128 sharing the physical chip is handed this
     // handle so their logical operations are mutually exclusive.
     flash_device_mutex = xSemaphoreCreateRecursiveMutex();
     configASSERT(flash_device_mutex != nullptr);
 #endif /* CYBSP_SPI_HW */
 }
+
+///
+/// \brief One-time system bring-up shared by both firmware targets.
+///
+/// \details The layer above \ref peripheral_initialize: BSP init, retarget-IO +
+///          cy_log, OTA validation/QSPI, the watchdog kick, \ref
+///          peripheral_initialize, the BLE debug-stream task, and the BLE stack.
+///          Hoisted out of the (previously near-identical) \c main.cpp /
+///          \c testbench.cpp so the boot bring-up has a \b single definition and
+///          cannot drift between the two targets; each target's entry point now
+///          only calls this, then creates its orchestrator. The serial banner
+///          interpolates the \c APP_NAME_STRING build define
+///          (\c "sentinel-firmware" vs \c "sentinel-testbench").
+///
+///          Declared here (in the \c resource namespace, alongside
+///          \ref peripheral_initialize) but \b defined in
+///          \c sentinel_resource.cpp: the body pulls the BLE stack / OTA /
+///          retarget-IO headers, and this header is included transitively by
+///          \c sentinel_device_context.hpp, so a header-only definition would
+///          drag those heavy dependencies into every translation unit that
+///          touches the device context.
+///
+/// \return \c true if the BLE stack initialized successfully. The boot
+///         orchestrator forwards this to POST, which records a BLE-stack failure
+///         rather than bricking the boot (degraded operation, decision #12).
+///
+bool system_initialize() noexcept;
 
 ///
 /// \brief Release peripheral resources from Device Configurator.

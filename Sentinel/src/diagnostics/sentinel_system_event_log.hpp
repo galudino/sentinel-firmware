@@ -258,6 +258,33 @@ public:
         return record(as_record(r));
     }
 
+    ///
+    /// \brief Record a periodic snapshot-persistence heartbeat (#38, lane 1).
+    ///
+    /// \param snapshot_count Snapshot store count after the capture this marks.
+    ///
+    bool record_snapshot_persisted(uint32_t snapshot_count) noexcept {
+        auto r              = snapshot_event_record{};
+        r.header.event_type = system_event::snapshot_persisted;
+        r.snapshot_count    = snapshot_count;
+        r.reason            = 0u; // periodic heartbeat
+        return record(as_record(r));
+    }
+
+    ///
+    /// \brief Record that a fault handler captured a snapshot (#38) — emit just
+    ///        before the \c capture_now() append so the two correlate by time.
+    ///
+    /// \param snapshot_count Snapshot store count at capture time.
+    ///
+    bool record_pre_fault_snapshot(uint32_t snapshot_count) noexcept {
+        auto r              = snapshot_event_record{};
+        r.header.event_type = system_event::pre_fault_snapshot_captured;
+        r.snapshot_count    = snapshot_count;
+        r.reason            = 1u; // pre-fault capture
+        return record(as_record(r));
+    }
+
     // =====================================================================
     // Query (delegates to the store)
     // =====================================================================

@@ -39,6 +39,7 @@ extern "C" {
 #include "sentinel_bme280.hpp"
 #include "sentinel_cyhal_i2c_bus_transport.hpp"
 #include "sentinel_debug_print.hpp"
+#include "sentinel_device_context.hpp"
 #include "sentinel_resource.hpp"
 #include "sentinel_task_bme280_service.hpp"
 #include "sentinel_task_rtc_service.hpp"
@@ -91,7 +92,8 @@ inline void split_centi(int32_t centi, char &sign_out, int32_t &whole_out,
 }
 
 ///
-/// \brief Convert a Bosch compensated reading into the fixed-point cache sample.
+/// \brief Convert a Bosch compensated reading into the fixed-point cache
+/// sample.
 ///
 /// \details The Bosch driver is compiled in double-precision compensation mode,
 ///          so \c temperature / \c humidity / \c pressure arrive as doubles in
@@ -185,15 +187,14 @@ void bme280_service::task_trampoline(void *task_parameter) {
 }
 
 void bme280_service::run() {
-    // Bus transport + driver are task-local: they live for the whole task
-    // lifetime (this loop never returns) and are not shared with other tasks.
-    // Routes through sentinel::resource::cybsp_i2c_bus so the periodic reads
-    // serialize cleanly with every other task on the shared I²C bus (notably
-    // the DS3231 RTC service).
-    auto bme280_bus = sentinel::cyhal_i2c_bus_transport(
-        sentinel::resource::cybsp_i2c_bus, BME280_I2C_ADDR_PRIM);
-
-    auto sensor = bme280_t(bme280_bus, BME280_I2C_ADDR_PRIM);
+    // Borrow the shared BME280 from the application device context (decision
+    // #13). One driver instance means the factory-calibration read in the
+    // BME280 constructor happens once (at context construction) rather than
+    // once per consumer. The context is built by the boot orchestrator
+    // (post-scheduler) before this task starts; its transport still routes
+    // through sentinel::resource::cybsp_i2c_bus so the periodic reads serialize
+    // cleanly with every other task on the shared I²C bus (notably the DS3231).
+    auto &sensor = sentinel::resource::context().bme;
 
     // Gate-check the part is present. A failure here is logged but NOT fatal:
     // the loop still runs so the task survives a sensor that is absent at boot
@@ -227,7 +228,8 @@ void bme280_service::run() {
                        "BME280 service: read error %d\n",
                        static_cast<int>(sensor.last_error()));
         } else {
-            auto s = build_sample(*data, rtc_service::instance().last_unix_time());
+            auto s =
+                build_sample(*data, rtc_service::instance().last_unix_time());
             publish(s);
 
             if (sample_counter % HEARTBEAT_LOG_EVERY_N == 0) {
@@ -243,14 +245,13 @@ void bme280_service::run() {
                      static_cast<int>(t_whole), static_cast<int>(t_frac),
                      static_cast<int>(s.pressure_pa), static_cast<int>(h_whole),
                      static_cast<int>(h_frac));
-                cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF,
-                           CY_LOG_LEVEL_T::CY_LOG_INFO,
-                           "BME280 service: T=%c%d.%02d C  P=%d Pa  "
-                           "H=%d.%02d %%\n",
-                           t_sign, static_cast<int>(t_whole),
-                           static_cast<int>(t_frac),
-                           static_cast<int>(s.pressure_pa),
-                           static_cast<int>(h_whole), static_cast<int>(h_frac));
+                cy_log_msg(
+                    CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
+                    "BME280 service: T=%c%d.%02d C  P=%d Pa  "
+                    "H=%d.%02d %%\n",
+                    t_sign, static_cast<int>(t_whole), static_cast<int>(t_frac),
+                    static_cast<int>(s.pressure_pa), static_cast<int>(h_whole),
+                    static_cast<int>(h_frac));
             }
 
             ++sample_counter;

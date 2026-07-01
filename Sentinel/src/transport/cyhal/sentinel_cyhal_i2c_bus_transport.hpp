@@ -336,6 +336,11 @@ private:
     ///          stash it in \c last_error).
     ///
     cy_rslt_t exchange(const sentinel::task::i2c_request &request) noexcept {
+        // If our response queue failed to allocate (heap exhausted at ctor
+        // time), blocking on it would hang forever — fail fast instead.
+        if (m_response_queue == nullptr) {
+            return static_cast<cy_rslt_t>(CY_RSLT_TYPE_ERROR);
+        }
         if (m_bus.submit(request) != pdPASS) {
             return static_cast<cy_rslt_t>(CY_RSLT_TYPE_ERROR);
         }
