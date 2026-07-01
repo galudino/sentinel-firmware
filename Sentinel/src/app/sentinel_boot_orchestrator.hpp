@@ -1,5 +1,5 @@
 ///
-/// \file    sentinel_app_orchestrator.hpp
+/// \file    sentinel_boot_orchestrator.hpp
 /// \brief   Production boot orchestrator task (decision #13, issue #38)
 ///
 /// \details Declares the application's boot orchestrator: a single highest-
@@ -32,8 +32,8 @@
 /// \version 1.0 - Initial production boot orchestrator
 ///
 
-#ifndef SENTINEL_APP_ORCHESTRATOR_HPP
-#define SENTINEL_APP_ORCHESTRATOR_HPP
+#ifndef SENTINEL_BOOT_ORCHESTRATOR_HPP
+#define SENTINEL_BOOT_ORCHESTRATOR_HPP
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
@@ -115,4 +115,4 @@ private:
 
 } // namespace sentinel::app
 
-#endif /* SENTINEL_APP_ORCHESTRATOR_HPP */
+#endif /* SENTINEL_BOOT_ORCHESTRATOR_HPP */

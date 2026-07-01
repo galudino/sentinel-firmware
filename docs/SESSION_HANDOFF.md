@@ -20,10 +20,13 @@ than letting them accumulate here.
 
 ---
 
-**Last updated:** 2026-06-30 (session: #38). **Implemented on branch
-`feature/38-boot-orchestrator-device-context` (off `develop`, not yet merged):**
-**#38 boot orchestrator + shared device context + lane-1 snapshot persistence.**
-Both configs build clean under `-Werror -Wall -Wextra -pedantic-errors`
+**Last updated:** 2026-07-01 (sessions: #38, then #51). **#38 and #51 are both
+merged to `develop` and closed** (details below). The section immediately below
+documents #38 as-built; #51 (unify entry points + dedup BT/OTA config) is
+summarized under "Also this session." **NEXT: #6.**
+
+**#38 (merged):** boot orchestrator + shared device context + lane-1 snapshot
+persistence. Both configs build clean under `-Werror -Wall -Wextra -pedantic-errors`
 (`TESTBENCH=1` and `TESTBENCH=0` both reach `Linking … .elf`; only the benign
 imgtool/`click` signing step fails). New pieces:
 - **Shared device context** (`src/resource/sentinel_device_context.hpp`) —
@@ -32,7 +35,7 @@ imgtool/`click` signing step fails). New pieces:
   first-constructed inside the orchestrator (post-scheduler). `initialize_stores()`
   scans both flash regions, binds the event log, sets `context_ready()`.
   `rtc_service`/`bme280_service` now **borrow** `ctx.rtc`/`ctx.bme`.
-- **Production boot orchestrator** (`src/app/sentinel_app_orchestrator.cpp`) —
+- **Production boot orchestrator** (`src/app/sentinel_boot_orchestrator.cpp`) —
   one-shot highest-prio task (twin of #48): build context → `initialize_stores`
   → `post::run` (real drivers) → cache first-fail status → `record_results`
   (enqueue) → start event-log drain task (runs boot sequence, then drains POST
@@ -81,10 +84,22 @@ run. **Two on-bench bugs found + fixed:**
 - **Build via `Sentinel/scripts/build-sentinel-{firmware,testbench}-debug.sh`**
   (venv → signing works; no more `click` error). **BLE needs the Release config**
   for `sentinel-firmware`. See [[reference_local_firmware_build]].
-- **#51** (unify entry points + dedup BT/OTA config, Phase I backlog): code half
-  staged on branch `feature/51-unify-entry-points` (common `create_orchestrator`
-  entry symbol; both mains now target-agnostic), remainder = manual MTB config
-  move. Depends on #38 — rebase onto `develop` after #38 merges.
+- **#51 DONE (merged 2026-07-01):** unified entry points + de-duplicated BT/OTA
+  config. One shared `src/main.cpp` calls `sentinel::create_orchestrator()` (in
+  `sentinel_orchestrator_entry.hpp`), defined per-target in each orchestrator TU;
+  `TESTBENCH` `CY_IGNORE`s the other dir so the linker resolves it with no
+  `#ifdef`. Single canonical `src/design.cybt` + `src/cy_ota_config.h` (regen'd
+  `GeneratedSource/` at `src/`, gitignored; canonical OTA config carries the
+  correct `CYBLE-416045-EVAL` board name). Orchestrator files renamed to match
+  their class: `sentinel_boot_orchestrator.*` / `sentinel_test_orchestrator.*`.
+  Both targets link + boot on-bench (firmware boot sequence; testbench test
+  tally). Also fixed a pre-existing bug: `build-sentinel-testbench-release.sh`
+  had `testbench_mode=0` (built the app under the testbench name) → set to `1`.
+  **Known footgun (open, unfiled):** toggling `TESTBENCH` within one `CONFIG`
+  without a clean makes ninja reuse the stale build graph and silently emit the
+  wrong binary; the unified `main.cpp` removed the old duplicate-`main()` guard
+  that used to catch it. Candidate follow-up: per-target build subdirs or
+  force-clean on toggle.
 
 **#38 SIGNED OFF (2026-07-01):** all six on-bench POST hardware ACs resolved —
 [`docs/acceptance/post-hardware-acceptance-checklist.md`](acceptance/post-hardware-acceptance-checklist.md)

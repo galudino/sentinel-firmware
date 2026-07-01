@@ -27,9 +27,11 @@ CY_TOOLS_PATHS=/Applications/ModusToolbox/tools_3.8 make build TESTBENCH=1   # t
 CY_TOOLS_PATHS=/Applications/ModusToolbox/tools_3.8 make build TESTBENCH=0   # main app
 ```
 
-- `TESTBENCH=1` builds `src/testbench/testbench.cpp`; `TESTBENCH=0` builds
-  `src/app/main.cpp`. The non-entry directory is excluded via `CY_IGNORE`; all
-  other `src/` sources (tasks, tests, drivers) compile into **both** builds.
+- Both configs share one entry point, `src/main.cpp` (#51); `TESTBENCH` selects
+  the per-target orchestrator it links. `TESTBENCH=1` compiles
+  `src/testbench/` (test orchestrator); `TESTBENCH=0` compiles `src/app/` (boot
+  orchestrator). The other directory is excluded via `CY_IGNORE`; all other
+  `src/` sources (tasks, tests, drivers) compile into **both** builds.
 - The `imgtool` `click` `ModuleNotFoundError` at the postbuild signing step is
   **benign** — the ELF + HEX are already produced; only the MCUBoot signing
   wrapper fails for lack of a Python `click` module. A clean link with that as

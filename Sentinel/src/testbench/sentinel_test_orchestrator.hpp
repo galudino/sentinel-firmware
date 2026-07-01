@@ -1,5 +1,5 @@
 ///
-/// \file    sentinel_testbench_orchestrator.hpp
+/// \file    sentinel_test_orchestrator.hpp
 /// \brief   One-shot serial test orchestrator task (#48)
 ///
 /// \details Declares the testbench's serial test orchestrator: a single
@@ -36,8 +36,8 @@
 /// \version 1.0 - Initial serial test orchestrator
 ///
 
-#ifndef SENTINEL_TESTBENCH_ORCHESTRATOR_HPP
-#define SENTINEL_TESTBENCH_ORCHESTRATOR_HPP
+#ifndef SENTINEL_TEST_ORCHESTRATOR_HPP
+#define SENTINEL_TEST_ORCHESTRATOR_HPP
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
@@ -123,4 +123,4 @@ private:
 
 } // namespace sentinel::testbench
 
-#endif /* SENTINEL_TESTBENCH_ORCHESTRATOR_HPP */
+#endif /* SENTINEL_TEST_ORCHESTRATOR_HPP */
