@@ -25,8 +25,9 @@ extern "C" {
 }
 #pragma GCC diagnostic pop
 
-///< Boot orchestrator — one-shot boot sequence + service-task spawner (#38).
-#include "sentinel_app_orchestrator.hpp"
+///< Per-target orchestrator entry symbol (#51) — resolves to this target's
+///< orchestrator at link time, so this entry point is target-agnostic.
+#include "sentinel_orchestrator_entry.hpp"
 
 ///< Shared system bring-up + Device Configurator resources.
 #include "sentinel_resource.hpp"
@@ -46,14 +47,13 @@ int main(int argc, const char *argv[]) {
 
     const auto ble_stack_ok = sentinel::resource::system_initialize();
 
-    // Create the one-shot boot orchestrator. Created here before the scheduler
+    // Create this target's one-shot orchestrator. Created before the scheduler
     // starts, but its body runs only once scheduling begins — so the bus
-    // arbiters can pump the I/O its POST probes + device-context construction
-    // issue (decision #13). Phase I has no custom GATT DB yet (#6), so the
-    // GATT-DB-OK argument tracks the stack-init result.
+    // arbiters can pump the I/O its work issues (decision #13). Phase I has no
+    // custom GATT DB yet (#6), so the GATT-DB-OK argument tracks the stack-init
+    // result.
     auto orchestrator_result =
-        sentinel::app::boot_orchestrator::instance().task_create(ble_stack_ok,
-                                                                 ble_stack_ok);
+        sentinel::create_orchestrator(ble_stack_ok, ble_stack_ok);
     configASSERT(orchestrator_result == pdPASS);
 
     // Start the FreeRTOS scheduler.

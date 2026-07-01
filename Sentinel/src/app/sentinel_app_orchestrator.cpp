@@ -38,6 +38,7 @@ extern "C" {
 #include "sentinel_app_orchestrator.hpp"
 
 #include "sentinel_debug_print.hpp"
+#include "sentinel_orchestrator_entry.hpp"
 #include "sentinel_device_context.hpp"
 #include "sentinel_post.hpp"
 
@@ -225,3 +226,13 @@ void boot_orchestrator::run() {
 }
 
 } // namespace sentinel::app
+
+// Per-target entry symbol (#51): the shared main.cpp calls this; the linker
+// resolves it to whichever orchestrator TU is compiled (this one when the app
+// target is built, the testbench's when TESTBENCH=1).
+namespace sentinel {
+BaseType_t create_orchestrator(bool ble_stack_ok, bool gatt_db_ok) noexcept {
+    return app::boot_orchestrator::instance().task_create(ble_stack_ok,
+                                                          gatt_db_ok);
+}
+} // namespace sentinel

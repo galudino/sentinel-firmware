@@ -30,6 +30,9 @@ extern "C" {
 ///< Logging
 #include "sentinel_debug_print.hpp"
 
+///< Shared per-target entry symbol (#51).
+#include "sentinel_orchestrator_entry.hpp"
+
 ///< Shared device context — built once here before the readers borrow it (#38).
 #include "sentinel_device_context.hpp"
 
@@ -221,3 +224,12 @@ void test_orchestrator::run() {
 }
 
 } // namespace sentinel::testbench
+
+// Per-target entry symbol (#51): the shared main.cpp calls this; the linker
+// resolves it to this definition when the testbench target is built.
+namespace sentinel {
+BaseType_t create_orchestrator(bool ble_stack_ok, bool gatt_db_ok) noexcept {
+    return testbench::test_orchestrator::instance().task_create(ble_stack_ok,
+                                                               gatt_db_ok);
+}
+} // namespace sentinel
