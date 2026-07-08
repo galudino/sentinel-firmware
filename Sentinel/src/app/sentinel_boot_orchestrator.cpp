@@ -39,6 +39,9 @@ extern "C" {
 #include "sentinel_debug_print.hpp"
 #include "sentinel_orchestrator_entry.hpp"
 #include "sentinel_device_context.hpp"
+#include "sentinel_gatt_dis.hpp"
+#include "sentinel_gatt_system.hpp"
+#include "sentinel_platform_id.hpp"
 #include "sentinel_post.hpp"
 
 ///< Service tasks the orchestrator spawns.
@@ -191,6 +194,23 @@ void boot_orchestrator::run() {
     // then block-drains the POST records enqueued above. See the file header on
     // ordering.
     start_task("event log", ctx.event_log().task_create());
+
+    // ---- 4a. Seed the System service + Device Information Service (#6/#45). ----
+    // The GATT DB value arrays live in RAM independent of registration; seed the
+    // machine-stable identity now (before a central connects) so first reads are
+    // correct. Manufacturer Name is derived from vendor_of(platform) (#45); the
+    // DIS Firmware Revision / Serial mirror the System values.
+    {
+        namespace gsys = sentinel::gatt::system;
+        const auto platform = sentinel::current_platform_id();
+        gsys::set_firmware_version(sentinel::current_firmware_version);
+        gsys::set_platform_id(platform);
+        sentinel::gatt::dis::populate(platform, sentinel::current_firmware_version,
+                                      gsys::serial_number());
+        logi("boot: GATT identity seeded (platform=%u, serial=%lu)",
+             static_cast<unsigned>(sentinel::to_underlying(platform)),
+             static_cast<unsigned long>(gsys::serial_number()));
+    }
 
     // ---- 4. Start the service tasks. ----
     logi("boot: starting service tasks...");

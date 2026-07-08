@@ -49,6 +49,8 @@ extern "C" {
 
 #include "sentinel_ble_context.hpp"
 #include "sentinel_ble_gatt.hpp"
+#include "sentinel_gatt_dis.hpp"
+#include "sentinel_gatt_system.hpp"
 #include "sentinel_led_pwm.hpp"
 #include "sentinel_task_battery_service.hpp"
 #include "sentinel_task_debug_stream.hpp"
@@ -431,6 +433,18 @@ sentinel::ble_gatt_command_write_handler(wiced_bt_gatt_event_data_t *event_data,
     case HDLC_OTA_FW_UPGRADE_SERVICE_OTA_UPGRADE_DATA_VALUE:
         return ble_context_object.ota_agent_write_handler(event_data,
                                                           error_handle);
+
+    case HDLC_SYSTEM_SERIAL_NUMBER_VALUE: {
+        // Store the new serial, then mirror it into the DIS Serial Number
+        // display string (#45) so both stay in sync.
+        auto status = ble_gatt_db_set_value(
+            write_request->handle, write_request->p_val, write_request->val_len);
+        if (status == wiced_bt_gatt_status_e::WICED_BT_GATT_SUCCESS) {
+            sentinel::gatt::dis::set_serial_number(
+                sentinel::gatt::system::serial_number());
+        }
+        return status;
+    }
 
     default:
         return ble_gatt_db_set_value(write_request->handle,
