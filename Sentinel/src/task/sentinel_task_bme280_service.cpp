@@ -39,6 +39,7 @@ extern "C" {
 #include "sentinel_cyhal_i2c_bus_transport.hpp"
 #include "sentinel_debug_print.hpp"
 #include "sentinel_device_context.hpp"
+#include "sentinel_gatt_bme280.hpp"
 #include "sentinel_resource.hpp"
 #include "sentinel_task_bme280_service.hpp"
 #include "sentinel_task_rtc_service.hpp"
@@ -131,6 +132,14 @@ void bme280_service::publish(const sample &s) noexcept {
         // Zero timeout: drop the sample if the handler's queue is full rather
         // than stall the sample cadence on a slow consumer.
         xQueueSendToBack(m_notify_queue, &s, 0);
+    }
+
+    // Publish to the BME280 Ambient Sample GATT characteristic (#6): refresh the
+    // read value and notify a subscribed central. A no-op on the wire when no
+    // central is connected/subscribed; the notify gate lives in the gatt layer.
+    if (s.valid) {
+        sentinel::gatt::bme280::publish(s.temperature_centi_c,
+                                        s.humidity_centi_pct, s.pressure_pa);
     }
 }
 

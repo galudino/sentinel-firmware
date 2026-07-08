@@ -40,6 +40,7 @@ extern "C" {
 #include "sentinel_orchestrator_entry.hpp"
 #include "sentinel_device_context.hpp"
 #include "sentinel_gatt_dis.hpp"
+#include "sentinel_gatt_snapshot_stream.hpp"
 #include "sentinel_gatt_system.hpp"
 #include "sentinel_platform_id.hpp"
 #include "sentinel_post.hpp"
@@ -218,6 +219,12 @@ void boot_orchestrator::run() {
     start_task("bme280 service", task::bme280_service::instance().task_create());
     start_task("snapshot persistence",
                task::snapshot_persistence_task::instance().task_create());
+    // Attach the live snapshot stream (#46, lane 2) to its GATT notify sink (#6)
+    // before starting it, so the Snapshot Notify Enable characteristic can drive
+    // start()/stop() and each produced snapshot lands on the Current Device
+    // Snapshot characteristic.
+    task::snapshot_stream_task::instance().set_notify_sink(
+        &sentinel::gatt::snapshot_stream::notify_sink);
     start_task("snapshot stream",
                task::snapshot_stream_task::instance().task_create());
     start_task("battery service",

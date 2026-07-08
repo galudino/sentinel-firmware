@@ -49,9 +49,13 @@ extern "C" {
 
 #include "sentinel_ble_context.hpp"
 #include "sentinel_ble_gatt.hpp"
+#include "sentinel_device_context.hpp"
 #include "sentinel_gatt_dis.hpp"
+#include "sentinel_gatt_ds3231.hpp"
+#include "sentinel_gatt_snapshot_stream.hpp"
 #include "sentinel_gatt_system.hpp"
 #include "sentinel_led_pwm.hpp"
+#include "sentinel_task_snapshot_stream.hpp"
 #include "sentinel_task_battery_service.hpp"
 #include "sentinel_task_debug_stream.hpp"
 #include "sentinel_utilities.hpp"
@@ -442,6 +446,37 @@ sentinel::ble_gatt_command_write_handler(wiced_bt_gatt_event_data_t *event_data,
         if (status == wiced_bt_gatt_status_e::WICED_BT_GATT_SUCCESS) {
             sentinel::gatt::dis::set_serial_number(
                 sentinel::gatt::system::serial_number());
+        }
+        return status;
+    }
+
+    case HDLC_SNAPSHOT_STREAM_SNAPSHOT_NOTIFY_ENABLE_VALUE: {
+        // Drive the live snapshot stream task (#46, lane 2) from the enable
+        // characteristic (#6): 1 => start streaming, 0 => return to idle.
+        auto status = ble_gatt_db_set_value(
+            write_request->handle, write_request->p_val, write_request->val_len);
+        if (status == wiced_bt_gatt_status_e::WICED_BT_GATT_SUCCESS) {
+            if (sentinel::gatt::snapshot_stream::enable_flag()) {
+                sentinel::task::snapshot_stream_task::instance().start();
+            } else {
+                sentinel::task::snapshot_stream_task::instance().stop();
+            }
+        }
+        return status;
+    }
+
+    case HDLC_DS3231_UNIX_TIME_VALUE: {
+        // BLE time-sync (#6): store the written epoch, then push it to the
+        // DS3231 over the arbitrated I²C bus. This is the *only* time-set path;
+        // rtc_service stays read-only (RTC time design, decision recorded in
+        // project memory). Writes are rare + user-initiated, so doing the bus
+        // transaction here (serialized by the I²C arbiter) is acceptable.
+        auto status = ble_gatt_db_set_value(
+            write_request->handle, write_request->p_val, write_request->val_len);
+        if (status == wiced_bt_gatt_status_e::WICED_BT_GATT_SUCCESS &&
+            sentinel::resource::context_ready()) {
+            sentinel::resource::context().rtc.set_unix_time(
+                sentinel::gatt::ds3231::unix_time());
         }
         return status;
     }

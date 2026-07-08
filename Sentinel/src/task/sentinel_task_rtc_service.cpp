@@ -35,6 +35,7 @@ extern "C" {
 #include "sentinel_debug_print.hpp"
 #include "sentinel_device_context.hpp"
 #include "sentinel_ds3231.hpp"
+#include "sentinel_gatt_ds3231.hpp"
 #include "sentinel_resource.hpp"
 #include "sentinel_task_rtc_service.hpp"
 #include "sentinel_utilities.hpp"
@@ -225,6 +226,8 @@ void rtc_service::run() {
         auto unix = ds3231_t::datetime::to_unix_time(*now);
         if (unix) {
             m_last_unix_seconds = *unix;
+            // Refresh the Unix Time GATT read value at 1 Hz (#6; no notify).
+            sentinel::gatt::ds3231::set_unix_time(*unix);
         }
 
         // Throttle logging to HEARTBEAT_LOG_PERIOD_SECONDS; the time latch
@@ -244,6 +247,10 @@ void rtc_service::run() {
         // Publish the latest temperature for cross-task consumers (the device
         // snapshot #36 reads this cache rather than issuing its own I²C read).
         m_last_temperature_centi = *temp;
+
+        // Publish to the DS3231 RTC Temperature GATT characteristic (#6):
+        // refresh the read value and notify a subscribed central.
+        sentinel::gatt::ds3231::publish_temperature(*temp);
 
         auto sign = char{};
         auto whole = int32_t{};
