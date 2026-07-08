@@ -92,6 +92,59 @@ size_t ring_buffer::pop(uint8_t *out, size_t max_length) {
     return count;
 }
 
+size_t ring_buffer::pop_frame(uint8_t *out, size_t max_length) {
+    if (max_length == 0) {
+        return 0;
+    }
+
+    taskENTER_CRITICAL();
+
+    // Peek for a complete frame: scan for the '\0' delimiter without
+    // committing. The producer writes each frame (line + null) atomically under
+    // its own critical section, so a queued non-empty ring always contains a
+    // delimiter.
+    auto scan = m_tail;
+    auto found_null = false;
+
+    while (scan != m_head) {
+        const auto is_null = m_buffer[scan] == 0;
+        scan = (scan + 1) % DEBUG_RING_BUFFER_CAPACITY;
+        if (is_null) {
+            found_null = true;
+            break;
+        }
+    }
+
+    if (!found_null) {
+        // No complete frame queued yet — leave the ring untouched.
+        taskEXIT_CRITICAL();
+        out[0] = 0;
+        return 0;
+    }
+
+    // Consume the frame: copy up to max_length-1 bytes, drop the delimiter and
+    // any overflow (single clean truncation), then null-terminate the output.
+    auto count = size_t{};
+
+    while (m_tail != m_head) {
+        const uint8_t b = m_buffer[m_tail];
+        m_tail = (m_tail + 1) % DEBUG_RING_BUFFER_CAPACITY;
+
+        if (b == 0) {
+            break; // delimiter consumed
+        }
+
+        if (count < max_length - 1) {
+            out[count++] = b;
+        }
+    }
+
+    out[count] = 0;
+
+    taskEXIT_CRITICAL();
+    return count + 1; // bytes written, including the null terminator
+}
+
 size_t ring_buffer::size() const {
     taskENTER_CRITICAL();
 

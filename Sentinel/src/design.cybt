@@ -557,7 +557,7 @@
                                                 <Property id="Name" value="Debug Output Stream"/>
                                                 <Property id="Value" value=""/>
                                                 <Property id="Format" value="f_uint8_array"/>
-                                                <Property id="ByteLength" value="128"/>
+                                                <Property id="ByteLength" value="512"/>
                                             </FieldProperties>
                                         </Field>
                                     </Fields>

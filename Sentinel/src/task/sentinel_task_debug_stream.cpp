@@ -155,16 +155,21 @@ wiced_bt_gatt_status_t send_notification_for_output_stream(const uint8_t *data,
 void output_stream_notifier(void) {
     using sentinel::ble_context_object;
 
-    // Calculate max payload based on MTU
+    // One notification carries at most ATT_MTU - 3 bytes, further bounded by
+    // the GATT characteristic length. The negotiated MTU governs; a message
+    // longer than this budget is truncation-marked by pop_frame (fragmentation
+    // is deferred to the client mirror, #34).
     size_t max_payload =
         (ble_context_object.mtu() > 3) ? (ble_context_object.mtu() - 3) : 20;
     if (max_payload > app_debug_output_stream_len) {
         max_payload = app_debug_output_stream_len;
     }
 
-    // Pop data from ring buffer
+    // Pop exactly one '\0'-terminated frame (one log line) so the client
+    // decodes each notification as a single C-string log entry.
     uint8_t tx_buffer[sentinel::logging::DEBUG_OUTPUT_STREAM_MAX_LEN];
-    auto to_send = sentinel::logging::g_ring_buffer.pop(tx_buffer, max_payload);
+    auto to_send =
+        sentinel::logging::g_ring_buffer.pop_frame(tx_buffer, max_payload);
 
     if (to_send == 0) {
         return;

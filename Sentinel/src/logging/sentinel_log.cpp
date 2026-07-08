@@ -41,6 +41,10 @@ static char g_log_buffer[DEBUG_OUTPUT_STREAM_MAX_LEN];
 /// Held across the (blocking) serial write, mirroring the former cy_log mutex.
 static SemaphoreHandle_t g_log_mutex = nullptr;
 
+/// Monotonic per-line sequence index. Shared by both sinks so a gap on serial
+/// and a gap on BLE line up; wraps at 16 bits (also the fragment msg_id, #34).
+static uint16_t g_seq = 0;
+
 } // namespace sentinel::logging
 
 //==============================================================================
@@ -96,8 +100,10 @@ void sentinel::logging::vlog(level l, const char *file, int line,
             sentinel::task::rtc_service::instance().last_unix_time()) *
         1000ull;
 
+    const uint16_t seq = g_seq++;
+
     const auto length = sentinel::logging::build_string(
-        g_log_buffer, sizeof(g_log_buffer), unix_ms, file, line, function,
+        g_log_buffer, sizeof(g_log_buffer), seq, unix_ms, file, line, function,
         to_string(l), fmt, args);
 
     if (length > 0) {
@@ -125,21 +131,28 @@ void sentinel::logging::sink::serial::write(level l, const char *line,
         return;
     }
 
-    std::printf("%s", line);
+    // build_string emits no terminator; serial lines end in '\n'.
+    std::printf("%s\n", line);
 }
 
 void sentinel::logging::sink::ble_debug::write(level l, const char *line,
                                                size_t len) noexcept {
     static_cast<void>(l);
 
+    // Frame the line for the datagram client: <line>'\0'. The trailing null
+    // terminates the C-string the client decodes, and delimits one message for
+    // the drain (one notification per frame, #34).
+    //
     // Atomic-vs-drain: keep the admission check and the push in one critical
     // section so the drain task cannot interleave. All-or-nothing — only write
-    // if the ENTIRE line fits, so a partial (corrupt) entry never enters the
-    // ring.
+    // if the ENTIRE frame (line + null) fits, so a partial (corrupt) entry
+    // never enters the ring.
     taskENTER_CRITICAL();
 
-    if (len <= g_ring_buffer.available_bytes()) {
+    if (len + 1 <= g_ring_buffer.available_bytes()) {
         g_ring_buffer.push_bytes(reinterpret_cast<const uint8_t *>(line), len);
+        const uint8_t nul = 0;
+        g_ring_buffer.push_bytes(&nul, 1);
     }
 
     taskEXIT_CRITICAL();

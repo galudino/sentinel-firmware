@@ -84,6 +84,27 @@ public:
     size_t pop(uint8_t *out, size_t max_length);
 
     ///
+    /// \brief      Pop one '\0'-delimited frame (a single log line).
+    ///
+    /// \details    Copies bytes up to (and consuming) the next '\0' delimiter
+    ///             into \p out, then null-terminates \p out. If the frame is
+    ///             longer than \p max_length, the excess is consumed from the
+    ///             ring but dropped from \p out (single clean truncation). The
+    ///             producer writes each frame atomically, so a complete '\0'
+    ///             always terminates each queued frame.
+    ///
+    ///             Thread-safe via FreeRTOS critical sections.
+    ///
+    /// \param      out         Output buffer (always null-terminated on
+    /// return).
+    /// \param      max_length  Capacity of \p out including the null
+    /// terminator.
+    /// \return     Bytes written to \p out including the null terminator, or 0
+    ///             if no complete frame is available.
+    ///
+    size_t pop_frame(uint8_t *out, size_t max_length);
+
+    ///
     /// \brief      Get the number of bytes currently stored in the ring buffer.
     ///
     /// \return     Number of bytes available to pop.
@@ -91,7 +112,7 @@ public:
     size_t size() const;
 
 private:
-    static constexpr size_t DEBUG_RING_BUFFER_CAPACITY = 256;
+    static constexpr size_t DEBUG_RING_BUFFER_CAPACITY = 2048;
 
     uint8_t m_buffer[DEBUG_RING_BUFFER_CAPACITY]; ///< Ring buffer storage.
 
@@ -101,7 +122,10 @@ private:
 
 inline ring_buffer g_ring_buffer; ///< Ring buffer instance for debug output.
 
-static constexpr auto DEBUG_OUTPUT_STREAM_MAX_LEN = 128;
+/// Max bytes of one rendered log line / one BLE notification payload. Matches
+/// the Debug Output Stream GATT characteristic (design.cybt, 512). A single
+/// notification is still bounded at runtime by min(ATT_MTU - 3, this).
+static constexpr auto DEBUG_OUTPUT_STREAM_MAX_LEN = 512;
 
 ///
 /// \brief      Write a formatted string directly to the debug ring buffer.
