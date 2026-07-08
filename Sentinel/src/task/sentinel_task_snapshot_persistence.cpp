@@ -22,7 +22,6 @@
 #pragma GCC diagnostic ignored "-Wpedantic"
 extern "C" {
 #include "FreeRTOS.h"
-#include "cy_log.h"
 #include "task.h"
 }
 #pragma GCC diagnostic pop
@@ -102,19 +101,12 @@ bool snapshot_persistence_task::capture_now() noexcept {
     auto snapshot = sentinel::telemetry::device_snapshot::make();
 
     if (!store().append(snapshot)) {
-        loge("Snapshot persistence: append failed (store err=%d)",
-             static_cast<int>(store().last_error()));
-
         loge("snapshot_persistence: append failed (store err=%d)",
              static_cast<int>(store().last_error()));
         return false;
     }
 
     ++m_capture_count;
-
-    logi("Snapshot persistence: captured #%u (store count=%u)",
-         static_cast<unsigned>(m_capture_count),
-         static_cast<unsigned>(store().count()));
 
     logi("snapshot_persistence: captured #%u (store count=%u)",
          static_cast<unsigned>(m_capture_count),

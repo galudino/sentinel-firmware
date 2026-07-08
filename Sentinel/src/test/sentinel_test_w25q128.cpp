@@ -24,7 +24,6 @@
 #pragma GCC diagnostic ignored "-Wpedantic"
 extern "C" {
 #include "FreeRTOS.h"
-#include "cy_log.h"
 #include "cy_result.h"
 #include "cycfg_pins.h"
 #include "portmacro.h"
@@ -130,11 +129,6 @@ bool fixture::presence_check() noexcept {
         return false;
     }
 
-    logi("W25Q128 presence_check: JEDEC = 0x%02X 0x%02X 0x%02X",
-         static_cast<int>(jedec->manufacturer),
-         static_cast<int>(jedec->memory_type),
-         static_cast<int>(jedec->capacity));
-
     logi("presence_check: JEDEC = 0x%02X 0x%02X 0x%02X",
          static_cast<int>(jedec->manufacturer),
          static_cast<int>(jedec->memory_type),
@@ -151,15 +145,10 @@ bool fixture::presence_check() noexcept {
 
     // Bonus diagnostics — manufacturer+device ID and unique ID.
     if (auto mfr_dev = flash.manufacturer_device_id()) {
-        logi("W25Q128 presence_check: Mfr/Dev = 0x%02X 0x%02X",
-             static_cast<int>(mfr_dev->manufacturer),
-             static_cast<int>(mfr_dev->device));
         logi("presence_check: Mfr/Dev = 0x%02X 0x%02X",
              static_cast<int>(mfr_dev->manufacturer),
              static_cast<int>(mfr_dev->device));
     } else {
-        logi("W25Q128 presence_check: Mfr/Dev read error %d",
-             static_cast<int>(flash.last_error()));
         logw("presence_check: Mfr/Dev read transport error %d",
              static_cast<int>(flash.last_error()));
     }

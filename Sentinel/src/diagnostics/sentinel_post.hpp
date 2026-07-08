@@ -328,7 +328,7 @@ public:
     static void record_results(Log &log, const summary &s) noexcept {
         if (s.all_passed) {
             log.record_post_passed();
-            logi("POST: all subsystems passed");
+            logi("post: all subsystems passed");
             return;
         }
 
@@ -343,7 +343,8 @@ public:
                     static_cast<uint8_t>(r.subsystem),
                     static_cast<uint8_t>(r.result), r.error_detail);
             }
-            loge("POST fail: subsys=0x%02X result=0x%02X detail=0x%02X",
+            loge("post: subsystem failed (subsys=0x%02X result=0x%02X "
+                 "detail=0x%02X)",
                  static_cast<unsigned>(static_cast<uint8_t>(r.subsystem)),
                  static_cast<unsigned>(static_cast<uint8_t>(r.result)),
                  static_cast<unsigned>(r.error_detail));

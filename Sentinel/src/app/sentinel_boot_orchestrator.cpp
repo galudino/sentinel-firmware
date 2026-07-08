@@ -29,7 +29,6 @@
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
 extern "C" {
-#include "cy_log.h"
 #include <FreeRTOS.h>
 #include <task.h>
 }
@@ -102,7 +101,7 @@ const char *result_name(sentinel::diagnostics::post_result r) noexcept {
 /// \brief Start a service task, logging on failure (boot continues regardless).
 void start_task(const char *name, BaseType_t rc) noexcept {
     if (rc != pdPASS) {
-        loge("orchestrator: %s create failed", name);
+        loge("boot: %s task create failed", name);
     }
 }
 
@@ -130,7 +129,7 @@ void boot_orchestrator::run() {
     namespace res  = sentinel::resource;
     namespace diag = sentinel::diagnostics;
 
-    logi("\nboot orchestrator: starting boot sequence");
+    logi("boot: starting sequence");
 
     // ---- 1. Build the shared device context + scan the flash stores. ----
     // First touch of context() constructs the drivers here, post-scheduler, so
@@ -160,7 +159,7 @@ void boot_orchestrator::run() {
         ctx.event_store, &res::now_unix_seconds);
     res::g_context_ready = event_ok && snapshot_ok && log_ok;
     if (!res::g_context_ready) {
-        loge("orchestrator: flash store init failed (event/snapshot scan)");
+        loge("boot: flash store init failed (event/snapshot scan)");
         // Continue regardless — POST will record the record-store failure and
         // the device runs degraded (decision #12).
     }
@@ -180,7 +179,7 @@ void boot_orchestrator::run() {
         (xTaskGetTickCount() - post_start_ticks) * portTICK_PERIOD_MS);
     for (auto i = uint8_t{0}; i < summary.count; ++i) {
         const auto &r = summary.results[i];
-        logi("post %s %s", subsystem_name(r.subsystem), result_name(r.result));
+        logi("post: %s %s", subsystem_name(r.subsystem), result_name(r.result));
     }
     logi("---- [ POST ] done in %u ms: %s ----", post_ms,
          summary.all_passed ? "all subsystems passed" : "failures recorded");
@@ -204,7 +203,7 @@ void boot_orchestrator::run() {
     start_task("battery service",
                task::battery_service::instance().task_create());
 
-    logi("boot orchestrator: boot complete, %s",
+    logi("boot: complete (%s)",
          summary.all_passed ? "POST passed" : "POST reported failures");
 
     // ---- 5. One-shot: a FreeRTOS task must not return; delete self. ----

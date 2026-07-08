@@ -21,12 +21,10 @@
 ///          every outcome into a \ref sentinel::test::tally, and returns it.
 ///
 ///          Output strategy:
-///          - Step-by-step progress is emitted via \c logi / \c loge so it
-///            appears in the BLE debug-stream view in SentinelPanel.
-///          - PASS / FAIL summary lines are *also* emitted via \c cy_log_msg
-///            so they are visible on the retarget-IO UART even if the BLE
-///            debug-stream ring buffer overflows or no BLE central is
-///            connected.
+///          - Progress and PASS / FAIL summary lines are emitted via
+///            \c logi / \c loge; the logging facade (#50) writes each line once
+///            to both the retarget-IO UART serial monitor and the BLE
+///            debug-stream view in SentinelPanel.
 ///
 ///          Floating-point handling: the Bosch BME280 driver is compiled in
 ///          double-precision compensation mode. Per the project-wide constraint
@@ -45,7 +43,6 @@ extern "C" {
 #include "FreeRTOS.h"
 #include "bme280.h"
 #include "bme280_defs.h"
-#include "cy_log.h"
 #include "cy_result.h"
 #include "portmacro.h"
 #include "task.h"
@@ -68,7 +65,7 @@ namespace {
 ///
 /// \brief Yield long enough for the BLE debug ring buffer to drain
 ///
-/// \details The debug stream's ring buffer is 256 bytes; rapid back-to-back
+/// \details The debug stream's ring buffer is best-effort; rapid back-to-back
 ///          \c logi() calls can overflow it and silently drop messages.
 ///          Inserting a short \c vTaskDelay between logical test phases
 ///          gives the debug-stream task time to push pending bytes out as

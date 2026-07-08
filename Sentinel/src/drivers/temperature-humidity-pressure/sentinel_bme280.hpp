@@ -241,7 +241,7 @@ public:
     ///          failure it reads the exact \c int8_t code the Bosch C driver
     ///          returned (\c BME280_E_COMM_FAIL, \c BME280_E_NULL_PTR,
     ///          \c BME280_E_INVALID_LEN, ...). Pair this with \c logi /
-    ///          \c loge / \c cy_log_msg to surface the underlying reason a
+    ///          \c loge to surface the underlying reason a
     ///          \c std::optional read came back \c std::nullopt.
     ///
     /// \return Most recent Bosch result code, or \c BME280_OK if no

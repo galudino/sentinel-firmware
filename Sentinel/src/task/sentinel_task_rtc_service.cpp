@@ -24,7 +24,6 @@
 #pragma GCC diagnostic ignored "-Wpedantic"
 extern "C" {
 #include "FreeRTOS.h"
-#include "cy_log.h"
 #include "cy_result.h"
 #include "cyhal_gpio.h"
 #include "portmacro.h"
@@ -197,6 +196,8 @@ void rtc_service::run() {
     // cleanly with every other task on the shared I²C bus.
     auto &rtc = sentinel::resource::context().rtc;
 
+    logd("rtc_service: arming 1 Hz SQW (P6_3 falling-edge)");
+
     if (!configure_square_wave(rtc)) {
         loge("rtc_service: 1 Hz SQW config failed (last_err=%d)",
              static_cast<int>(rtc.last_error()));
@@ -214,7 +215,7 @@ void rtc_service::run() {
 
         auto now = rtc.time();
         if (!now) {
-            loge("rtc_service: time read error %d",
+            loge("rtc_service: time read failed (err=%d)",
                  static_cast<int>(rtc.last_error()));
             continue;
         }
@@ -235,7 +236,7 @@ void rtc_service::run() {
 
         auto temp = rtc.temperature_centi_c();
         if (!temp) {
-            loge("rtc_service: temperature read error %d",
+            loge("rtc_service: temperature read failed (err=%d)",
                  static_cast<int>(rtc.last_error()));
             continue;
         }
@@ -249,7 +250,7 @@ void rtc_service::run() {
         auto frac = int32_t{};
         split_centi(*temp, sign, whole, frac);
 
-        logi("%04d-%02d-%02d %s %02d:%02d:%02d  T=%c%d.%02d C",
+        logi("rtc_service: %04d-%02d-%02d %s %02d:%02d:%02d  T=%c%d.%02d C",
              static_cast<int>(now->year), static_cast<int>(now->month),
              static_cast<int>(now->date), day_name(now->day_of_week),
              static_cast<int>(now->hour), static_cast<int>(now->minute),

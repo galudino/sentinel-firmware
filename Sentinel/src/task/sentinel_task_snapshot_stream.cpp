@@ -25,7 +25,6 @@
 #pragma GCC diagnostic ignored "-Wpedantic"
 extern "C" {
 #include "FreeRTOS.h"
-#include "cy_log.h"
 #include "task.h"
 }
 #pragma GCC diagnostic pop

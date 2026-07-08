@@ -24,9 +24,9 @@
 ///          bus-arbitrated SPI transport (the canonical "fixture holds the
 ///          shared resource" shape), so there is no file-static bus global.
 ///
-///          Per project convention every PASS / FAIL line goes to both the
-///          BLE debug stream (\c logi / \c loge) and the retarget-IO UART
-///          (\c cy_log_msg).
+///          Every PASS / FAIL line goes through \c logi / \c loge, which
+///          the logging facade (#50) writes to both the retarget-IO UART and
+///          the BLE debug stream.
 ///
 /// \author  galudino
 /// \date    2026-05-18

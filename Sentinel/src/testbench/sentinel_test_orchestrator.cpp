@@ -16,7 +16,6 @@
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
 extern "C" {
-#include "cy_log.h"
 #include <FreeRTOS.h>
 #include <task.h>
 
@@ -140,7 +139,6 @@ void test_orchestrator::run() {
     // Run one group to completion: print its header, call the suite's
     // synchronous run_all(), print its result line, and retain the tally.
     auto run_group = [&](const char *name, sentinel::test::tally (*run_all)()) {
-        logi("\n---- [ %s ] ----", name);
         logi("---- [ %s ] ----", name);
 
         const auto result = run_all();
