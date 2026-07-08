@@ -99,10 +99,9 @@ bool snapshot_persistence_task::erase_all() noexcept {
 }
 
 bool snapshot_persistence_task::capture_now() noexcept {
-    auto snap = sentinel::telemetry::device_snapshot{};
-    sentinel::telemetry::populate_snapshot(&snap);
+    auto snapshot = sentinel::telemetry::device_snapshot::make();
 
-    if (!store().append(snap)) {
+    if (!store().append(snapshot)) {
         cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
                    "Snapshot persistence: append failed (store err=%d)\n",
                    static_cast<int>(store().last_error()));

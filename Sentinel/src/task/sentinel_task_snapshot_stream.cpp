@@ -72,8 +72,9 @@ bool snapshot_stream_task::central_connected() const noexcept {
 
 void snapshot_stream_task::start() noexcept {
     m_streaming = true;
-    // Wake the task if it is blocked in the idle wait. Harmless if it is already
-    // streaming — the run loop re-checks m_streaming, not the notification.
+    // Wake the task if it is blocked in the idle wait. Harmless if it is
+    // already streaming — the run loop re-checks m_streaming, not the
+    // notification.
     if (m_handle != nullptr) {
         xTaskNotifyGive(m_handle);
     }
@@ -87,19 +88,22 @@ void snapshot_stream_task::set_period_ms(uint32_t period_ms) noexcept {
     m_period_ms = period_ms < MIN_PERIOD_MS ? MIN_PERIOD_MS : period_ms;
 }
 
-uint32_t snapshot_stream_task::period_ms() const noexcept { return m_period_ms; }
+uint32_t snapshot_stream_task::period_ms() const noexcept {
+    return m_period_ms;
+}
 
 void snapshot_stream_task::set_notify_sink(notify_fn sink) noexcept {
     m_notify_sink = sink;
 }
 
-void snapshot_stream_task::set_connected_predicate(connected_fn predicate) noexcept {
+void snapshot_stream_task::set_connected_predicate(
+    connected_fn predicate) noexcept {
     m_connected = predicate;
 }
 
 BaseType_t snapshot_stream_task::task_create(UBaseType_t priority,
-                                             uint16_t    stack_words,
-                                             uint32_t    period_ms) noexcept {
+                                             uint16_t stack_words,
+                                             uint32_t period_ms) noexcept {
     set_period_ms(period_ms);
     return xTaskCreate(&snapshot_stream_task::task_trampoline,
                        "Snapshot Stream Task", stack_words, this, priority,
@@ -130,11 +134,10 @@ void snapshot_stream_task::run() {
 
         // ---- Stream: notify at the cadence while enabled AND connected. ----
         while (m_streaming && central_connected()) {
-            auto snap = sentinel::telemetry::device_snapshot{};
-            sentinel::telemetry::populate_snapshot(&snap);
+            auto snapshot = sentinel::telemetry::device_snapshot::make();
 
             if (m_notify_sink != nullptr) {
-                m_notify_sink(snap);
+                m_notify_sink(snapshot);
             }
 
             vTaskDelay(pdMS_TO_TICKS(m_period_ms));
