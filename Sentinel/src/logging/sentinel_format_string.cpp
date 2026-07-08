@@ -80,24 +80,19 @@ int sentinel::logging::build_string(char *out, size_t size, uint16_t seq,
         }
     }
 
-    // Format timestamp directly into the output buffer first to avoid
-    // a separate 28-byte local array. We'll overwrite it with the full
-    // prefix using snprintf below.
-    //
-    // NOTE: We use %.*s precision specifiers to truncate file/function
-    // names inline — this avoids local char arrays and saves ~32 bytes
-    // of stack, which matters on tasks with 200-300 word stacks.
+    // Format the timestamp into a small local buffer first.
     char timestamp[28];
     format_unix_timestamp_ms(static_cast<int64_t>(unix_time_ms), timestamp,
                              sizeof(timestamp), false);
 
     // Build the prefix: "<seq> <timestamp> [file:line] function <level> ".
     // seq is a monotonic per-line index (also the fragment msg_id, #34) so a
-    // gap on serial and a gap on BLE line up. %.*s truncates file to 16 chars
-    // and function to 14 chars inline.
-    auto written = std::snprintf(out, size, "%04u <%s> [%.*s:%d] %.*s <%s> ",
-                                 static_cast<unsigned>(seq), timestamp, 16,
-                                 basename, line, 14, function, level);
+    // gap on serial and a gap on BLE line up. File and function names are
+    // emitted in full — the 512-byte line budget leaves ample room, and a
+    // truncated message is preferable to a truncated source location.
+    auto written = std::snprintf(out, size, "%04u <%s> [%s:%d] %s <%s> ",
+                                 static_cast<unsigned>(seq), timestamp,
+                                 basename, line, function, level);
 
     if (written < 0 || static_cast<size_t>(written) >= size) {
         return written;

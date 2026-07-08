@@ -167,7 +167,7 @@ void boot_orchestrator::run() {
     // ---- 2. POST against the real drivers; log + record each probe. ----
     // probe_record_store now reuses the already-initialized event store (no
     // redundant rescan), so POST is fast and the per-probe lines print promptly.
-    logi("\n---- [ POST ] ----");
+    logi("---- [ POST ] ----");
     // Time only the probe phase (no interleaved logging inside run()), so the
     // reported duration is the true POST timing for #35's "< 100 ms" hardware AC
     // — the multi-second flash scans above are NOT part of POST.

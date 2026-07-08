@@ -190,7 +190,7 @@ void test_orchestrator::run() {
     // Only now — after every one-shot group has completed — start the ~1 Hz
     // serial readers, so their output can never interleave the diagnostic above
     // (#48 AC readers_start_after).
-    logi("\nStarting continuous reader services "
+    logi("testbench: starting continuous reader services "
          "(rtc_service, bme280_service)...");
 
     // Build the shared device context HERE — a single first-touch from this one
