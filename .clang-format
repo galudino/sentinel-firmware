@@ -1,0 +1,14 @@
+---
+# Sentinel firmware C/C++/ObjC style.
+# Applies repo-wide: clang-format resolves the nearest .clang-format by walking
+# up from each file, so this root file governs Sentinel/src and any future tree.
+# See sentinel-firmware issue: "Formatting, conventions, documentation".
+BasedOnStyle: LLVM
+AccessModifierOffset: '-4'
+AlwaysBreakTemplateDeclarations: 'Yes'
+ColumnLimit: '80'
+IndentWidth: '4'
+PointerAlignment: Right
+# Enforce always-braced if/for/while/do-while (Swift-like). Requires clang-format >= 15.
+InsertBraces: true
+...
