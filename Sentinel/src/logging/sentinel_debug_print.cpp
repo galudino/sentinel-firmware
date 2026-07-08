@@ -19,18 +19,8 @@ extern "C" {
 #pragma GCC diagnostic pop
 
 #include "sentinel_debug_print.hpp"
-#include "sentinel_format_string.hpp"
-#include "sentinel_resource.hpp"
 
 #include <cstdio>
-
-namespace sentinel::logging {
-
-static char
-    g_log_buffer[DEBUG_OUTPUT_STREAM_MAX_LEN]; ///< Static buffer for formatting
-                                               ///< log messages
-
-} // namespace sentinel::logging
 
 void sentinel::logging::bleprint_format(const char *fmt, ...) {
     va_list args;
@@ -55,43 +45,6 @@ void sentinel::logging::blevprint_format(const char *fmt, va_list args) {
     for (auto *it = buf; *it; it++) {
         g_ring_buffer.push(static_cast<uint8_t>(*it));
     }
-}
-
-void sentinel::logging::enqueue_log_for_debug_stream(const char *file, int line,
-                                                     const char *function,
-                                                     const char *level,
-                                                     const char *fmt, ...) {
-    // Use critical section to protect the static g_log_buffer
-    taskENTER_CRITICAL();
-
-    /// TODO: Initialize RTC and get real timestamp for log messages
-
-    // uint64_t unix_ms = sensor.unix_time();
-    uint64_t unix_ms = 0; // 1970-01-01T00:00:00Z in milliseconds - placeholder
-                          // until RTC is implemented
-
-    va_list args;
-    va_start(args, fmt);
-
-    auto length = sentinel::logging::build_string(
-        g_log_buffer, sizeof(g_log_buffer), unix_ms, file, line, function,
-        level, fmt, args);
-
-    va_end(args);
-
-    if (length > 0) {
-        // Atomic write: check if the ENTIRE message fits before writing
-        // any bytes. This prevents partial messages (which show as corrupt
-        // unicode on the iOS app) from entering the ring buffer.
-        if (static_cast<size_t>(length) <= g_ring_buffer.available_bytes()) {
-            // Full message fits — write all bytes
-            g_ring_buffer.push_bytes(
-                reinterpret_cast<const uint8_t *>(g_log_buffer), length);
-        }
-        // else: drop entire message (better than corrupt partial message)
-    }
-
-    taskEXIT_CRITICAL();
 }
 
 using sentinel::logging::ring_buffer;
@@ -137,6 +90,59 @@ size_t ring_buffer::pop(uint8_t *out, size_t max_length) {
 
     taskEXIT_CRITICAL();
     return count;
+}
+
+size_t ring_buffer::pop_frame(uint8_t *out, size_t max_length) {
+    if (max_length == 0) {
+        return 0;
+    }
+
+    taskENTER_CRITICAL();
+
+    // Peek for a complete frame: scan for the '\0' delimiter without
+    // committing. The producer writes each frame (line + null) atomically under
+    // its own critical section, so a queued non-empty ring always contains a
+    // delimiter.
+    auto scan = m_tail;
+    auto found_null = false;
+
+    while (scan != m_head) {
+        const auto is_null = m_buffer[scan] == 0;
+        scan = (scan + 1) % DEBUG_RING_BUFFER_CAPACITY;
+        if (is_null) {
+            found_null = true;
+            break;
+        }
+    }
+
+    if (!found_null) {
+        // No complete frame queued yet — leave the ring untouched.
+        taskEXIT_CRITICAL();
+        out[0] = 0;
+        return 0;
+    }
+
+    // Consume the frame: copy up to max_length-1 bytes, drop the delimiter and
+    // any overflow (single clean truncation), then null-terminate the output.
+    auto count = size_t{};
+
+    while (m_tail != m_head) {
+        const uint8_t b = m_buffer[m_tail];
+        m_tail = (m_tail + 1) % DEBUG_RING_BUFFER_CAPACITY;
+
+        if (b == 0) {
+            break; // delimiter consumed
+        }
+
+        if (count < max_length - 1) {
+            out[count++] = b;
+        }
+    }
+
+    out[count] = 0;
+
+    taskEXIT_CRITICAL();
+    return count + 1; // bytes written, including the null terminator
 }
 
 size_t ring_buffer::size() const {

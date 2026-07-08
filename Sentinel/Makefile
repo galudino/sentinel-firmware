@@ -133,7 +133,17 @@ CFLAGS=-std=c17
 #
 # NOTE: Includes and defines should use the INCLUDES and DEFINES variable
 # above.
-CXXFLAGS=-std=c++17 -fno-exceptions -fno-rtti -pedantic-errors -Wall -Werror -Wextra
+# -fno-threadsafe-statics: function-local `static` initialization normally emits
+# a __cxa_guard_acquire/release pair. Once the FreeRTOS scheduler is running
+# (__gthread_active_p() == true) that guard takes a gthread-mutex path this
+# newlib/wiced port does not wire up, so the FIRST function-local static
+# constructed post-scheduler dead-locks (observed on-bench in #38: the boot
+# orchestrator hung constructing resource::context()). We never rely on the
+# guard's concurrency protection — every singleton is first-touched from a
+# single task (the boot/test orchestrator) before its dependents run — so it is
+# safe to drop it, and doing so is the standard fix for C++ singletons on
+# bare-metal FreeRTOS.
+CXXFLAGS=-std=c++17 -fno-exceptions -fno-rtti -fno-threadsafe-statics -pedantic-errors -Wall -Werror -Wextra
 
 # Additional / custom assembler flags.
 #
@@ -193,10 +203,13 @@ endif
 #
 # Main app vs Testbench
 #
-# TESTBENCH=0 builds the main application (src/app/main.cpp).
-# TESTBENCH=1 builds the testbench application (src/testbench/testbench.cpp).
-# Only one of the two source dirs is included in the build; the other is
-# excluded via CY_IGNORE so the linker sees exactly one main().
+# One shared entry point (src/main.cpp) serves both targets; the two source
+# dirs now hold only the per-target orchestrator, each defining the common
+# sentinel::create_orchestrator() symbol (see sentinel_orchestrator_entry.hpp).
+# TESTBENCH=0 builds the main application (src/app/ boot orchestrator).
+# TESTBENCH=1 builds the testbench application (src/testbench/ test orchestrator).
+# CY_IGNORE excludes the other dir so the linker resolves exactly one
+# create_orchestrator() — no #ifdef in the shared main.cpp (#51).
 #
 ###############################################################################
 ifeq ($(TESTBENCH), 1)
@@ -206,6 +219,37 @@ ifeq ($(TESTBENCH), 1)
 else
     CY_IGNORE+="./src/testbench/"
     DEFINES+=SENTINEL_APP=1
+endif
+
+###############################################################################
+#
+# Clean-on-toggle guard (#52)
+#
+# The mtbninja build aggregates every ./build/**/local/*.o under the project into
+# the link, ignoring CY_BUILD_LOCATION. So if a firmware build tree and a
+# testbench build tree ever coexist, the link pulls in BOTH targets' objects and
+# fails with ~2000 duplicate-symbol errors (pre-#51 this instead SILENTLY emitted
+# a mislabeled binary, because each target had its own main() and the stale graph
+# was simply re-linked). Per-target build dirs can't fix this — mtbninja scans
+# them all — so we ensure only ONE target's tree exists at a time: force a clean
+# whenever the target (TESTBENCH) changes from the last build.
+#
+# Runs at parse time, gated on the build/program goals so IDE queries
+# (get_app_info, etc.) don't wipe anything. Incremental builds WITHIN a target
+# are untouched (marker matches → no clean); only switching firmware<->testbench
+# pays a one-time full rebuild. All build/program scripts call `make build|program`,
+# so they inherit this automatically — no per-script duplication.
+###############################################################################
+ifneq ($(filter build program,$(MAKECMDGOALS)),)
+_MTB_TB_MARKER := ./build/.last_testbench
+_MTB_LAST_TB := $(strip $(shell cat $(_MTB_TB_MARKER) 2>/dev/null))
+ifneq ($(_MTB_LAST_TB),)
+ifneq ($(_MTB_LAST_TB),$(TESTBENCH))
+$(info === [#52] TESTBENCH changed ($(_MTB_LAST_TB) -> $(TESTBENCH)); cleaning ./build to avoid stale-object cross-link ===)
+_MTB_TB_CLEAN := $(shell rm -rf ./build)
+endif
+endif
+_MTB_TB_WRITE := $(shell mkdir -p ./build && printf '%s' '$(TESTBENCH)' > $(_MTB_TB_MARKER))
 endif
 
 ###############################################################################

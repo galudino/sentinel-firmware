@@ -29,22 +29,23 @@
 #ifndef SENTINEL_TEST_SNAPSHOT_STREAM_HPP
 #define SENTINEL_TEST_SNAPSHOT_STREAM_HPP
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wpedantic"
-extern "C" {
-#include "FreeRTOS.h"
-#include "portmacro.h"
-#include "task.h"
-}
-#pragma GCC diagnostic pop
+#include "sentinel_test_result.hpp"
 
 namespace sentinel::test::snapshot_stream {
 
-/// \brief Run the full snapshot stream task behavioral suite (ordered).
-void all();
-
-/// \brief Create the FreeRTOS task that runs \ref all.
-BaseType_t task_create();
+///
+/// \brief Run the full snapshot stream task behavioral suite to completion.
+///
+/// \details Ordered, stateful behavioral suite over the real
+///          \ref sentinel::task::snapshot_stream_task singleton (idle ↔ stream
+///          lifecycle, cadence, disconnect auto-stop). Run-to-completion (#48):
+///          no longer self-schedules as a FreeRTOS task; the serial test
+///          orchestrator calls \ref run_all directly, after the singleton has
+///          been created. Returns the pass/fail \ref sentinel::test::tally.
+///
+/// \return The suite's pass/fail tally.
+///
+tally run_all() noexcept;
 
 } // namespace sentinel::test::snapshot_stream
 

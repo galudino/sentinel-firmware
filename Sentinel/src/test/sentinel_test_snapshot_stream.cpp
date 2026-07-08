@@ -29,7 +29,6 @@
 #pragma GCC diagnostic ignored "-Wpedantic"
 extern "C" {
 #include "FreeRTOS.h"
-#include "cy_log.h"
 #include "portmacro.h"
 #include "task.h"
 }
@@ -38,6 +37,7 @@ extern "C" {
 #include "sentinel_debug_print.hpp"
 #include "sentinel_device_snapshot.hpp"
 #include "sentinel_task_snapshot_stream.hpp"
+#include "sentinel_test_result.hpp"
 #include "sentinel_test_snapshot_stream.hpp"
 
 #include <cstdint>
@@ -63,15 +63,13 @@ void counting_sink(const device_snapshot &snap) noexcept {
 /// \brief Controllable connection predicate (drives \c disconnect_autostop).
 bool controllable_connected() noexcept { return g_connected; }
 
-void report(const char *name, bool ok, const char *detail) noexcept {
+bool report(const char *name, bool ok, const char *detail) noexcept {
     if (ok) {
         logi("%s PASS", name);
-        cy_log_msg(CYLF_DEF, CY_LOG_INFO, "snapshot_stream %s PASS\n", name);
     } else {
         loge("%s FAIL: %s", name, detail);
-        cy_log_msg(CYLF_DEF, CY_LOG_INFO, "snapshot_stream %s FAIL: %s\n", name,
-                   detail);
     }
+    return ok;
 }
 
 void delay_ms(uint32_t milliseconds) noexcept {
@@ -84,8 +82,9 @@ void delay_ms(uint32_t milliseconds) noexcept {
 // Ordered behavioral suite
 // ============================================================================
 
-void sentinel::test::snapshot_stream::all() {
+sentinel::test::tally sentinel::test::snapshot_stream::run_all() noexcept {
     auto &task = snapshot_stream_task::instance();
+    auto  t    = sentinel::test::tally{};
 
     // Deterministic, BLE-independent connection state for the whole suite.
     g_connected = true;
@@ -100,9 +99,9 @@ void sentinel::test::snapshot_stream::all() {
         const auto streaming = task.streaming();
         delay_ms(300);
         const auto fired = g_notify_count;
-        report("idle_by_default", !streaming && fired == 0,
-               streaming ? "streaming() true before start"
-                         : "sink fired while idle");
+        t.record(report("idle_by_default", !streaming && fired == 0,
+                         streaming ? "streaming() true before start"
+                                   : "sink fired while idle"));
     }
 
     // ---- start_stop -------------------------------------------------------
@@ -131,7 +130,7 @@ void sentinel::test::snapshot_stream::all() {
                           : fired_while_streaming == 0 ? "no notifications while streaming"
                           : streaming_after_stop ? "streaming() true after stop"
                                                  : "notifications continued after stop";
-        report("start_stop", ok, why);
+        t.record(report("start_stop", ok, why));
     }
 
     // ---- cadence ----------------------------------------------------------
@@ -147,9 +146,10 @@ void sentinel::test::snapshot_stream::all() {
     delay_ms(120);
     {
         const auto ok = cadence_count >= 7 && cadence_count <= 14;
-        report("cadence", ok,
-               cadence_count < 7 ? "too few notifications for the period"
-                                 : "too many notifications for the period");
+        t.record(report("cadence", ok,
+                         cadence_count < 7
+                             ? "too few notifications for the period"
+                             : "too many notifications for the period"));
     }
 
     // ---- populate_is_cache_backed ----------------------------------------
@@ -157,8 +157,8 @@ void sentinel::test::snapshot_stream::all() {
     // I²C/SPI arbiter driving a sensor in this path — populate is cache-only.
     {
         const auto ok = g_last_magic == SNAPSHOT_TRAILER_MAGIC;
-        report("populate_is_cache_backed", ok,
-               "streamed snapshot incomplete (trailer magic unset)");
+        t.record(report("populate_is_cache_backed", ok,
+                         "streamed snapshot incomplete (trailer magic unset)"));
     }
 
     // ---- disconnect_autostop ----------------------------------------------
@@ -178,9 +178,10 @@ void sentinel::test::snapshot_stream::all() {
     const auto count_after_drop = g_notify_count;
     {
         const auto ok = !streaming_after_drop && count_after_drop == count_at_drop;
-        report("disconnect_autostop", ok,
-               streaming_after_drop ? "still streaming after disconnect"
-                                    : "notifications continued after disconnect");
+        t.record(report("disconnect_autostop", ok,
+                         streaming_after_drop
+                             ? "still streaming after disconnect"
+                             : "notifications continued after disconnect"));
     }
 
     // ---- Restore: leave the singleton idle and un-instrumented. -----------
@@ -189,23 +190,5 @@ void sentinel::test::snapshot_stream::all() {
     task.set_notify_sink(nullptr);
     task.set_connected_predicate(nullptr);
 
-    logi("snapshot_stream: all tests complete", "");
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO, "snapshot_stream: all tests complete\n");
-}
-
-// ============================================================================
-// task_create
-// ============================================================================
-
-BaseType_t sentinel::test::snapshot_stream::task_create() {
-    constexpr auto stack_words = configMINIMAL_STACK_SIZE * 4;
-    constexpr auto priority = static_cast<UBaseType_t>(configMAX_PRIORITIES - 3);
-
-    return xTaskCreate(
-        [](void *) -> void {
-            sentinel::test::snapshot_stream::all();
-            // One-shot suite: a FreeRTOS task must not return, so delete it.
-            vTaskDelete(nullptr);
-        },
-        "SnapshotStream Test Task", stack_words, nullptr, priority, nullptr);
+    return t;
 }

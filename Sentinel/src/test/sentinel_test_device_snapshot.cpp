@@ -18,7 +18,6 @@
 #pragma GCC diagnostic ignored "-Wpedantic"
 extern "C" {
 #include "FreeRTOS.h"
-#include "cy_log.h"
 #include "portmacro.h"
 #include "task.h"
 }
@@ -27,6 +26,7 @@ extern "C" {
 #include "sentinel_debug_print.hpp"
 #include "sentinel_device_snapshot.hpp"
 #include "sentinel_test_device_snapshot.hpp"
+#include "sentinel_test_result.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -41,11 +41,8 @@ using sentinel::telemetry::SNAPSHOT_VERSION;
 void report(const char *name, bool ok, const char *detail) noexcept {
     if (ok) {
         logi("%s PASS", name);
-        cy_log_msg(CYLF_DEF, CY_LOG_INFO, "device_snapshot %s PASS\n", name);
     } else {
         loge("%s FAIL: %s", name, detail);
-        cy_log_msg(CYLF_DEF, CY_LOG_INFO, "device_snapshot %s FAIL: %s\n", name,
-                   detail);
     }
 }
 
@@ -178,72 +175,36 @@ bool body_trailer_magic(const char **why) {
     return true;
 }
 
-void run_one(const char *name, bool (*body)(const char **)) noexcept {
+bool run_one(const char *name, bool (*body)(const char **)) noexcept {
     const char *why = "assertion";
     const auto  ok  = body(&why);
     report(name, ok, why);
+    return ok;
 }
 
 } // namespace
 
 // ============================================================================
-// Public entry points
+// sentinel::test::device_snapshot::run_all
 // ============================================================================
 
-void sentinel::test::device_snapshot::size_invariant() {
-    run_one("size_invariant", body_size_invariant);
-}
+sentinel::test::tally sentinel::test::device_snapshot::run_all() noexcept {
+    auto t = sentinel::test::tally{};
 
-void sentinel::test::device_snapshot::byte_layout() {
-    run_one("byte_layout", body_byte_layout);
-}
-
-void sentinel::test::device_snapshot::round_trip() {
-    run_one("round_trip", body_round_trip);
-}
-
-void sentinel::test::device_snapshot::forward_compat_probe() {
-    run_one("forward_compat_probe", body_forward_compat_probe);
-}
-
-void sentinel::test::device_snapshot::trailer_magic() {
-    run_one("trailer_magic", body_trailer_magic);
-}
-
-void sentinel::test::device_snapshot::all() {
-    size_invariant();
+    t.record(run_one("size_invariant", body_size_invariant));
     yield_for_debug_drain(200);
 
-    byte_layout();
+    t.record(run_one("byte_layout", body_byte_layout));
     yield_for_debug_drain(200);
 
-    round_trip();
+    t.record(run_one("round_trip", body_round_trip));
     yield_for_debug_drain(200);
 
-    forward_compat_probe();
+    t.record(run_one("forward_compat_probe", body_forward_compat_probe));
     yield_for_debug_drain(200);
 
-    trailer_magic();
+    t.record(run_one("trailer_magic", body_trailer_magic));
     yield_for_debug_drain(200);
 
-    logi("device_snapshot: all tests complete", "");
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO, "device_snapshot: all tests complete\n");
-}
-
-// ============================================================================
-// task_create
-// ============================================================================
-
-BaseType_t sentinel::test::device_snapshot::task_create() {
-    constexpr auto stack_words = configMINIMAL_STACK_SIZE * 4;
-    constexpr auto priority =
-        static_cast<UBaseType_t>(configMAX_PRIORITIES - 3);
-
-    return xTaskCreate(
-        [](void *) -> void {
-            sentinel::test::device_snapshot::all();
-            // One-shot suite: a FreeRTOS task must not return, so delete it.
-            vTaskDelete(nullptr);
-        },
-        "DevSnapshot Test Task", stack_words, nullptr, priority, nullptr);
+    return t;
 }

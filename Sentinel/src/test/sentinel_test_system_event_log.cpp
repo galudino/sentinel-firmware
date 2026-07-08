@@ -26,7 +26,6 @@
 #pragma GCC diagnostic ignored "-Wpedantic"
 extern "C" {
 #include "FreeRTOS.h"
-#include "cy_log.h"
 #include "portmacro.h"
 #include "task.h"
 }
@@ -37,6 +36,7 @@ extern "C" {
 #include "sentinel_ram_record_store.hpp"
 #include "sentinel_system_event.hpp"
 #include "sentinel_system_event_log.hpp"
+#include "sentinel_test_result.hpp"
 #include "sentinel_test_system_event_log.hpp"
 
 #include <cstdint>
@@ -68,11 +68,8 @@ uint8_t *alloc_buffer(uint32_t records) noexcept {
 void report(const char *name, bool ok, const char *detail) noexcept {
     if (ok) {
         logi("%s PASS", name);
-        cy_log_msg(CYLF_DEF, CY_LOG_INFO, "event_log %s PASS\n", name);
     } else {
         loge("%s FAIL: %s", name, detail);
-        cy_log_msg(CYLF_DEF, CY_LOG_INFO, "event_log %s FAIL: %s\n", name,
-                   detail);
     }
 }
 
@@ -429,102 +426,55 @@ bool body_crossing_size_threshold(uint8_t *buf, uint32_t size,
 ///
 /// \brief Run one test: allocate the buffer, run \p body, free, report.
 ///
-void run_one(const char *name, uint32_t records,
+bool run_one(const char *name, uint32_t records,
              bool (*body)(uint8_t *, uint32_t, const char **)) noexcept {
     auto *buf = alloc_buffer(records);
     if (buf == nullptr) {
         report(name, false, "buffer alloc");
-        return;
+        return false;
     }
     const char *why = "assertion";
     const auto ok = body(buf, records * store_t::SLOT_SIZE, &why);
     vPortFree(buf);
     report(name, ok, why);
+    return ok;
 }
 
 } // namespace
 
 // ============================================================================
-// Public entry points
+// sentinel::test::system_event_log::run_all
 // ============================================================================
 
-void sentinel::test::system_event_log::presence_check() {
-    run_one("presence_check", 8u, body_presence_check);
-}
+sentinel::test::tally sentinel::test::system_event_log::run_all() noexcept {
+    auto t = sentinel::test::tally{};
 
-void sentinel::test::system_event_log::record_and_read() {
-    run_one("record_and_read", 8u, body_record_and_read);
-}
+    t.record(run_one("presence_check", 8u, body_presence_check));
+    yield_for_debug_drain(200);
 
-void sentinel::test::system_event_log::typed_round_trip() {
-    run_one("typed_round_trip", 8u, body_typed_round_trip);
-}
+    t.record(run_one("record_and_read", 8u, body_record_and_read));
+    yield_for_debug_drain(200);
 
-void sentinel::test::system_event_log::record_burst() {
+    t.record(run_one("typed_round_trip", 8u, body_typed_round_trip));
+    yield_for_debug_drain(200);
+
     // 1024 slots ( > 1000 ) so the burst never wraps.
-    run_one("record_burst", 1024u, body_record_burst);
-}
-
-void sentinel::test::system_event_log::survive_reset() {
-    run_one("survive_reset", 64u, body_survive_reset);
-}
-
-void sentinel::test::system_event_log::unexpected_shutdown_synthesis() {
-    run_one("unexpected_shutdown_synthesis", 16u,
-            body_unexpected_shutdown_synthesis);
-}
-
-void sentinel::test::system_event_log::erase_all() {
-    run_one("erase_all", 16u, body_erase_all);
-}
-
-void sentinel::test::system_event_log::crossing_size_threshold() {
-    run_one("crossing_size_threshold", 16u, body_crossing_size_threshold);
-}
-
-void sentinel::test::system_event_log::all() {
-    presence_check();
+    t.record(run_one("record_burst", 1024u, body_record_burst));
     yield_for_debug_drain(200);
 
-    record_and_read();
+    t.record(run_one("survive_reset", 64u, body_survive_reset));
     yield_for_debug_drain(200);
 
-    typed_round_trip();
+    t.record(run_one("unexpected_shutdown_synthesis", 16u,
+                     body_unexpected_shutdown_synthesis));
     yield_for_debug_drain(200);
 
-    record_burst();
+    t.record(run_one("erase_all", 16u, body_erase_all));
     yield_for_debug_drain(200);
 
-    survive_reset();
+    t.record(run_one("crossing_size_threshold", 16u,
+                     body_crossing_size_threshold));
     yield_for_debug_drain(200);
 
-    unexpected_shutdown_synthesis();
-    yield_for_debug_drain(200);
-
-    erase_all();
-    yield_for_debug_drain(200);
-
-    crossing_size_threshold();
-    yield_for_debug_drain(200);
-
-    logi("system_event_log: all tests complete", "");
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO, "system_event_log: all tests complete\n");
-}
-
-// ============================================================================
-// task_create
-// ============================================================================
-
-BaseType_t sentinel::test::system_event_log::task_create() {
-    constexpr auto stack_words = configMINIMAL_STACK_SIZE * 4;
-    constexpr auto priority =
-        static_cast<UBaseType_t>(configMAX_PRIORITIES - 3);
-
-    return xTaskCreate(
-        [](void *) -> void {
-            sentinel::test::system_event_log::all();
-            // One-shot suite: a FreeRTOS task must not return, so delete it.
-            vTaskDelete(nullptr);
-        },
-        "System Event Log Test Task", stack_words, nullptr, priority, nullptr);
+    return t;
 }

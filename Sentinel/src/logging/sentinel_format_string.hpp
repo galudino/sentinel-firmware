@@ -48,16 +48,21 @@ int format_unix_timestamp_ms(int64_t unix_time_ms, char *out_buf,
                              size_t out_buf_size, bool local_time);
 
 //
-/// \brief      Build a complete log string with timestamp and metadata.
+/// \brief      Build a complete log line with sequence, timestamp, and
+///             metadata.
 ///
 /// Constructs a formatted log entry in the form:
-/// "<timestamp> [file:line] function <level> message\n"
+/// "<seq> <timestamp> [file:line] function <level> message"
+///
+/// No trailing terminator is appended — the caller's sink adds its own
+/// ('\n' for serial, '\0' for the BLE datagram). The buffer is null-terminated.
 ///
 /// Example output:
-/// "<2026-01-31 18:00:24.027Z> [main.cpp:42] MyFunc <info> Hello, world!\n"
+/// "0042 <2026-01-31 18:00:24.027Z> [main.cpp:42] MyFunc <info> Hello, world!"
 ///
 /// \param      out             Output buffer for the complete log string
 /// \param      size            Size of the output buffer
+/// \param      seq             Monotonic line index (also the fragment msg_id)
 /// \param      unix_time_ms    Unix timestamp in milliseconds
 /// \param      file            Source filename (typically __FILE__)
 /// \param      line            Source line number (typically __LINE__)
@@ -67,10 +72,10 @@ int format_unix_timestamp_ms(int64_t unix_time_ms, char *out_buf,
 /// \param      fmt             printf-style format string for the message
 /// \param      args            Variable argument list for the format string
 ///
-/// \return     Total number of characters written (excluding null terminator),
+/// \return     Number of characters written (excluding null terminator),
 ///             or negative value on error
 ///
-int build_string(char *out, size_t size, uint64_t unix_time_ms,
+int build_string(char *out, size_t size, uint16_t seq, uint64_t unix_time_ms,
                  const char *file, int line, const char *function,
                  const char *level, const char *fmt, va_list args);
 

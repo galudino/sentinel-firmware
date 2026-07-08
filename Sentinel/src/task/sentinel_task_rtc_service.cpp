@@ -24,7 +24,6 @@
 #pragma GCC diagnostic ignored "-Wpedantic"
 extern "C" {
 #include "FreeRTOS.h"
-#include "cy_log.h"
 #include "cy_result.h"
 #include "cyhal_gpio.h"
 #include "portmacro.h"
@@ -34,6 +33,7 @@ extern "C" {
 
 #include "sentinel_cyhal_i2c_bus_transport.hpp"
 #include "sentinel_debug_print.hpp"
+#include "sentinel_device_context.hpp"
 #include "sentinel_ds3231.hpp"
 #include "sentinel_resource.hpp"
 #include "sentinel_task_rtc_service.hpp"
@@ -187,32 +187,27 @@ void rtc_service::configure_sqw_interrupt() noexcept {
 }
 
 void rtc_service::run() {
-    // Bus transport + driver are task-local: they live for the whole task
-    // lifetime (this loop never returns on the happy path) and are not shared
-    // with other tasks. Routes through sentinel::resource::cybsp_i2c_bus so the
-    // per-second reads serialize cleanly with every other task on the shared
-    // I²C bus.
-    auto rtc_bus = sentinel::cyhal_i2c_bus_transport(
-        sentinel::resource::cybsp_i2c_bus,
-        static_cast<uint16_t>(ds3231_t::slave_address::primary));
+    // Borrow the shared DS3231 from the application device context (decision
+    // #13): one driver instance serves the RTC service, POST, and the device
+    // snapshot, rather than each task constructing its own. The context is built
+    // by the boot orchestrator (post-scheduler) before this task is started, so
+    // it is live by the time we reach here. Its transport still routes through
+    // sentinel::resource::cybsp_i2c_bus, so the per-second reads serialize
+    // cleanly with every other task on the shared I²C bus.
+    auto &rtc = sentinel::resource::context().rtc;
 
-    auto rtc = ds3231_t(rtc_bus);
+    logd("rtc_service: arming 1 Hz SQW (P6_3 falling-edge)");
 
     if (!configure_square_wave(rtc)) {
         loge("rtc_service: 1 Hz SQW config failed (last_err=%d)",
              static_cast<int>(rtc.last_error()));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
-                   "RTC service: 1 Hz SQW config failed (last_err=%d)\n",
-                   static_cast<int>(rtc.last_error()));
         vTaskDelete(nullptr);
         return;
     }
 
     configure_sqw_interrupt();
 
-    logi("rtc_service: 1 Hz SQW armed (falling-edge IRQ on P6_3)", "");
-    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-               "RTC service: 1 Hz SQW armed (falling-edge IRQ on P6_3)\n");
+    logi("rtc_service: 1 Hz SQW armed (falling-edge IRQ on P6_3)");
 
     while (true) {
         // Block until the next SQW falling edge (one per second).
@@ -220,7 +215,7 @@ void rtc_service::run() {
 
         auto now = rtc.time();
         if (!now) {
-            loge("rtc_service: time read error %d",
+            loge("rtc_service: time read failed (err=%d)",
                  static_cast<int>(rtc.last_error()));
             continue;
         }
@@ -241,11 +236,8 @@ void rtc_service::run() {
 
         auto temp = rtc.temperature_centi_c();
         if (!temp) {
-            loge("rtc_service: temperature read error %d",
+            loge("rtc_service: temperature read failed (err=%d)",
                  static_cast<int>(rtc.last_error()));
-            cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
-                       "rtc_service: temperature error %d\n",
-                       static_cast<int>(rtc.last_error()));
             continue;
         }
 
@@ -258,20 +250,11 @@ void rtc_service::run() {
         auto frac = int32_t{};
         split_centi(*temp, sign, whole, frac);
 
-        logi("%04d-%02d-%02d %s %02d:%02d:%02d  T=%c%d.%02d C",
+        logi("rtc_service: %04d-%02d-%02d %s %02d:%02d:%02d  T=%c%d.%02d C",
              static_cast<int>(now->year), static_cast<int>(now->month),
              static_cast<int>(now->date), day_name(now->day_of_week),
              static_cast<int>(now->hour), static_cast<int>(now->minute),
              static_cast<int>(now->second), sign, static_cast<int>(whole),
              static_cast<int>(frac));
-
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "rtc_service: %04d-%02d-%02d %s %02d:%02d:%02d  "
-                   "T=%c%d.%02d C\n",
-                   static_cast<int>(now->year), static_cast<int>(now->month),
-                   static_cast<int>(now->date), day_name(now->day_of_week),
-                   static_cast<int>(now->hour), static_cast<int>(now->minute),
-                   static_cast<int>(now->second), sign, static_cast<int>(whole),
-                   static_cast<int>(frac));
     }
 }

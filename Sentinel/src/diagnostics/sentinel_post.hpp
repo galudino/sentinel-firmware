@@ -248,7 +248,13 @@ public:
     ///
     template <typename Store>
     static post_subsystem_result probe_record_store(Store &store) noexcept {
-        if (!store.initialize()) {
+        // Re-scanning the backing flash region is O(capacity) — ~8 k serialized
+        // SPI reads for the production event-log region (tracked for optimization
+        // in issue #49). The boot orchestrator already initializes the store
+        // before POST runs, so trust an already-initialized store and only verify
+        // its geometry; a fresh store (the off-bench fakes, or a skipped boot
+        // init) is initialized here as before.
+        if (!store.initialized() && !store.initialize()) {
             return {post_subsystem::record_store, post_result::fail_init, 0u};
         }
         const auto head = store.head_index();
@@ -322,7 +328,7 @@ public:
     static void record_results(Log &log, const summary &s) noexcept {
         if (s.all_passed) {
             log.record_post_passed();
-            logi("POST: all subsystems passed", "");
+            logi("post: all subsystems passed");
             return;
         }
 
@@ -337,7 +343,8 @@ public:
                     static_cast<uint8_t>(r.subsystem),
                     static_cast<uint8_t>(r.result), r.error_detail);
             }
-            loge("POST fail: subsys=0x%02X result=0x%02X detail=0x%02X",
+            loge("post: subsystem failed (subsys=0x%02X result=0x%02X "
+                 "detail=0x%02X)",
                  static_cast<unsigned>(static_cast<uint8_t>(r.subsystem)),
                  static_cast<unsigned>(static_cast<uint8_t>(r.result)),
                  static_cast<unsigned>(r.error_detail));
