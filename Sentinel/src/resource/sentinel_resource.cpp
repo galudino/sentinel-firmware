@@ -41,6 +41,7 @@ extern "C" {
 
 #include "sentinel_ble_context.hpp"
 #include "sentinel_firmware_version.hpp"
+#include "sentinel_log.hpp"
 #include "sentinel_resource.hpp"
 #include "sentinel_task_debug_stream.hpp"
 
@@ -67,7 +68,12 @@ bool system_initialize() noexcept {
     cy_retarget_io_init(CYBSP_DEBUG_UART_TX, CYBSP_DEBUG_UART_RX,
                         CY_RETARGET_IO_BAUDRATE);
 
-    // Default all logging to INFO.
+    // Initialize the logging facade (serial + BLE sinks). Must precede the
+    // first log call (the banner below).
+    sentinel::logging::init();
+
+    // cy_log still serves the Infineon middleware (OTA, BT stack) that logs
+    // through it internally; the application logs via the facade above.
     cy_log_init(CY_LOG_LEVEL_T::CY_LOG_INFO, nullptr, nullptr);
     cy_ota_set_log_level(CY_LOG_LEVEL_T::CY_LOG_INFO);
 
@@ -81,22 +87,16 @@ bool system_initialize() noexcept {
 
     // Banner — APP_NAME_STRING is the build define ("sentinel-firmware" or
     // "sentinel-testbench"), so one definition serves both targets.
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-               "%s ==============================\r\n",
-               SENTINEL_STRINGIZE(APP_NAME_STRING));
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO, "Application version: %d.%d.%d.%d\n",
-               current_firmware_version.major(),
-               current_firmware_version.minor(),
-               current_firmware_version.patch(),
-               current_firmware_version.build());
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-               "================================================\n\n");
+    logi("%s ==============================",
+         SENTINEL_STRINGIZE(APP_NAME_STRING));
+    logi("Application version: %d.%d.%d.%d", current_firmware_version.major(),
+         current_firmware_version.minor(), current_firmware_version.patch(),
+         current_firmware_version.build());
+    logi("================================================");
 
 #ifdef TEST_REVERT
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-               "======================TESTING REVERT==========================\r\n");
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-               "=========================== Rebooting !!!======================\r\n");
+    logi("======================TESTING REVERT==========================");
+    logi("=========================== Rebooting !!!======================");
     NVIC_SystemReset();
 #else
     // Validate the update so we do not revert on reboot.
@@ -124,8 +124,7 @@ bool system_initialize() noexcept {
         // Do NOT brick the boot: POST records the BLE-stack failure and the
         // device runs degraded (decision #12). All non-BLE subsystems still come
         // up through the orchestrator.
-        cy_log_msg(CYLF_DEF, CY_LOG_ERR,
-                   "*** Bluetooth stack initialization failed! ***\r\n");
+        loge("*** Bluetooth stack initialization failed! ***");
     }
 
     return ble_stack_ok;

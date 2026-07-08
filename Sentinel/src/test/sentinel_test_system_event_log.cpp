@@ -69,11 +69,8 @@ uint8_t *alloc_buffer(uint32_t records) noexcept {
 void report(const char *name, bool ok, const char *detail) noexcept {
     if (ok) {
         logi("%s PASS", name);
-        cy_log_msg(CYLF_DEF, CY_LOG_INFO, "event_log %s PASS\n", name);
     } else {
         loge("%s FAIL: %s", name, detail);
-        cy_log_msg(CYLF_DEF, CY_LOG_INFO, "event_log %s FAIL: %s\n", name,
-                   detail);
     }
 }
 

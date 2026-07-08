@@ -328,7 +328,7 @@ public:
     static void record_results(Log &log, const summary &s) noexcept {
         if (s.all_passed) {
             log.record_post_passed();
-            logi("POST: all subsystems passed", "");
+            logi("POST: all subsystems passed");
             return;
         }
 

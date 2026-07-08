@@ -200,18 +200,13 @@ void rtc_service::run() {
     if (!configure_square_wave(rtc)) {
         loge("rtc_service: 1 Hz SQW config failed (last_err=%d)",
              static_cast<int>(rtc.last_error()));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
-                   "RTC service: 1 Hz SQW config failed (last_err=%d)\n",
-                   static_cast<int>(rtc.last_error()));
         vTaskDelete(nullptr);
         return;
     }
 
     configure_sqw_interrupt();
 
-    logi("rtc_service: 1 Hz SQW armed (falling-edge IRQ on P6_3)", "");
-    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-               "RTC service: 1 Hz SQW armed (falling-edge IRQ on P6_3)\n");
+    logi("rtc_service: 1 Hz SQW armed (falling-edge IRQ on P6_3)");
 
     while (true) {
         // Block until the next SQW falling edge (one per second).
@@ -242,9 +237,6 @@ void rtc_service::run() {
         if (!temp) {
             loge("rtc_service: temperature read error %d",
                  static_cast<int>(rtc.last_error()));
-            cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
-                       "rtc_service: temperature error %d\n",
-                       static_cast<int>(rtc.last_error()));
             continue;
         }
 
@@ -263,14 +255,5 @@ void rtc_service::run() {
              static_cast<int>(now->hour), static_cast<int>(now->minute),
              static_cast<int>(now->second), sign, static_cast<int>(whole),
              static_cast<int>(frac));
-
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "rtc_service: %04d-%02d-%02d %s %02d:%02d:%02d  "
-                   "T=%c%d.%02d C\n",
-                   static_cast<int>(now->year), static_cast<int>(now->month),
-                   static_cast<int>(now->date), day_name(now->day_of_week),
-                   static_cast<int>(now->hour), static_cast<int>(now->minute),
-                   static_cast<int>(now->second), sign, static_cast<int>(whole),
-                   static_cast<int>(frac));
     }
 }

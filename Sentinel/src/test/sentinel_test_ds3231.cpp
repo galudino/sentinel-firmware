@@ -153,16 +153,13 @@ struct fixture {
 
 bool fixture::presence_check() noexcept {
     auto rtc = ds3231_t(ds3231_bus);
-    logi("DS3231 presence_check: driver constructed", "");
+    logi("DS3231 presence_check: driver constructed");
     yield_for_debug_drain(200);
 
     auto status = rtc.status();
     if (!status) {
         loge("presence_check FAIL: status read error %d",
              static_cast<int>(rtc.last_error()));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "DS3231 presence_check FAIL: status read error %d\n",
-                   static_cast<int>(rtc.last_error()));
         return false;
     }
 
@@ -171,9 +168,7 @@ bool fixture::presence_check() noexcept {
     // bits at positions 4..6 that always read 0, so 0xFF is impossible
     // from a working part.
     if (*status == 0xFF) {
-        loge("presence_check FAIL: status=0xFF (no slave?)", "");
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "DS3231 presence_check FAIL: status=0xFF\n");
+        loge("presence_check FAIL: status=0xFF (no slave?)");
         return false;
     }
 
@@ -181,23 +176,16 @@ bool fixture::presence_check() noexcept {
     if (!osf) {
         loge("presence_check FAIL: OSF read error %d",
              static_cast<int>(rtc.last_error()));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "DS3231 presence_check FAIL: OSF read error %d\n",
-                   static_cast<int>(rtc.last_error()));
         return false;
     }
 
     logi("presence_check PASS: status=0x%02X OSF=%d", static_cast<int>(*status),
          *osf ? 1 : 0);
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-               "DS3231 presence_check PASS: status=0x%02X OSF=%d\n",
-               static_cast<int>(*status), *osf ? 1 : 0);
 
     if (*osf) {
-        logw(
-            "presence_check: oscillator-stop flag set; time may be "
-            "uninitialized. Call set_time() then clear_oscillator_stop_flag().",
-            "");
+        logw("presence_check: oscillator-stop flag set; time may be "
+             "uninitialized. Call set_time() then "
+             "clear_oscillator_stop_flag().");
     }
 
     return true;
@@ -209,7 +197,7 @@ bool fixture::presence_check() noexcept {
 
 bool fixture::register_round_trip() noexcept {
     auto rtc = ds3231_t(ds3231_bus);
-    logi("DS3231 register_round_trip: driver constructed", "");
+    logi("DS3231 register_round_trip: driver constructed");
     yield_for_debug_drain(200);
 
     // Snapshot original aging-offset so we can restore it.
@@ -217,9 +205,6 @@ bool fixture::register_round_trip() noexcept {
     if (!original) {
         loge("register_round_trip FAIL: initial read error %d",
              static_cast<int>(rtc.last_error()));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "DS3231 register_round_trip FAIL: initial read error %d\n",
-                   static_cast<int>(rtc.last_error()));
         return false;
     }
     logi("register_round_trip: original aging_offset=%d",
@@ -234,9 +219,6 @@ bool fixture::register_round_trip() noexcept {
     if (!rtc.set_aging_offset(target)) {
         loge("register_round_trip FAIL: write error %d",
              static_cast<int>(rtc.last_error()));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "DS3231 register_round_trip FAIL: write error %d\n",
-                   static_cast<int>(rtc.last_error()));
         return false;
     }
 
@@ -244,9 +226,6 @@ bool fixture::register_round_trip() noexcept {
     if (!readback) {
         loge("register_round_trip FAIL: readback error %d",
              static_cast<int>(rtc.last_error()));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "DS3231 register_round_trip FAIL: readback error %d\n",
-                   static_cast<int>(rtc.last_error()));
         return false;
     }
 
@@ -254,17 +233,10 @@ bool fixture::register_round_trip() noexcept {
     if (*readback != target) {
         loge("register_round_trip FAIL: readback %d != expected %d",
              static_cast<int>(*readback), static_cast<int>(target));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "DS3231 register_round_trip FAIL: readback %d != %d\n",
-                   static_cast<int>(*readback), static_cast<int>(target));
         ok = false;
     } else {
         logi("register_round_trip PASS: aging_offset readback=%d",
              static_cast<int>(*readback));
-        cy_log_msg(
-            CYLF_DEF, CY_LOG_INFO,
-            "DS3231 register_round_trip PASS: aging_offset readback=%d\n",
-            static_cast<int>(*readback));
         ok = true;
     }
 
@@ -284,7 +256,7 @@ bool fixture::register_round_trip() noexcept {
 
 bool fixture::time_read() noexcept {
     auto rtc = ds3231_t(ds3231_bus);
-    logi("DS3231 time_read: driver constructed", "");
+    logi("DS3231 time_read: driver constructed");
     yield_for_debug_drain(200);
 
     // Three sequential reads ~500 ms apart. If the oscillator is running
@@ -298,9 +270,6 @@ bool fixture::time_read() noexcept {
         if (!now) {
             loge("time_read FAIL: read %d returned error %d",
                  static_cast<int>(i), static_cast<int>(rtc.last_error()));
-            cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                       "DS3231 time_read FAIL: read %d error %d\n",
-                       static_cast<int>(i), static_cast<int>(rtc.last_error()));
             return false;
         }
 
@@ -321,15 +290,10 @@ bool fixture::time_read() noexcept {
     }
 
     if (observed_change) {
-        logi("time_read PASS: seconds field changed across reads", "");
-        cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-                   "DS3231 time_read PASS: oscillator is running\n");
+        logi("time_read PASS: seconds field changed across reads");
     } else {
         logw("time_read: seconds did not change across 1s of reads — "
-             "could be coincidence at boundary, or oscillator stopped",
-             "");
-        cy_log_msg(CYLF_DEF, CY_LOG_WARNING,
-                   "DS3231 time_read WARN: seconds unchanged (boundary?)\n");
+             "could be coincidence at boundary, or oscillator stopped");
     }
 
     // The seconds-unchanged case is a tolerated warning (clock boundary), not
@@ -343,7 +307,7 @@ bool fixture::time_read() noexcept {
 
 bool fixture::time_write() noexcept {
     auto rtc = ds3231_t(ds3231_bus);
-    logi("DS3231 time_write: driver constructed", "");
+    logi("DS3231 time_write: driver constructed");
     yield_for_debug_drain(200);
 
     // Snapshot the pre-write time for the log; we do not restore.
@@ -351,9 +315,6 @@ bool fixture::time_write() noexcept {
     if (!before) {
         loge("time_write FAIL: initial read error %d",
              static_cast<int>(rtc.last_error()));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "DS3231 time_write FAIL: initial read error %d\n",
-                   static_cast<int>(rtc.last_error()));
         return false;
     }
     logi("time_write[before]: %04d-%02d-%02d %s %02d:%02d:%02d",
@@ -381,9 +342,6 @@ bool fixture::time_write() noexcept {
     if (!rtc.set_time(target)) {
         loge("time_write FAIL: set_time error %d",
              static_cast<int>(rtc.last_error()));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "DS3231 time_write FAIL: set_time error %d\n",
-                   static_cast<int>(rtc.last_error()));
         return false;
     }
 
@@ -394,9 +352,6 @@ bool fixture::time_write() noexcept {
     if (!after) {
         loge("time_write FAIL: readback error %d",
              static_cast<int>(rtc.last_error()));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "DS3231 time_write FAIL: readback error %d\n",
-                   static_cast<int>(rtc.last_error()));
         return false;
     }
 
@@ -428,8 +383,6 @@ bool fixture::time_write() noexcept {
              static_cast<int>(after->month), static_cast<int>(after->date),
              day_name(after->day_of_week), static_cast<int>(after->hour),
              static_cast<int>(after->minute), static_cast<int>(after->second));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "DS3231 time_write FAIL: readback mismatch\n");
         return false;
     }
 
@@ -447,11 +400,6 @@ bool fixture::time_write() noexcept {
          static_cast<int>(after->hour), static_cast<int>(after->minute),
          static_cast<int>(after->second),
          static_cast<int>(after->second - target.second));
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-               "DS3231 time_write PASS: wrote 2024-02-29 12:34:56 Thu, "
-               "readback %02d:%02d:%02d (OSF cleared, time NOT restored)\n",
-               static_cast<int>(after->hour), static_cast<int>(after->minute),
-               static_cast<int>(after->second));
     return true;
 }
 
@@ -461,7 +409,7 @@ bool fixture::time_write() noexcept {
 
 bool fixture::time_sync_from_build() noexcept {
     auto rtc = ds3231_t(ds3231_bus);
-    logi("DS3231 time_sync_from_build: driver constructed", "");
+    logi("DS3231 time_sync_from_build: driver constructed");
     yield_for_debug_drain(200);
 
     // Log the build moment that the helper is about to push to the RTC.
@@ -481,9 +429,6 @@ bool fixture::time_sync_from_build() noexcept {
     if (!sentinel::build_time::sync_from_build_time(rtc)) {
         loge("time_sync_from_build FAIL: sync helper error %d",
              static_cast<int>(rtc.last_error()));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "DS3231 time_sync_from_build FAIL: sync error %d\n",
-                   static_cast<int>(rtc.last_error()));
         return false;
     }
 
@@ -491,9 +436,6 @@ bool fixture::time_sync_from_build() noexcept {
     if (!after) {
         loge("time_sync_from_build FAIL: post-sync read error %d",
              static_cast<int>(rtc.last_error()));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "DS3231 time_sync_from_build FAIL: read error %d\n",
-                   static_cast<int>(rtc.last_error()));
         return false;
     }
 
@@ -521,13 +463,6 @@ bool fixture::time_sync_from_build() noexcept {
          static_cast<int>(after->date), day_name(after->day_of_week),
          static_cast<int>(after->hour), static_cast<int>(after->minute),
          static_cast<int>(after->second));
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-               "DS3231 time_sync_from_build PASS: RTC now "
-               "%04d-%02d-%02d %s %02d:%02d:%02d\n",
-               static_cast<int>(after->year), static_cast<int>(after->month),
-               static_cast<int>(after->date), day_name(after->day_of_week),
-               static_cast<int>(after->hour), static_cast<int>(after->minute),
-               static_cast<int>(after->second));
     return true;
 }
 
@@ -537,7 +472,7 @@ bool fixture::time_sync_from_build() noexcept {
 
 bool fixture::temperature_read() noexcept {
     auto rtc = ds3231_t(ds3231_bus);
-    logi("DS3231 temperature_read: driver constructed", "");
+    logi("DS3231 temperature_read: driver constructed");
     yield_for_debug_drain(200);
 
     // Read whatever the last scheduled conversion left in the registers.
@@ -545,9 +480,6 @@ bool fixture::temperature_read() noexcept {
     if (!first) {
         loge("temperature_read FAIL: initial read error %d",
              static_cast<int>(rtc.last_error()));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "DS3231 temperature_read FAIL: initial read error %d\n",
-                   static_cast<int>(rtc.last_error()));
         return false;
     }
     auto sign_a = char{};
@@ -562,12 +494,9 @@ bool fixture::temperature_read() noexcept {
     if (!rtc.start_temperature_conversion()) {
         loge("temperature_read FAIL: start_conversion error %d",
              static_cast<int>(rtc.last_error()));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "DS3231 temperature_read FAIL: start_conversion error %d\n",
-                   static_cast<int>(rtc.last_error()));
         return false;
     }
-    logi("temperature_read: CONV set, polling BSY...", "");
+    logi("temperature_read: CONV set, polling BSY...");
 
     // Poll BSY for up to ~200 ms. The datasheet quotes typical conversion
     // time at ~125 ms.
@@ -578,9 +507,6 @@ bool fixture::temperature_read() noexcept {
         if (!busy) {
             loge("temperature_read FAIL: BSY poll error %d",
                  static_cast<int>(rtc.last_error()));
-            cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                       "DS3231 temperature_read FAIL: BSY poll error %d\n",
-                       static_cast<int>(rtc.last_error()));
             return false;
         }
         if (!*busy) {
@@ -590,9 +516,7 @@ bool fixture::temperature_read() noexcept {
     }
 
     if (!completed) {
-        loge("temperature_read FAIL: BSY did not clear within 200ms", "");
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "DS3231 temperature_read FAIL: BSY timeout\n");
+        loge("temperature_read FAIL: BSY did not clear within 200ms");
         return false;
     }
 
@@ -600,9 +524,6 @@ bool fixture::temperature_read() noexcept {
     if (!second) {
         loge("temperature_read FAIL: post-conversion read error %d",
              static_cast<int>(rtc.last_error()));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "DS3231 temperature_read FAIL: post-conv read error %d\n",
-                   static_cast<int>(rtc.last_error()));
         return false;
     }
     auto sign_b = char{};
@@ -612,9 +533,6 @@ bool fixture::temperature_read() noexcept {
     logi("temperature_read[post-conv]: %c%d.%02d C", sign_b,
          static_cast<int>(whole_b), static_cast<int>(frac_b));
 
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-               "DS3231 temperature_read PASS: %c%d.%02d C\n", sign_b,
-               static_cast<int>(whole_b), static_cast<int>(frac_b));
     return true;
 }
 
@@ -624,7 +542,7 @@ bool fixture::temperature_read() noexcept {
 
 bool fixture::alarm_round_trip() noexcept {
     auto rtc = ds3231_t(ds3231_bus);
-    logi("DS3231 alarm_round_trip: driver constructed", "");
+    logi("DS3231 alarm_round_trip: driver constructed");
     yield_for_debug_drain(200);
 
     // Keep alarm interrupts off across the test so the INT/SQW pin
@@ -635,9 +553,6 @@ bool fixture::alarm_round_trip() noexcept {
         loge("alarm_round_trip FAIL: could not disable alarm interrupts "
              "(last_err=%d)",
              static_cast<int>(rtc.last_error()));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "DS3231 alarm_round_trip FAIL: disable IE %d\n",
-                   static_cast<int>(rtc.last_error()));
         return false;
     }
 
@@ -653,9 +568,6 @@ bool fixture::alarm_round_trip() noexcept {
     if (!rtc.set_alarm1(alarm1_target)) {
         loge("alarm_round_trip FAIL: set_alarm1 error %d",
              static_cast<int>(rtc.last_error()));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "DS3231 alarm_round_trip FAIL: set_alarm1 %d\n",
-                   static_cast<int>(rtc.last_error()));
         return false;
     }
 
@@ -663,9 +575,6 @@ bool fixture::alarm_round_trip() noexcept {
     if (!alarm1_readback) {
         loge("alarm_round_trip FAIL: get_alarm1 error %d",
              static_cast<int>(rtc.last_error()));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "DS3231 alarm_round_trip FAIL: get_alarm1 %d\n",
-                   static_cast<int>(rtc.last_error()));
         return false;
     }
 
@@ -679,8 +588,6 @@ bool fixture::alarm_round_trip() noexcept {
              static_cast<int>(alarm1_readback->minute),
              static_cast<int>(alarm1_readback->second),
              static_cast<int>(alarm1_readback->match_mode));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "DS3231 alarm_round_trip FAIL: alarm1 mismatch\n");
         return false;
     }
     logi("alarm_round_trip: alarm1 ok (h=%d m=%d s=%d, hours_minutes_seconds)",
@@ -701,9 +608,6 @@ bool fixture::alarm_round_trip() noexcept {
     if (!rtc.set_alarm2(alarm2_target)) {
         loge("alarm_round_trip FAIL: set_alarm2 error %d",
              static_cast<int>(rtc.last_error()));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "DS3231 alarm_round_trip FAIL: set_alarm2 %d\n",
-                   static_cast<int>(rtc.last_error()));
         return false;
     }
 
@@ -711,9 +615,6 @@ bool fixture::alarm_round_trip() noexcept {
     if (!alarm2_readback) {
         loge("alarm_round_trip FAIL: get_alarm2 error %d",
              static_cast<int>(rtc.last_error()));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "DS3231 alarm_round_trip FAIL: get_alarm2 %d\n",
-                   static_cast<int>(rtc.last_error()));
         return false;
     }
 
@@ -727,8 +628,6 @@ bool fixture::alarm_round_trip() noexcept {
              static_cast<int>(alarm2_readback->minute),
              static_cast<int>(alarm2_readback->day_or_date),
              static_cast<int>(alarm2_readback->match_mode));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "DS3231 alarm_round_trip FAIL: alarm2 mismatch\n");
         return false;
     }
     logi("alarm_round_trip: alarm2 ok (h=%d m=%d dow=%d (%s), "
@@ -742,7 +641,7 @@ bool fixture::alarm_round_trip() noexcept {
     rtc.clear_alarm1_flag();
     rtc.clear_alarm2_flag();
 
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO, "DS3231 alarm_round_trip PASS\n");
+    logi("DS3231 alarm_round_trip PASS");
     return true;
 }
 

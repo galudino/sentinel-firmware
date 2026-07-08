@@ -204,14 +204,9 @@ void bme280_service::run() {
         loge("bme280_service: chip ID 0x%02X (last_err=%d) -- sampling anyway",
              id ? static_cast<int>(*id) : 0xFF,
              static_cast<int>(sensor.last_error()));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
-                   "BME280 service: chip ID 0x%02X at start\n",
-                   id ? static_cast<int>(*id) : 0xFF);
     } else {
         logi("bme280_service: chip ID OK (0x%02X), sampling at %d ms",
              static_cast<int>(*id), static_cast<int>(m_period_ms));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "BME280 service: chip ID OK, sampling started\n");
     }
 
     auto sample_counter = uint32_t{0};
@@ -224,9 +219,6 @@ void bme280_service::run() {
             // crash — the sensor may return.
             loge("bme280_service: read error %d",
                  static_cast<int>(sensor.last_error()));
-            cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
-                       "BME280 service: read error %d\n",
-                       static_cast<int>(sensor.last_error()));
         } else {
             auto s =
                 build_sample(*data, rtc_service::instance().last_unix_time());
@@ -245,13 +237,6 @@ void bme280_service::run() {
                      static_cast<int>(t_whole), static_cast<int>(t_frac),
                      static_cast<int>(s.pressure_pa), static_cast<int>(h_whole),
                      static_cast<int>(h_frac));
-                cy_log_msg(
-                    CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                    "BME280 service: T=%c%d.%02d C  P=%d Pa  "
-                    "H=%d.%02d %%\n",
-                    t_sign, static_cast<int>(t_whole), static_cast<int>(t_frac),
-                    static_cast<int>(s.pressure_pa), static_cast<int>(h_whole),
-                    static_cast<int>(h_frac));
             }
 
             ++sample_counter;

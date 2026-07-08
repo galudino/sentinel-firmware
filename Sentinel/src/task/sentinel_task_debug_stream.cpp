@@ -91,7 +91,7 @@ void debug_stream::run() {
     /// TODO: Wait for Persistent Task to be ready
 
     // Send a startup message to confirm the pipeline is working
-    logi("Debug Stream Task started - BLE debug output ready", "");
+    logi("Debug Stream Task started - BLE debug output ready");
 
     // NOTE: Do NOT force-enable here.
     // The client app controls this by writing 1 (enable) or 0 (disable)
