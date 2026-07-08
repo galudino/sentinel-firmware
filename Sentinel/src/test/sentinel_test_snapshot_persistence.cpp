@@ -22,7 +22,6 @@
 #pragma GCC diagnostic ignored "-Wpedantic"
 extern "C" {
 #include "FreeRTOS.h"
-#include "cy_log.h"
 #include "cycfg_pins.h"
 #include "task.h"
 }
@@ -104,21 +103,15 @@ bool fixture::presence_check() noexcept {
     if (!task.erase_all()) {
         loge("presence_check FAIL: erase_all error %d",
              static_cast<int>(store.last_error()));
-        cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-                   "snapshot_persistence presence_check FAIL: erase_all\n");
         return false;
     }
     if (task.count() != 0u) {
         loge("presence_check FAIL: count=%u expected 0",
              static_cast<unsigned>(task.count()));
-        cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-                   "snapshot_persistence presence_check FAIL: not empty\n");
         return false;
     }
 
-    logi("presence_check PASS: fresh store empty", "");
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-               "snapshot_persistence presence_check PASS\n");
+    logi("presence_check PASS: fresh store empty");
     return true;
 }
 
@@ -138,9 +131,6 @@ bool fixture::capture_and_readback() noexcept {
             loge("capture_and_readback FAIL: capture %u error %d",
                  static_cast<unsigned>(i),
                  static_cast<int>(store.last_error()));
-            cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-                       "snapshot_persistence capture FAIL: capture %u\n",
-                       static_cast<unsigned>(i));
             return false;
         }
     }
@@ -149,8 +139,6 @@ bool fixture::capture_and_readback() noexcept {
         loge("capture_and_readback FAIL: count=%u expected %u",
              static_cast<unsigned>(task.count()),
              static_cast<unsigned>(kCount));
-        cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-                   "snapshot_persistence capture FAIL: count mismatch\n");
         return false;
     }
 
@@ -159,18 +147,12 @@ bool fixture::capture_and_readback() noexcept {
         if (!task.read(i, &s) || !snapshot_well_formed(s)) {
             loge("capture_and_readback FAIL: read/verify index %u",
                  static_cast<unsigned>(i));
-            cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-                       "snapshot_persistence capture FAIL: read %u\n",
-                       static_cast<unsigned>(i));
             return false;
         }
     }
 
     logi("capture_and_readback PASS: %u snapshots round-tripped",
          static_cast<unsigned>(kCount));
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-               "snapshot_persistence capture PASS: %u snapshots\n",
-               static_cast<unsigned>(kCount));
     return true;
 }
 
@@ -193,9 +175,7 @@ bool fixture::read_range_ordered() noexcept {
 
     snapshot out[kCount]{};
     if (!task.read_range(0, kCount, out)) {
-        loge("read_range_ordered FAIL: read_range error", "");
-        cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-                   "snapshot_persistence read_range FAIL: read_range\n");
+        loge("read_range_ordered FAIL: read_range error");
         return false;
     }
 
@@ -205,23 +185,17 @@ bool fixture::read_range_ordered() noexcept {
         if (!snapshot_well_formed(out[i])) {
             loge("read_range_ordered FAIL: malformed at %u",
                  static_cast<unsigned>(i));
-            cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-                       "snapshot_persistence read_range FAIL: malformed\n");
             return false;
         }
         if (i > 0 && out[i].uptime_seconds < out[i - 1].uptime_seconds) {
             loge("read_range_ordered FAIL: uptime regressed at %u",
                  static_cast<unsigned>(i));
-            cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-                       "snapshot_persistence read_range FAIL: order\n");
             return false;
         }
     }
 
     logi("read_range_ordered PASS: %u snapshots in order",
          static_cast<unsigned>(kCount));
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-               "snapshot_persistence read_range PASS\n");
     return true;
 }
 
@@ -242,23 +216,17 @@ bool fixture::capture_now_increments() noexcept {
     if (!task.capture_now()) {
         loge("capture_now_increments FAIL: capture error %d",
              static_cast<int>(store.last_error()));
-        cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-                   "snapshot_persistence capture_now FAIL: capture\n");
         return false;
     }
     if (task.count() != before + 1u) {
         loge("capture_now_increments FAIL: count %u -> %u (expected +1)",
              static_cast<unsigned>(before),
              static_cast<unsigned>(task.count()));
-        cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-                   "snapshot_persistence capture_now FAIL: count\n");
         return false;
     }
 
     logi("capture_now_increments PASS: count %u -> %u",
          static_cast<unsigned>(before), static_cast<unsigned>(task.count()));
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-               "snapshot_persistence capture_now PASS\n");
     return true;
 }
 
@@ -280,9 +248,6 @@ bool fixture::wrap_around() noexcept {
             loge("wrap_around FAIL: capture %u error %d",
                  static_cast<unsigned>(i),
                  static_cast<int>(store.last_error()));
-            cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-                       "snapshot_persistence wrap FAIL: capture %u\n",
-                       static_cast<unsigned>(i));
             return false;
         }
     }
@@ -293,8 +258,6 @@ bool fixture::wrap_around() noexcept {
         loge("wrap_around FAIL: count=%u capacity=%u",
              static_cast<unsigned>(task.count()),
              static_cast<unsigned>(capacity));
-        cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-                   "snapshot_persistence wrap FAIL: count bound\n");
         return false;
     }
 
@@ -306,8 +269,6 @@ bool fixture::wrap_around() noexcept {
         !task.read(head - 1u, &newest) || !snapshot_well_formed(newest)) {
         loge("wrap_around FAIL: tail/head read (tail=%u head=%u)",
              static_cast<unsigned>(tail), static_cast<unsigned>(head));
-        cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-                   "snapshot_persistence wrap FAIL: edge read\n");
         return false;
     }
 
@@ -315,17 +276,12 @@ bool fixture::wrap_around() noexcept {
     if (tail > 0u && task.read(tail - 1u, &evicted)) {
         loge("wrap_around FAIL: evicted record %u still readable",
              static_cast<unsigned>(tail - 1u));
-        cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-                   "snapshot_persistence wrap FAIL: evicted readable\n");
         return false;
     }
 
     logi("wrap_around PASS: count=%u tail=%u head=%u",
          static_cast<unsigned>(task.count()), static_cast<unsigned>(tail),
          static_cast<unsigned>(head));
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-               "snapshot_persistence wrap PASS: count=%u\n",
-               static_cast<unsigned>(task.count()));
     return true;
 }
 

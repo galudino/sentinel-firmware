@@ -67,7 +67,7 @@ int sentinel::logging::format_unix_timestamp_ms(int64_t unix_time_ms,
     return length;
 }
 
-int sentinel::logging::build_string(char *out, size_t size,
+int sentinel::logging::build_string(char *out, size_t size, uint16_t seq,
                                     uint64_t unix_time_ms, const char *file,
                                     int line, const char *function,
                                     const char *level, const char *fmt,
@@ -80,34 +80,31 @@ int sentinel::logging::build_string(char *out, size_t size,
         }
     }
 
-    // Format timestamp directly into the output buffer first to avoid
-    // a separate 28-byte local array. We'll overwrite it with the full
-    // prefix using snprintf below.
-    //
-    // NOTE: We use %.*s precision specifiers to truncate file/function
-    // names inline — this avoids local char arrays and saves ~32 bytes
-    // of stack, which matters on tasks with 200-300 word stacks.
+    // Format the timestamp into a small local buffer first.
     char timestamp[28];
     format_unix_timestamp_ms(static_cast<int64_t>(unix_time_ms), timestamp,
                              sizeof(timestamp), false);
 
-    // Build the log prefix: "<timestamp> [file:line] function <level> "
-    // %.*s truncates file to 16 chars and function to 14 chars inline
-    auto written =
-        std::snprintf(out, size, "<%s> [%.*s:%d] %.*s <%s> ", timestamp, 16,
-                      basename, line, 14, function, level);
+    // Build the prefix: "<seq> <timestamp> [file:line] function <level> ".
+    // seq is a monotonic per-line index (also the fragment msg_id, #34) so a
+    // gap on serial and a gap on BLE line up. File and function names are
+    // emitted in full — the 512-byte line budget leaves ample room, and a
+    // truncated message is preferable to a truncated source location.
+    auto written = std::snprintf(out, size, "%04u <%s> [%s:%d] %s <%s> ",
+                                 static_cast<unsigned>(seq), timestamp,
+                                 basename, line, function, level);
 
     if (written < 0 || static_cast<size_t>(written) >= size) {
         return written;
     }
 
-    // Calculate how much space remains for the message
-    // Reserve 2 chars for \n and \0
+    // Calculate how much space remains for the message. Reserve 1 char for the
+    // null terminator; the terminator itself (serial '\n' vs BLE '\0') is the
+    // sink's responsibility, so build_string emits no trailing newline.
     size_t remaining = size - static_cast<size_t>(written);
-    size_t max_msg = (remaining > 2) ? (remaining - 2) : 0;
+    size_t max_msg = (remaining > 1) ? (remaining - 1) : 0;
 
-    // Format the message directly into the remaining buffer space
-    // This uses ALL remaining space - no artificial 48-char limit!
+    // Format the message directly into the remaining buffer space.
     if (max_msg > 0) {
         int msg_len = vsnprintf(out + written, max_msg + 1, fmt, args);
 
@@ -119,10 +116,6 @@ int sentinel::logging::build_string(char *out, size_t size,
         }
     }
 
-    // Append newline if there's room
-    if (static_cast<size_t>(written) + 1 < size) {
-        out[written++] = '\n';
-    }
     out[written] = '\0';
 
     return written;

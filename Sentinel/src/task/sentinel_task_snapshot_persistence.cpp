@@ -22,7 +22,6 @@
 #pragma GCC diagnostic ignored "-Wpedantic"
 extern "C" {
 #include "FreeRTOS.h"
-#include "cy_log.h"
 #include "task.h"
 }
 #pragma GCC diagnostic pop
@@ -102,21 +101,12 @@ bool snapshot_persistence_task::capture_now() noexcept {
     auto snapshot = sentinel::telemetry::device_snapshot::make();
 
     if (!store().append(snapshot)) {
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
-                   "Snapshot persistence: append failed (store err=%d)\n",
-                   static_cast<int>(store().last_error()));
-
         loge("snapshot_persistence: append failed (store err=%d)",
              static_cast<int>(store().last_error()));
         return false;
     }
 
     ++m_capture_count;
-
-    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-               "Snapshot persistence: captured #%u (store count=%u)\n",
-               static_cast<unsigned>(m_capture_count),
-               static_cast<unsigned>(store().count()));
 
     logi("snapshot_persistence: captured #%u (store count=%u)",
          static_cast<unsigned>(m_capture_count),
@@ -151,9 +141,6 @@ void snapshot_persistence_task::task_trampoline(void *task_parameter) {
 void snapshot_persistence_task::run() {
     logi("snapshot_persistence: capturing every %d s",
          static_cast<int>(m_period_seconds));
-    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-               "Snapshot persistence: capturing every %d s\n",
-               static_cast<int>(m_period_seconds));
 
     while (true) {
         // Capture first so the very first snapshot is the boot anchor, then

@@ -25,12 +25,10 @@
 ///          bus-arbitrated transport (the canonical "fixture holds the shared
 ///          resource" shape), so there is no file-static bus global.
 ///
-///          Each test logs progress through both the BLE debug stream
-///          (\c logi / \c loge) and the retarget-IO UART serial monitor
-///          (\c cy_log_msg). \c logi / \c loge are best-effort writes into a
-///          256-byte ring buffer drained by the BLE debug-stream task;
-///          \c cy_log_msg always reaches the UART, so it carries the
-///          PASS / FAIL summary lines that must not be dropped.
+///          Each test logs progress through the unified logging facade
+///          (\c logi / \c loge, #50), which formats each line once and fans it
+///          out to both the retarget-IO UART serial monitor and the BLE
+///          debug stream. PASS / FAIL summary lines carry the test verdict.
 ///
 /// \author  galudino
 /// \date    2026-05-15

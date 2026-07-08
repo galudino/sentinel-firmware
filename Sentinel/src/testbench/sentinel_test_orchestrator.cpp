@@ -16,7 +16,6 @@
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
 extern "C" {
-#include "cy_log.h"
 #include <FreeRTOS.h>
 #include <task.h>
 
@@ -68,14 +67,13 @@ struct group_result {
 
 /// Print a horizontal rule to the UART diagnostic log.
 void rule() noexcept {
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-               "========================================================\n");
+    logi("========================================================");
 }
 
 /// Print a boxed banner to the UART diagnostic log.
 void banner(const char *title) noexcept {
     rule();
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO, "  %s\n", title);
+    logi("  %s", title);
     rule();
 }
 
@@ -129,10 +127,10 @@ void test_orchestrator::run() {
     //   - battery_service: only acts when BLE-connected + notifications
     //   enabled.
     if (task::snapshot_stream_task::instance().task_create() != pdPASS) {
-        loge("orchestrator: snapshot_stream_task create failed", "");
+        loge("orchestrator: snapshot_stream_task create failed");
     }
     if (task::battery_service::instance().task_create() != pdPASS) {
-        loge("orchestrator: battery_service create failed", "");
+        loge("orchestrator: battery_service create failed");
     }
 
     group_result groups[kMaxGroups]{};
@@ -141,15 +139,13 @@ void test_orchestrator::run() {
     // Run one group to completion: print its header, call the suite's
     // synchronous run_all(), print its result line, and retain the tally.
     auto run_group = [&](const char *name, sentinel::test::tally (*run_all)()) {
-        cy_log_msg(CYLF_DEF, CY_LOG_INFO, "\n---- [ %s ] ----\n", name);
         logi("---- [ %s ] ----", name);
 
         const auto result = run_all();
 
-        cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-                   "---- [ %s ] done: %u passed, %u failed ----\n", name,
-                   static_cast<unsigned>(result.passed),
-                   static_cast<unsigned>(result.failed));
+        logi("---- [ %s ] done: %u passed, %u failed ----", name,
+             static_cast<unsigned>(result.passed),
+             static_cast<unsigned>(result.failed));
 
         if (count < kMaxGroups) {
             groups[count].name = name;
@@ -180,25 +176,22 @@ void test_orchestrator::run() {
     auto overall = sentinel::test::tally{};
     for (auto i = int{0}; i < count; ++i) {
         overall += groups[i].tally;
-        cy_log_msg(CYLF_DEF, CY_LOG_INFO, "  %-20s %2u passed, %2u failed%s\n",
-                   groups[i].name,
-                   static_cast<unsigned>(groups[i].tally.passed),
-                   static_cast<unsigned>(groups[i].tally.failed),
-                   groups[i].tally.all_passed() ? "" : "   <-- FAIL");
+        logi("  %-20s %2u passed, %2u failed%s", groups[i].name,
+             static_cast<unsigned>(groups[i].tally.passed),
+             static_cast<unsigned>(groups[i].tally.failed),
+             groups[i].tally.all_passed() ? "" : "   <-- FAIL");
     }
     rule();
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO, "  TOTAL: %u passed, %u failed\n",
-               static_cast<unsigned>(overall.passed),
-               static_cast<unsigned>(overall.failed));
+    logi("  TOTAL: %u passed, %u failed", static_cast<unsigned>(overall.passed),
+         static_cast<unsigned>(overall.failed));
     banner(overall.all_passed() ? "ALL TESTS PASSED" : "SOME TESTS FAILED");
 
     // -------- Hand off to the continuous readers --------
     // Only now — after every one-shot group has completed — start the ~1 Hz
     // serial readers, so their output can never interleave the diagnostic above
     // (#48 AC readers_start_after).
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-               "\nStarting continuous reader services "
-               "(rtc_service, bme280_service)...\n");
+    logi("testbench: starting continuous reader services "
+         "(rtc_service, bme280_service)...");
 
     // Build the shared device context HERE — a single first-touch from this one
     // task — before either reader starts. With -fno-threadsafe-statics (decision
@@ -211,10 +204,10 @@ void test_orchestrator::run() {
     (void)sentinel::resource::context();
 
     if (task::rtc_service::instance().task_create() != pdPASS) {
-        loge("orchestrator: rtc_service create failed", "");
+        loge("orchestrator: rtc_service create failed");
     }
     if (task::bme280_service::instance().task_create() != pdPASS) {
-        loge("orchestrator: bme280_service create failed", "");
+        loge("orchestrator: bme280_service create failed");
     }
 
     // One-shot: a FreeRTOS task must not fall off the end of its entry function

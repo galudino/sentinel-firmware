@@ -29,7 +29,6 @@
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
 extern "C" {
-#include "cy_log.h"
 #include <FreeRTOS.h>
 #include <task.h>
 }
@@ -102,9 +101,7 @@ const char *result_name(sentinel::diagnostics::post_result r) noexcept {
 /// \brief Start a service task, logging on failure (boot continues regardless).
 void start_task(const char *name, BaseType_t rc) noexcept {
     if (rc != pdPASS) {
-        loge("orchestrator: %s create failed", name);
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
-                   "boot orchestrator: %s create failed\n", name);
+        loge("boot: %s task create failed", name);
     }
 }
 
@@ -132,43 +129,37 @@ void boot_orchestrator::run() {
     namespace res  = sentinel::resource;
     namespace diag = sentinel::diagnostics;
 
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-               "\nboot orchestrator: starting boot sequence\n");
+    logi("boot: starting sequence");
 
     // ---- 1. Build the shared device context + scan the flash stores. ----
     // First touch of context() constructs the drivers here, post-scheduler, so
     // the BME280 calibration read goes through the running I²C arbiter. The two
     // region scans are O(capacity) (~8 k SPI reads each — slow; see issue #49),
     // so the progress lines below matter: without them a healthy boot looks hung.
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO, "boot: building device context...\n");
+    logi("boot: building device context...");
     auto &ctx = res::context();
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-               "boot: device context built (BME280 init err=%d)\n",
-               static_cast<int>(ctx.bme.last_error()));
+    logi("boot: device context built (BME280 init err=%d)",
+         static_cast<int>(ctx.bme.last_error()));
 
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-               "boot: scanning event-log region (%u slots)...\n",
-               static_cast<unsigned>(ctx.event_store.capacity()));
+    logi("boot: scanning event-log region (%u slots)...",
+         static_cast<unsigned>(ctx.event_store.capacity()));
     const auto event_ok = ctx.event_store.initialize();
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-               "boot: event log ready (ok=%d, %u records)\n",
-               static_cast<int>(event_ok),
-               static_cast<unsigned>(ctx.event_store.count()));
+    logi("boot: event log ready (ok=%d, %u records)",
+         static_cast<int>(event_ok),
+         static_cast<unsigned>(ctx.event_store.count()));
 
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-               "boot: scanning snapshot region (%u slots)...\n",
-               static_cast<unsigned>(ctx.snapshot_store.capacity()));
+    logi("boot: scanning snapshot region (%u slots)...",
+         static_cast<unsigned>(ctx.snapshot_store.capacity()));
     const auto snapshot_ok = ctx.snapshot_store.initialize();
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-               "boot: snapshot history ready (ok=%d, %u records)\n",
-               static_cast<int>(snapshot_ok),
-               static_cast<unsigned>(ctx.snapshot_store.count()));
+    logi("boot: snapshot history ready (ok=%d, %u records)",
+         static_cast<int>(snapshot_ok),
+         static_cast<unsigned>(ctx.snapshot_store.count()));
 
     const auto log_ok = res::event_log_t::instance().initialize(
         ctx.event_store, &res::now_unix_seconds);
     res::g_context_ready = event_ok && snapshot_ok && log_ok;
     if (!res::g_context_ready) {
-        loge("orchestrator: flash store init failed (event/snapshot scan)", "");
+        loge("boot: flash store init failed (event/snapshot scan)");
         // Continue regardless — POST will record the record-store failure and
         // the device runs degraded (decision #12).
     }
@@ -176,7 +167,7 @@ void boot_orchestrator::run() {
     // ---- 2. POST against the real drivers; log + record each probe. ----
     // probe_record_store now reuses the already-initialized event store (no
     // redundant rescan), so POST is fast and the per-probe lines print promptly.
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO, "\n---- [ POST ] ----\n");
+    logi("---- [ POST ] ----");
     // Time only the probe phase (no interleaved logging inside run()), so the
     // reported duration is the true POST timing for #35's "< 100 ms" hardware AC
     // — the multi-second flash scans above are NOT part of POST.
@@ -188,14 +179,10 @@ void boot_orchestrator::run() {
         (xTaskGetTickCount() - post_start_ticks) * portTICK_PERIOD_MS);
     for (auto i = uint8_t{0}; i < summary.count; ++i) {
         const auto &r = summary.results[i];
-        logi("post %s %s", subsystem_name(r.subsystem), result_name(r.result));
-        cy_log_msg(CYLF_DEF, CY_LOG_INFO, "post %s %s\n",
-                   subsystem_name(r.subsystem), result_name(r.result));
+        logi("post: %s %s", subsystem_name(r.subsystem), result_name(r.result));
     }
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO, "---- [ POST ] done in %u ms: %s ----\n",
-               post_ms,
-               summary.all_passed ? "all subsystems passed"
-                                  : "failures recorded");
+    logi("---- [ POST ] done in %u ms: %s ----", post_ms,
+         summary.all_passed ? "all subsystems passed" : "failures recorded");
     ctx.post_last_status = first_failure_id(summary);
     diag::post::record_results(ctx.event_log(), summary); // enqueues records
 
@@ -206,7 +193,7 @@ void boot_orchestrator::run() {
     start_task("event log", ctx.event_log().task_create());
 
     // ---- 4. Start the service tasks. ----
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO, "boot: starting service tasks...\n");
+    logi("boot: starting service tasks...");
     start_task("rtc service", task::rtc_service::instance().task_create());
     start_task("bme280 service", task::bme280_service::instance().task_create());
     start_task("snapshot persistence",
@@ -216,9 +203,8 @@ void boot_orchestrator::run() {
     start_task("battery service",
                task::battery_service::instance().task_create());
 
-    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-               "boot orchestrator: boot complete, %s\n",
-               summary.all_passed ? "POST passed" : "POST reported failures");
+    logi("boot: complete (%s)",
+         summary.all_passed ? "POST passed" : "POST reported failures");
 
     // ---- 5. One-shot: a FreeRTOS task must not return; delete self. ----
     m_handle = nullptr;

@@ -25,7 +25,6 @@
 #pragma GCC diagnostic ignored "-Wpedantic"
 extern "C" {
 #include "FreeRTOS.h"
-#include "cy_log.h"
 #include "task.h"
 }
 #pragma GCC diagnostic pop
@@ -115,9 +114,7 @@ void snapshot_stream_task::task_trampoline(void *task_parameter) {
 }
 
 void snapshot_stream_task::run() {
-    logi("snapshot_stream: idle (awaiting capture session)", "");
-    cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-               "Snapshot stream: idle (awaiting capture session)\n");
+    logi("snapshot_stream: idle (awaiting capture session)");
 
     while (true) {
         // ---- Idle: block with zero CPU until start() wakes us. ----
@@ -129,8 +126,6 @@ void snapshot_stream_task::run() {
 
         logi("snapshot_stream: streaming at %d ms",
              static_cast<int>(m_period_ms));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "Snapshot stream: streaming started\n");
 
         // ---- Stream: notify at the cadence while enabled AND connected. ----
         while (m_streaming && central_connected()) {
@@ -148,8 +143,6 @@ void snapshot_stream_task::run() {
         // stop() already cleared the flag; this makes disconnect equivalent.
         m_streaming = false;
 
-        logi("snapshot_stream: returned to idle", "");
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "Snapshot stream: returned to idle\n");
+        logi("snapshot_stream: returned to idle");
     }
 }

@@ -29,7 +29,6 @@ extern "C" {
 #include "FreeRTOS.h"
 #include "bme280.h"
 #include "bme280_defs.h"
-#include "cy_log.h"
 #include "queue.h"
 #include "semphr.h"
 #include "task.h"
@@ -200,18 +199,16 @@ void bme280_service::run() {
     // the loop still runs so the task survives a sensor that is absent at boot
     // and appears later (resilience), and latest() keeps reporting
     // valid == false until a real reading lands.
+    logd("bme280_service: probing chip id");
+
     if (auto id = sensor.read_chip_id(); !id || *id != BME280_CHIP_ID) {
-        loge("bme280_service: chip ID 0x%02X (last_err=%d) -- sampling anyway",
-             id ? static_cast<int>(*id) : 0xFF,
-             static_cast<int>(sensor.last_error()));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
-                   "BME280 service: chip ID 0x%02X at start\n",
-                   id ? static_cast<int>(*id) : 0xFF);
+        logw(
+            "bme280_service: probe failed (chip_id=0x%02X, err=%d); continuing",
+            id ? static_cast<int>(*id) : 0xFF,
+            static_cast<int>(sensor.last_error()));
     } else {
-        logi("bme280_service: chip ID OK (0x%02X), sampling at %d ms",
+        logi("bme280_service: probe ok (chip_id=0x%02X), sampling at %d ms",
              static_cast<int>(*id), static_cast<int>(m_period_ms));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "BME280 service: chip ID OK, sampling started\n");
     }
 
     auto sample_counter = uint32_t{0};
@@ -222,11 +219,8 @@ void bme280_service::run() {
         if (!data) {
             // Keep the last good cached sample; just surface the error. Do not
             // crash — the sensor may return.
-            loge("bme280_service: read error %d",
+            loge("bme280_service: sample read failed (err=%d)",
                  static_cast<int>(sensor.last_error()));
-            cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_ERR,
-                       "BME280 service: read error %d\n",
-                       static_cast<int>(sensor.last_error()));
         } else {
             auto s =
                 build_sample(*data, rtc_service::instance().last_unix_time());
@@ -241,17 +235,11 @@ void bme280_service::run() {
                 auto h_whole = static_cast<int32_t>(s.humidity_centi_pct) / 100;
                 auto h_frac = static_cast<int32_t>(s.humidity_centi_pct) % 100;
 
-                logi("T=%c%d.%02d C  P=%d Pa  H=%d.%02d %%", t_sign,
-                     static_cast<int>(t_whole), static_cast<int>(t_frac),
-                     static_cast<int>(s.pressure_pa), static_cast<int>(h_whole),
-                     static_cast<int>(h_frac));
-                cy_log_msg(
-                    CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                    "BME280 service: T=%c%d.%02d C  P=%d Pa  "
-                    "H=%d.%02d %%\n",
-                    t_sign, static_cast<int>(t_whole), static_cast<int>(t_frac),
-                    static_cast<int>(s.pressure_pa), static_cast<int>(h_whole),
-                    static_cast<int>(h_frac));
+                logi("bme280_service: sample T=%c%d.%02d C  P=%d Pa  "
+                     "H=%d.%02d %%",
+                     t_sign, static_cast<int>(t_whole),
+                     static_cast<int>(t_frac), static_cast<int>(s.pressure_pa),
+                     static_cast<int>(h_whole), static_cast<int>(h_frac));
             }
 
             ++sample_counter;

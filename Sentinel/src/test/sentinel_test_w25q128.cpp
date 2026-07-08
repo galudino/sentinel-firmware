@@ -24,7 +24,6 @@
 #pragma GCC diagnostic ignored "-Wpedantic"
 extern "C" {
 #include "FreeRTOS.h"
-#include "cy_log.h"
 #include "cy_result.h"
 #include "cycfg_pins.h"
 #include "portmacro.h"
@@ -119,7 +118,7 @@ struct fixture {
 
 bool fixture::presence_check() noexcept {
     auto flash = w25q128_t(w25q128_bus, sentinel::resource::flash_device_mutex);
-    logi("W25Q128 presence_check: driver constructed", "");
+    logi("W25Q128 presence_check: driver constructed");
     yield_for_debug_drain(200);
 
     auto jedec = flash.jedec_id();
@@ -127,17 +126,8 @@ bool fixture::presence_check() noexcept {
     if (!jedec) {
         loge("presence_check FAIL: JEDEC read transport error %d",
              static_cast<int>(flash.last_error()));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "W25Q128 presence_check FAIL: JEDEC error %d\n",
-                   static_cast<int>(flash.last_error()));
         return false;
     }
-
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-               "W25Q128 presence_check: JEDEC = 0x%02X 0x%02X 0x%02X\n",
-               static_cast<int>(jedec->manufacturer),
-               static_cast<int>(jedec->memory_type),
-               static_cast<int>(jedec->capacity));
 
     logi("presence_check: JEDEC = 0x%02X 0x%02X 0x%02X",
          static_cast<int>(jedec->manufacturer),
@@ -150,28 +140,15 @@ bool fixture::presence_check() noexcept {
              static_cast<int>(jedec->manufacturer),
              static_cast<int>(jedec->memory_type),
              static_cast<int>(jedec->capacity));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "W25Q128 presence_check FAIL: JEDEC 0x%02X 0x%02X 0x%02X "
-                   "not in known-good list\n",
-                   static_cast<int>(jedec->manufacturer),
-                   static_cast<int>(jedec->memory_type),
-                   static_cast<int>(jedec->capacity));
         return false;
     }
 
     // Bonus diagnostics — manufacturer+device ID and unique ID.
     if (auto mfr_dev = flash.manufacturer_device_id()) {
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "W25Q128 presence_check: Mfr/Dev = 0x%02X 0x%02X\n",
-                   static_cast<int>(mfr_dev->manufacturer),
-                   static_cast<int>(mfr_dev->device));
         logi("presence_check: Mfr/Dev = 0x%02X 0x%02X",
              static_cast<int>(mfr_dev->manufacturer),
              static_cast<int>(mfr_dev->device));
     } else {
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "W25Q128 presence_check: Mfr/Dev read error %d\n",
-                   static_cast<int>(flash.last_error()));
         logw("presence_check: Mfr/Dev read transport error %d",
              static_cast<int>(flash.last_error()));
     }
@@ -189,11 +166,10 @@ bool fixture::presence_check() noexcept {
              static_cast<int>(flash.last_error()));
     }
 
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-               "W25Q128 presence_check PASS: JEDEC 0x%02X 0x%02X 0x%02X\n",
-               static_cast<int>(jedec->manufacturer),
-               static_cast<int>(jedec->memory_type),
-               static_cast<int>(jedec->capacity));
+    logi("W25Q128 presence_check PASS: JEDEC 0x%02X 0x%02X 0x%02X",
+         static_cast<int>(jedec->manufacturer),
+         static_cast<int>(jedec->memory_type),
+         static_cast<int>(jedec->capacity));
     return true;
 }
 
@@ -203,16 +179,13 @@ bool fixture::presence_check() noexcept {
 
 bool fixture::status_register_round_trip() noexcept {
     auto flash = w25q128_t(w25q128_bus, sentinel::resource::flash_device_mutex);
-    logi("W25Q128 status_register_round_trip: driver constructed", "");
+    logi("W25Q128 status_register_round_trip: driver constructed");
     yield_for_debug_drain(200);
 
     auto original = flash.read_status_register_1();
     if (!original) {
         loge("status_round_trip FAIL: initial SR1 read error %d",
              static_cast<int>(flash.last_error()));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "W25Q128 status_round_trip FAIL: initial SR1 %d\n",
-                   static_cast<int>(flash.last_error()));
         return false;
     }
     logi("status_round_trip: original SR1 = 0x%02X",
@@ -226,9 +199,6 @@ bool fixture::status_register_round_trip() noexcept {
     if (!flash.write_status_register_1(target, /*volatile_only=*/true)) {
         loge("status_round_trip FAIL: SR1 write error %d",
              static_cast<int>(flash.last_error()));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "W25Q128 status_round_trip FAIL: SR1 write %d\n",
-                   static_cast<int>(flash.last_error()));
         return false;
     }
 
@@ -236,9 +206,6 @@ bool fixture::status_register_round_trip() noexcept {
     if (!readback) {
         loge("status_round_trip FAIL: SR1 readback error %d",
              static_cast<int>(flash.last_error()));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "W25Q128 status_round_trip FAIL: SR1 readback %d\n",
-                   static_cast<int>(flash.last_error()));
         return false;
     }
 
@@ -250,17 +217,10 @@ bool fixture::status_register_round_trip() noexcept {
         (target & writable_mask)) {
         loge("status_round_trip FAIL: readback 0x%02X != target 0x%02X",
              static_cast<int>(*readback), static_cast<int>(target));
-        cy_log_msg(
-            CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-            "W25Q128 status_round_trip FAIL: readback 0x%02X != 0x%02X\n",
-            static_cast<int>(*readback), static_cast<int>(target));
         ok = false;
     } else {
         logi("status_round_trip PASS: SR1 round-tripped 0x%02X -> 0x%02X",
              static_cast<int>(*original), static_cast<int>(*readback));
-        cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-                   "W25Q128 status_round_trip PASS: SR1 0x%02X -> 0x%02X\n",
-                   static_cast<int>(*original), static_cast<int>(*readback));
         ok = true;
     }
 
@@ -279,7 +239,7 @@ bool fixture::status_register_round_trip() noexcept {
 
 bool fixture::erase_program_read() noexcept {
     auto flash = w25q128_t(w25q128_bus, sentinel::resource::flash_device_mutex);
-    logi("W25Q128 erase_program_read: driver constructed", "");
+    logi("W25Q128 erase_program_read: driver constructed");
     yield_for_debug_drain(200);
 
     // Test region: last sector of flash (0xFFF000), well above any
@@ -292,13 +252,11 @@ bool fixture::erase_program_read() noexcept {
     }
 
     // 1. Erase the sector.
-    logi("erase_program_read: erasing sector at 0x%06X", test_address);
+    logi("erase_program_read: erasing sector at 0x%06X",
+         static_cast<unsigned>(test_address));
     if (!flash.sector_erase_4kb(test_address)) {
         loge("erase_program_read FAIL: sector_erase error %d",
              static_cast<int>(flash.last_error()));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "W25Q128 erase_program_read FAIL: erase %d\n",
-                   static_cast<int>(flash.last_error()));
         return false;
     }
     yield_for_debug_drain(50);
@@ -308,11 +266,9 @@ bool fixture::erase_program_read() noexcept {
         loge("erase_program_read FAIL: post-erase region not blank "
              "(last_err=%d)",
              static_cast<int>(flash.last_error()));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "W25Q128 erase_program_read FAIL: not blank after erase\n");
         return false;
     }
-    logi("erase_program_read: post-erase region is blank", "");
+    logi("erase_program_read: post-erase region is blank");
 
     // 3. Program the page.
     if (!flash.page_program(
@@ -320,12 +276,9 @@ bool fixture::erase_program_read() noexcept {
             sentinel::make_cspan(pattern.data(), pattern.size()))) {
         loge("erase_program_read FAIL: page_program error %d",
              static_cast<int>(flash.last_error()));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "W25Q128 erase_program_read FAIL: program %d\n",
-                   static_cast<int>(flash.last_error()));
         return false;
     }
-    logi("erase_program_read: programmed 256 bytes", "");
+    logi("erase_program_read: programmed 256 bytes");
 
     // 4. Read back and verify.
     auto readback = std::array<uint8_t, verify_length>{};
@@ -333,9 +286,6 @@ bool fixture::erase_program_read() noexcept {
                                                            readback.size()))) {
         loge("erase_program_read FAIL: read_data error %d",
              static_cast<int>(flash.last_error()));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "W25Q128 erase_program_read FAIL: read %d\n",
-                   static_cast<int>(flash.last_error()));
         return false;
     }
 
@@ -345,18 +295,12 @@ bool fixture::erase_program_read() noexcept {
                  "expected=0x%02X",
                  static_cast<unsigned>(i), static_cast<int>(readback[i]),
                  static_cast<int>(pattern[i]));
-            cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                       "W25Q128 erase_program_read FAIL: mismatch at %u\n",
-                       static_cast<unsigned>(i));
             return false;
         }
     }
 
     logi("erase_program_read PASS: 256 bytes round-tripped at 0x%06X",
-         test_address);
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-               "W25Q128 erase_program_read PASS: 256 B at 0x%06X\n",
-               test_address);
+         static_cast<unsigned>(test_address));
     return true;
 }
 
@@ -366,7 +310,7 @@ bool fixture::erase_program_read() noexcept {
 
 bool fixture::security_register_round_trip() noexcept {
     auto flash = w25q128_t(w25q128_bus, sentinel::resource::flash_device_mutex);
-    logi("W25Q128 security_register_round_trip: driver constructed", "");
+    logi("W25Q128 security_register_round_trip: driver constructed");
     yield_for_debug_drain(200);
 
     constexpr uint8_t reg_index = 3; // least likely to collide with future use.
@@ -376,9 +320,6 @@ bool fixture::security_register_round_trip() noexcept {
         loge("security_round_trip FAIL: erase reg %u error %d",
              static_cast<unsigned>(reg_index),
              static_cast<int>(flash.last_error()));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "W25Q128 security_round_trip FAIL: erase %d\n",
-                   static_cast<int>(flash.last_error()));
         return false;
     }
 
@@ -389,17 +330,12 @@ bool fixture::security_register_round_trip() noexcept {
             sentinel::make_span(blank_check.data(), blank_check.size()))) {
         loge("security_round_trip FAIL: post-erase read error %d",
              static_cast<int>(flash.last_error()));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "W25Q128 security_round_trip FAIL: post-erase read %d\n",
-                   static_cast<int>(flash.last_error()));
         return false;
     }
     for (auto i = size_t{0}; i < blank_check.size(); i++) {
         if (blank_check[i] != 0xFF) {
             loge("security_round_trip FAIL: post-erase byte %u = 0x%02X",
                  static_cast<unsigned>(i), static_cast<int>(blank_check[i]));
-            cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                       "W25Q128 security_round_trip FAIL: not blank\n");
             return false;
         }
     }
@@ -413,9 +349,6 @@ bool fixture::security_register_round_trip() noexcept {
             sentinel::make_cspan(pattern.data(), pattern.size()))) {
         loge("security_round_trip FAIL: program error %d",
              static_cast<int>(flash.last_error()));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "W25Q128 security_round_trip FAIL: program %d\n",
-                   static_cast<int>(flash.last_error()));
         return false;
     }
 
@@ -426,9 +359,6 @@ bool fixture::security_register_round_trip() noexcept {
             sentinel::make_span(readback.data(), readback.size()))) {
         loge("security_round_trip FAIL: readback error %d",
              static_cast<int>(flash.last_error()));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "W25Q128 security_round_trip FAIL: readback %d\n",
-                   static_cast<int>(flash.last_error()));
         return false;
     }
     for (auto i = size_t{0}; i < pattern.size(); i++) {
@@ -437,9 +367,6 @@ bool fixture::security_register_round_trip() noexcept {
                  "expected=0x%02X",
                  static_cast<unsigned>(i), static_cast<int>(readback[i]),
                  static_cast<int>(pattern[i]));
-            cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                       "W25Q128 security_round_trip FAIL: mismatch at %u\n",
-                       static_cast<unsigned>(i));
             return false;
         }
     }
@@ -452,9 +379,6 @@ bool fixture::security_register_round_trip() noexcept {
 
     logi("security_round_trip PASS: security reg %u round-tripped 16 bytes",
          static_cast<unsigned>(reg_index));
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO,
-               "W25Q128 security_round_trip PASS: reg %u, 16 B\n",
-               static_cast<unsigned>(reg_index));
     return true;
 }
 
@@ -464,16 +388,13 @@ bool fixture::security_register_round_trip() noexcept {
 
 bool fixture::power_down_release() noexcept {
     auto flash = w25q128_t(w25q128_bus, sentinel::resource::flash_device_mutex);
-    logi("W25Q128 power_down_release: driver constructed", "");
+    logi("W25Q128 power_down_release: driver constructed");
     yield_for_debug_drain(200);
 
     // 1. Enter deep power-down.
     if (!flash.power_down()) {
         loge("power_down_release FAIL: power_down error %d",
              static_cast<int>(flash.last_error()));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "W25Q128 power_down_release FAIL: power_down %d\n",
-                   static_cast<int>(flash.last_error()));
         return false;
     }
 
@@ -486,10 +407,9 @@ bool fixture::power_down_release() noexcept {
     if (!in_pd) {
         logw("power_down_release: chip still answering JEDEC during PD "
              "(some W25Q variants ignore commands silently rather than "
-             "returning garbage — non-fatal)",
-             "");
+             "returning garbage — non-fatal)");
     } else {
-        logi("power_down_release: confirmed unresponsive during PD", "");
+        logi("power_down_release: confirmed unresponsive during PD");
     }
 
     // 3. Release power-down and read device ID.
@@ -497,18 +417,12 @@ bool fixture::power_down_release() noexcept {
     if (!device_id) {
         loge("power_down_release FAIL: release/device_id error %d",
              static_cast<int>(flash.last_error()));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "W25Q128 power_down_release FAIL: release %d\n",
-                   static_cast<int>(flash.last_error()));
         return false;
     }
     if (*device_id != w25q128_t::RELEASE_POWER_DOWN_DEVICE_ID) {
         loge("power_down_release FAIL: device_id 0x%02X != expected 0x%02X",
              static_cast<int>(*device_id),
              static_cast<int>(w25q128_t::RELEASE_POWER_DOWN_DEVICE_ID));
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "W25Q128 power_down_release FAIL: device_id 0x%02X\n",
-                   static_cast<int>(*device_id));
         return false;
     }
     logi("power_down_release: release returned device_id 0x%02X",
@@ -517,14 +431,11 @@ bool fixture::power_down_release() noexcept {
     // 4. JEDEC again to confirm full responsiveness.
     auto recheck = flash.jedec_id();
     if (!recheck || !w25q128_t::is_known_jedec(*recheck)) {
-        loge("power_down_release FAIL: post-release JEDEC mismatch", "");
-        cy_log_msg(CY_LOG_FACILITY_T::CYLF_DEF, CY_LOG_LEVEL_T::CY_LOG_INFO,
-                   "W25Q128 power_down_release FAIL: post-release JEDEC\n");
+        loge("power_down_release FAIL: post-release JEDEC mismatch");
         return false;
     }
 
-    logi("power_down_release PASS: PD -> release -> JEDEC round-trip OK", "");
-    cy_log_msg(CYLF_DEF, CY_LOG_INFO, "W25Q128 power_down_release PASS\n");
+    logi("power_down_release PASS: PD -> release -> JEDEC round-trip OK");
     return true;
 }
 

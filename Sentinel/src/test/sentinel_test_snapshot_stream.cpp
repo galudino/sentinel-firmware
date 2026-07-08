@@ -29,7 +29,6 @@
 #pragma GCC diagnostic ignored "-Wpedantic"
 extern "C" {
 #include "FreeRTOS.h"
-#include "cy_log.h"
 #include "portmacro.h"
 #include "task.h"
 }
@@ -67,11 +66,8 @@ bool controllable_connected() noexcept { return g_connected; }
 bool report(const char *name, bool ok, const char *detail) noexcept {
     if (ok) {
         logi("%s PASS", name);
-        cy_log_msg(CYLF_DEF, CY_LOG_INFO, "snapshot_stream %s PASS\n", name);
     } else {
         loge("%s FAIL: %s", name, detail);
-        cy_log_msg(CYLF_DEF, CY_LOG_INFO, "snapshot_stream %s FAIL: %s\n", name,
-                   detail);
     }
     return ok;
 }

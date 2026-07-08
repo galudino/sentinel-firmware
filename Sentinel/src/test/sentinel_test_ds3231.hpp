@@ -28,9 +28,9 @@
 ///          bus-arbitrated transport (the canonical "fixture holds the shared
 ///          resource" shape), so there is no file-static bus global.
 ///
-///          Each test logs progress through both the BLE debug stream
-///          (\c logi / \c loge) and the retarget-IO UART serial monitor
-///          (\c cy_log_msg).
+///          Each test logs progress via \c logi / \c loge; the logging
+///          facade (#50) writes each line to both the retarget-IO UART serial
+///          monitor and the BLE debug stream.
 ///
 /// \author  galudino
 /// \date    2026-05-16
