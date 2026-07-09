@@ -66,6 +66,7 @@ the Phase I GATT catalog. **Landed + building clean (Release + testbench):**
 **#6 remaining (next session) — all firmware wired; only bench validation left:**
 - **On-bench validation** (nRF Connect + serial): enumerate all services, DIS
   reads, notifications, paged walk, Unix Time write sets the RTC, Clear/Bootloader.
+  Checklist: [`acceptance/gatt-nrf-connect-checklist.md`](acceptance/gatt-nrf-connect-checklist.md).
 - **Die-temp on-bench validation** tracked in **#55** (SFLASH calibration accuracy
   + SAR 8-bit divider 6 conflict check).
 - Latent quirk noted: `firmware_version::build()` truncates to 8 bits; use
