@@ -30,6 +30,7 @@ extern "C" {
 #include "sentinel_device_context.hpp"
 #include "sentinel_device_snapshot.hpp"
 #include "sentinel_firmware_version.hpp"
+#include "sentinel_psoc6_die_temperature.hpp"
 #include "sentinel_task_bme280_service.hpp"
 #include "sentinel_task_rtc_service.hpp"
 
@@ -97,10 +98,16 @@ void device_snapshot::populate(device_snapshot &out) noexcept {
     out.uptime_seconds = static_cast<uint32_t>(xTaskGetTickCount()) /
                          static_cast<uint32_t>(configTICK_RATE_HZ);
     out.uptime_seconds_low = static_cast<uint8_t>(out.uptime_seconds & 0xFFu);
-    // cpu_temperature_001c stays 0: reading the PSoC 6 on-die temperature needs
-    // a SAR ADC internal-sensor channel + SFLASH calibration conversion (its own
-    // small driver) — deferred follow-up; the field remains its documented 0
-    // sentinel until then.
+    // On-die CPU temperature via the SAR ADC (#6). Throttled (~1 Hz) + cached in
+    // the driver, so the 100 ms stream path does not re-convert every populate.
+    // Stays 0 off-bench / before the driver is initialized (its cache is invalid).
+    sentinel::drivers::psoc6_die_temperature::instance().refresh();
+    if (int16_t die_centi_c = 0;
+        sentinel::drivers::psoc6_die_temperature::instance().cached_centi_c(
+            die_centi_c)) {
+        out.cpu_temperature_001c =
+            die_centi_c < 0 ? uint16_t{0} : static_cast<uint16_t>(die_centi_c);
+    }
 
     // ---- Trailer (written last) ----
     out.trailer_magic = SNAPSHOT_TRAILER_MAGIC;

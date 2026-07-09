@@ -38,6 +38,7 @@ extern "C" {
 
 #include "sentinel_ble_context.hpp"
 #include "sentinel_debug_print.hpp"
+#include "sentinel_psoc6_die_temperature.hpp"
 #include "sentinel_orchestrator_entry.hpp"
 #include "sentinel_device_context.hpp"
 #include "sentinel_gatt_dis.hpp"
@@ -219,6 +220,15 @@ void boot_orchestrator::run() {
         logi("boot: GATT identity seeded (platform=%u, serial=%lu)",
              static_cast<unsigned>(sentinel::to_underlying(platform)),
              static_cast<unsigned long>(gsys::serial_number()));
+    }
+
+    // ---- 4b. Bring up the on-die temperature sensor (#6). ----
+    // Feeds device_snapshot::cpu_temperature_001c; snapshot producers only read
+    // its cache, so this must be initialized before they start.
+    if (drivers::psoc6_die_temperature::instance().initialize()) {
+        logi("boot: die-temperature sensor ready");
+    } else {
+        loge("boot: die-temperature sensor init failed (snapshot CPU temp = 0)");
     }
 
     // ---- 4. Start the service tasks. ----
