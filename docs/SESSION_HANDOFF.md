@@ -50,18 +50,19 @@ the Phase I GATT catalog. **Landed + building clean (Release + testbench):**
   (deferred `NVIC_SystemReset`) — kept off the BT callback.
 - **Real `gatt_db_ok`**: `ble_context` stores the `wiced_bt_gatt_db_init` result;
   the orchestrator reads it live at POST (BTM_ENABLED has run by then).
-- **`device_snapshot` BLE link metrics**: `ble_context::refresh_link_metrics()`
-  kicks async (~1 Hz throttled) `wiced_bt_dev_read_rssi`/`read_tx_power` and caches
-  the results; `populate_snapshot` reads the cache (peer RSSI + TX power). Only
-  `cpu_temperature_001c` remains 0.
+- **`device_snapshot` fully populated**: BLE link metrics via
+  `ble_context::refresh_link_metrics()` (async, ~1 Hz throttled RSSI/TX-power
+  cached); **CPU die temp** via the new `drivers::psoc6_die_temperature` (SAR ADC
+  DieTemp channel + SFLASH dual-slope conversion; cache+throttle+mutex). No zero
+  fields left.
 - UUIDs assigned + recorded in issue #6 body + client #9 mirrors 1:1. Issue #6
   UUID table + #45 acceptance boxes updated (kept as official docs).
 
-**#6 remaining (next session):**
-- **`cpu_temperature_001c`** — needs a PSoC 6 SAR ADC internal-temp channel +
-  SFLASH-calibration conversion (its own small driver). Still 0 (documented).
-- **On-bench validation** (nRF Connect): enumerate all services, DIS reads,
-  notifications, paged walk, Unix Time write sets the RTC, Clear/Bootloader.
+**#6 remaining (next session) — all firmware wired; only bench validation left:**
+- **On-bench validation** (nRF Connect + serial): enumerate all services, DIS
+  reads, notifications, paged walk, Unix Time write sets the RTC, Clear/Bootloader.
+- **Die-temp on-bench validation** tracked in **#55** (SFLASH calibration accuracy
+  + SAR 8-bit divider 6 conflict check).
 - Latent quirk noted: `firmware_version::build()` truncates to 8 bits; use
   `array()[3]` for the full 16-bit build (done in `gatt::system`).
 - `bt-configurator-cli -o` is relative to the config's parent dir (`src/`), so

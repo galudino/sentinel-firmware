@@ -20,7 +20,7 @@
 ///          which is 0/invalid until \ref initialize runs on real hardware.
 ///
 ///          \note The mV→°C calibration and the chosen SAR clock divider need
-///          \b on-bench validation (see the tracking issue).
+///          \b on-bench validation — tracked in issue #55.
 ///
 /// \author  galudino
 /// \date    2026-07-08
