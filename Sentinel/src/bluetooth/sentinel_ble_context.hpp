@@ -84,6 +84,30 @@ public:
     /// \brief Record the GATT-DB registration result (called at registration).
     void set_gatt_db_ok(bool ok) noexcept { m_gatt_db_ok = ok; }
 
+    /// \brief Last cached peer RSSI in dBm (negative; 0 if not yet read). #6
+    int8_t peer_rssi() const noexcept { return m_peer_rssi; }
+
+    /// \brief Last cached connection TX power in dBm (0 if not yet read). #6
+    int8_t tx_power_dbm() const noexcept { return m_tx_power_dbm; }
+
+    ///
+    /// \brief Kick asynchronous reads of peer RSSI + connection TX power.
+    ///
+    /// \details Non-blocking: issues the HCI reads (throttled to ~1 Hz) and
+    ///          returns immediately; the results land in \ref m_peer_rssi /
+    ///          \ref m_tx_power_dbm via the completion callbacks. Callers read
+    ///          the \e previously cached value (\ref peer_rssi / \ref
+    ///          tx_power_dbm). A no-op when not connected. Feeds the
+    ///          \c device_snapshot BLE fields (#6/#36).
+    ///
+    void refresh_link_metrics() noexcept;
+
+    /// \brief Cache a freshly read peer RSSI (from the read-RSSI callback).
+    void set_peer_rssi(int8_t rssi) noexcept { m_peer_rssi = rssi; }
+
+    /// \brief Cache a freshly read TX power (from the read-TX-power callback).
+    void set_tx_power_dbm(int8_t dbm) noexcept { m_tx_power_dbm = dbm; }
+
     ///
     /// \brief Handle BLE connection and disconnection events
     ///
@@ -208,6 +232,10 @@ private:
     uint16_t m_connection_id; ///< Current BLE connection ID (0 if disconnected)
 
     bool m_gatt_db_ok{false}; ///< GATT-DB registration result (#6).
+
+    volatile int8_t m_peer_rssi{0};     ///< Last cached peer RSSI, dBm (#6).
+    volatile int8_t m_tx_power_dbm{0};  ///< Last cached TX power, dBm (#6).
+    uint32_t m_last_metrics_tick{0};    ///< Throttle for refresh_link_metrics.
 
     std::array<uint8_t, BD_ADDR_LEN>
         m_peer_address; ///< Bluetooth address of connected peer

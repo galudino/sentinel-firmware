@@ -56,7 +56,7 @@ inline uint32_t read_u32_le(const uint8_t *p) noexcept {
 }
 
 /// \brief Write a store's record count into its Record Count characteristic.
-template <class Store>
+template <typename Store>
 inline void set_count(const Store &store, uint16_t count_handle) noexcept {
     const uint32_t c = store.count();
     uint8_t le[4] = {static_cast<uint8_t>(c & 0xFFu),
@@ -71,7 +71,7 @@ inline void set_count(const Store &store, uint16_t count_handle) noexcept {
 ///        \c floor(block_max/sizeof(Rec)) records starting at \p cursor
 ///        (relative index in <tt>[0, count)</tt>).
 ///
-template <class Rec, class Store>
+template <typename Rec, typename Store>
 inline void fill_block(const Store &store, uint32_t cursor,
                        uint16_t block_handle, uint32_t block_max) noexcept {
     static uint8_t buf[BLOCK_SCRATCH]; // GATT reads are serialized in the BT task.

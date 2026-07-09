@@ -281,6 +281,52 @@ void ble_context::ota_agent_confirmation_handler() noexcept {
     }
 }
 
+namespace {
+
+/// \brief ~1 s throttle between link-metric HCI reads.
+constexpr uint32_t LINK_METRICS_MIN_INTERVAL_MS = 1000;
+
+/// \brief read-RSSI completion: cache the peer RSSI on the shared context.
+void rssi_read_complete(void *p_data) {
+    auto *result = static_cast<wiced_bt_dev_rssi_result_t *>(p_data);
+    if (result != nullptr &&
+        result->status == wiced_result_t::WICED_BT_SUCCESS) {
+        sentinel::ble_context_object.set_peer_rssi(result->rssi);
+    }
+}
+
+/// \brief read-TX-power completion: cache the connection TX power.
+void tx_power_read_complete(void *p_data) {
+    auto *result = static_cast<wiced_bt_tx_power_result_t *>(p_data);
+    if (result != nullptr &&
+        result->status == wiced_result_t::WICED_BT_SUCCESS) {
+        sentinel::ble_context_object.set_tx_power_dbm(result->tx_power);
+    }
+}
+
+} // namespace
+
+void ble_context::refresh_link_metrics() noexcept {
+    if (!connected()) {
+        return;
+    }
+
+    // Throttle: the snapshot populate path may call this every ~100 ms, but two
+    // HCI reads per second is plenty for a health metric.
+    const auto now_ms =
+        static_cast<uint32_t>(xTaskGetTickCount()) * portTICK_PERIOD_MS;
+    if ((now_ms - m_last_metrics_tick) < LINK_METRICS_MIN_INTERVAL_MS) {
+        return;
+    }
+    m_last_metrics_tick = now_ms;
+
+    // Non-blocking: results arrive later via the completion callbacks.
+    wiced_bt_dev_read_rssi(m_peer_address.data(), BT_TRANSPORT_LE,
+                           &rssi_read_complete);
+    wiced_bt_dev_read_tx_power(m_peer_address.data(), BT_TRANSPORT_LE,
+                               &tx_power_read_complete);
+}
+
 wiced_bt_dev_status_t ble_context::stack_management_callback(
     wiced_bt_management_evt_t event,
     wiced_bt_management_evt_data_t *event_data) noexcept {
