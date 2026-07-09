@@ -72,6 +72,13 @@ void cpu_die_temp_service::task_trampoline(void *task_parameter) {
 void cpu_die_temp_service::run() {
     auto &die = sentinel::drivers::psoc6_die_temperature::instance();
 
+    // Idempotent: the app orchestrator (and the testbench die-temp suite) already
+    // initialize the sensor, but self-initializing here keeps the service correct
+    // regardless of who started it first.
+    if (!die.initialize()) {
+        loge("cpu_die_temp: die-temperature sensor init failed");
+    }
+
     while (true) {
         die.refresh();
 

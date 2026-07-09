@@ -38,18 +38,31 @@ void yield_for_debug_drain(uint32_t ms) noexcept {
     vTaskDelay(pdMS_TO_TICKS(ms));
 }
 
-/// \brief Force a fresh reading past the driver's ~1 s refresh throttle.
+/// \brief Just past the driver's ~1 s refresh throttle — used to space reads so
+///        each \ref read_fresh triggers a genuine SAR conversion rather than
+///        returning the coalesced cache.
+constexpr uint32_t PAST_THROTTLE_MS = 1100;
+
+/// \brief Take a reading (from the cache, filled by the first successful
+///        \c refresh). Waits out the throttle only if no reading is cached yet.
 bool read_fresh(int16_t &out_centi) noexcept {
     auto &die = sentinel::drivers::psoc6_die_temperature::instance();
-    // Space the calls beyond the throttle window so refresh() actually converts.
     for (int attempt = 0; attempt < 3; ++attempt) {
         die.refresh();
         if (die.cached_centi_c(out_centi)) {
             return true;
         }
-        vTaskDelay(pdMS_TO_TICKS(1100));
+        vTaskDelay(pdMS_TO_TICKS(PAST_THROTTLE_MS));
     }
     return false;
+}
+
+/// \brief Force a \b genuine conversion: wait past the throttle, then refresh.
+bool read_genuine(int16_t &out_centi) noexcept {
+    auto &die = sentinel::drivers::psoc6_die_temperature::instance();
+    vTaskDelay(pdMS_TO_TICKS(PAST_THROTTLE_MS));
+    die.refresh();
+    return die.cached_centi_c(out_centi);
 }
 
 bool test_initialize() noexcept {
@@ -99,7 +112,10 @@ bool test_stability() noexcept {
 
     for (int i = 0; i < 4; ++i) {
         int16_t centi = 0;
-        if (!read_fresh(centi)) {
+        // read_genuine spaces each read past the throttle so this exercises 4
+        // real conversions — otherwise the reads coalesce to one cached value
+        // and the spread is trivially 0.
+        if (!read_genuine(centi)) {
             loge("die_temperature stability FAIL: read %d failed", i);
             return false;
         }
