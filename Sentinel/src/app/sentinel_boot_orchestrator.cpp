@@ -51,6 +51,7 @@ extern "C" {
 #include "sentinel_task_battery_service.hpp"
 #include "sentinel_task_ble_maintenance.hpp"
 #include "sentinel_task_bme280_service.hpp"
+#include "sentinel_task_cpu_die_temp_service.hpp"
 #include "sentinel_task_rtc_service.hpp"
 #include "sentinel_task_snapshot_persistence.hpp"
 #include "sentinel_task_snapshot_stream.hpp"
@@ -247,6 +248,10 @@ void boot_orchestrator::run() {
                task::snapshot_stream_task::instance().task_create());
     start_task("battery service",
                task::battery_service::instance().task_create());
+    // CPU on-die temperature: publishes the System CPU Temperature char (#6) and
+    // logs die vs BME280-ambient vs DS3231 for on-bench comparison (#55 AC).
+    start_task("cpu die-temp service",
+               task::cpu_die_temp_service::instance().task_create());
     // Async handler for slow BLE-triggered maintenance (store clears + deferred
     // bootloader reset), kept off the Bluetooth callback (#6).
     start_task("ble maintenance",

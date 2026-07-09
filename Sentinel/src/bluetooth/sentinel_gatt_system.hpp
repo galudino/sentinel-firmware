@@ -28,6 +28,7 @@ extern "C" {
 }
 #pragma GCC diagnostic pop
 
+#include "sentinel_ble_context.hpp"
 #include "sentinel_ble_gatt.hpp"
 #include "sentinel_firmware_version.hpp"
 #include "sentinel_platform_id.hpp"
@@ -76,6 +77,42 @@ inline void set_platform_id(sentinel::platform_id p) noexcept {
 /// \brief Current Platform ID characteristic value.
 inline sentinel::platform_id platform_id() noexcept {
     return static_cast<sentinel::platform_id>(app_system_platform_id[0]);
+}
+
+// ---- CPU Temperature (R/Notify) — PSoC 6 on-die temperature, 0.01 °C -------
+
+/// \brief \c true while a central has subscribed to CPU Temperature notifications.
+inline bool cpu_temperature_notifications_enabled() noexcept {
+    return app_system_cpu_temperature_client_char_config[0] &
+           wiced_bt_gatt_client_char_config_e::GATT_CLIENT_CONFIG_NOTIFICATION;
+}
+
+/// \brief Write the CPU Temperature characteristic (0.01 °C / LSB, little-endian).
+inline void set_cpu_temperature_centi_c(int16_t centi_c) noexcept {
+    uint8_t le[2] = {static_cast<uint8_t>(static_cast<uint16_t>(centi_c) & 0xFFu),
+                     static_cast<uint8_t>(
+                         (static_cast<uint16_t>(centi_c) >> 8) & 0xFFu)};
+    ble_gatt_db_set_value(HDLC_SYSTEM_CPU_TEMPERATURE_VALUE, le,
+                          static_cast<uint16_t>(sizeof(le)));
+}
+
+/// \brief Notify the connected central with the current CPU Temperature value.
+inline wiced_bt_gatt_status_t notify_cpu_temperature(uint16_t connection_id) noexcept {
+    return wiced_bt_gatt_server_send_notification(
+        connection_id, HDLC_SYSTEM_CPU_TEMPERATURE_VALUE,
+        app_system_cpu_temperature_len, app_system_cpu_temperature, nullptr);
+}
+
+///
+/// \brief Publish the CPU die temperature: refresh the read value and notify a
+///        subscribed central (mirrors the BME280 / DS3231 sensor-char pattern).
+///
+inline void publish_cpu_temperature(int16_t centi_c) noexcept {
+    set_cpu_temperature_centi_c(centi_c);
+    if (sentinel::ble_context_object.connected() &&
+        cpu_temperature_notifications_enabled()) {
+        notify_cpu_temperature(sentinel::ble_context_object.connection_id());
+    }
 }
 
 } // namespace sentinel::gatt::system

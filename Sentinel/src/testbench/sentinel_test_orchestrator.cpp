@@ -44,6 +44,7 @@ extern "C" {
 ///< Test suites (each exposes a synchronous run_all() -> tally)
 #include "sentinel_test_bme280.hpp"
 #include "sentinel_test_device_snapshot.hpp"
+#include "sentinel_test_die_temperature.hpp"
 #include "sentinel_test_ds3231.hpp"
 #include "sentinel_test_post.hpp"
 #include "sentinel_test_record_store.hpp"
@@ -164,6 +165,9 @@ void test_orchestrator::run() {
     run_group("W25Q128", &sentinel::test::w25q128::run_all);
     run_group("record_store", &sentinel::test::record_store::run_all);
 #endif /* CYBSP_SPI_HW */
+
+    // PSoC 6 on-die temperature via the SAR ADC — no external bus (#55).
+    run_group("die_temperature", &sentinel::test::die_temperature::run_all);
 
     // RAM / fake-driven suites — independent of any physical bus being present.
     run_group("system_event_log", &sentinel::test::system_event_log::run_all);
