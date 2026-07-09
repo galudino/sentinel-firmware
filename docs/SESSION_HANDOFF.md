@@ -41,23 +41,28 @@ the Phase I GATT catalog. **Landed + building clean (Release + testbench):**
   + DS3231 Unix Time (R/W — write sets the RTC via `ctx.rtc.set_unix_time()`,
   the BLE time-sync path, **not** rtc_service) / RTC Temperature (R/Notify) /
   Alarm Flags. Live Snapshot Stream sink attached; enable char drives start/stop.
+- Paged **Snapshot History** + **System Event Log** reads (Record Count / Index /
+  Record Block) over `resource::context()`'s stores, refreshed in
+  `gatt::paged::before_read` at the top of the read handler (relative cursor →
+  `tail_index()+cursor`; block = `floor(MAX_LEN/rec_size)` records).
+- **Async maintenance task** (`ble_maintenance_task`, `xTaskNotify` bits): Clear
+  Store (both stores; `erase_all` is multi-second) + Request Bootloader Mode
+  (deferred `NVIC_SystemReset`) — kept off the BT callback.
+- **Real `gatt_db_ok`**: `ble_context` stores the `wiced_bt_gatt_db_init` result;
+  the orchestrator reads it live at POST (BTM_ENABLED has run by then).
 - UUIDs assigned + recorded in issue #6 (client #9 mirrors 1:1).
 
 **#6 remaining (next session):**
-- Paged **Snapshot History** + **System Event Log** reads (Record Count / Index /
-  Record Block) over `resource::context()`'s stores (`read(absolute_index)` uses
-  `tail_index()+cursor`; block = `floor(max/rec_size)` records). **Clear Store
-  needs an async path** — `record_store::erase_all()` erases all sectors (multi-
-  second) and must NOT run in the BT callback.
-- **Request Bootloader Mode** write → deferred MCUBoot reset (not from the BT
-  callback).
-- Thread the **real `gatt_db_ok`** (`wiced_bt_gatt_db_init` result) into the
-  orchestrator POST — it registers async in `BTM_ENABLED` (after the orchestrator
-  is created in `main`), so needs ordering/sync vs. POST.
-- Fill remaining `device_snapshot` fields (BLE tx-power / RSSI / CPU temp).
-- On-bench validation (nRF Connect).
+- Fill remaining `device_snapshot` fields — BLE tx-power / peer RSSI / CPU temp.
+  Non-trivial: RSSI + tx-power reads are async callbacks (need a cache in
+  `ble_context`), CPU temp needs an ADC die-temp read. Currently 0 (documented
+  sentinels).
+- **On-bench validation** (nRF Connect): enumerate all services, DIS reads,
+  notifications, paged walk, Unix Time write sets the RTC, Clear/Bootloader.
 - Latent quirk noted: `firmware_version::build()` truncates to 8 bits; use
   `array()[3]` for the full 16-bit build (done in `gatt::system`).
+- `bt-configurator-cli -o` is relative to the config's parent dir (`src/`), so
+  regenerate with `-o GeneratedSource` (not `-o src/GeneratedSource`).
 
 **#38 (merged):** boot orchestrator + shared device context + lane-1 snapshot
 persistence. Both configs build clean under `-Werror -Wall -Wextra -pedantic-errors`
