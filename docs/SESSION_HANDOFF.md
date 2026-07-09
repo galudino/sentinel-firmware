@@ -50,13 +50,16 @@ the Phase I GATT catalog. **Landed + building clean (Release + testbench):**
   (deferred `NVIC_SystemReset`) — kept off the BT callback.
 - **Real `gatt_db_ok`**: `ble_context` stores the `wiced_bt_gatt_db_init` result;
   the orchestrator reads it live at POST (BTM_ENABLED has run by then).
-- UUIDs assigned + recorded in issue #6 (client #9 mirrors 1:1).
+- **`device_snapshot` BLE link metrics**: `ble_context::refresh_link_metrics()`
+  kicks async (~1 Hz throttled) `wiced_bt_dev_read_rssi`/`read_tx_power` and caches
+  the results; `populate_snapshot` reads the cache (peer RSSI + TX power). Only
+  `cpu_temperature_001c` remains 0.
+- UUIDs assigned + recorded in issue #6 body + client #9 mirrors 1:1. Issue #6
+  UUID table + #45 acceptance boxes updated (kept as official docs).
 
 **#6 remaining (next session):**
-- Fill remaining `device_snapshot` fields — BLE tx-power / peer RSSI / CPU temp.
-  Non-trivial: RSSI + tx-power reads are async callbacks (need a cache in
-  `ble_context`), CPU temp needs an ADC die-temp read. Currently 0 (documented
-  sentinels).
+- **`cpu_temperature_001c`** — needs a PSoC 6 SAR ADC internal-temp channel +
+  SFLASH-calibration conversion (its own small driver). Still 0 (documented).
 - **On-bench validation** (nRF Connect): enumerate all services, DIS reads,
   notifications, paged walk, Unix Time write sets the RTC, Clear/Bootloader.
 - Latent quirk noted: `firmware_version::build()` truncates to 8 bits; use
