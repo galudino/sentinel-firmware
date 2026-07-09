@@ -55,6 +55,11 @@ the Phase I GATT catalog. **Landed + building clean (Release + testbench):**
   cached); **CPU die temp** via the new `drivers::psoc6_die_temperature` (SAR ADC
   DieTemp channel + SFLASH dual-slope conversion; cache+throttle+mutex). No zero
   fields left.
+- **CPU die-temp surfaced 3 ways**: a `System` **CPU Temperature** GATT char
+  (int16 0.01 °C, R/Notify — contract extension to #6, client #9 mirrors);
+  `cpu_die_temp_service` (periodic task, publishes the char + logs die vs
+  BME280-ambient vs DS3231 for the #55 comparison AC); and an on-target
+  `die_temperature` testbench suite (real SAR, decision #15).
 - UUIDs assigned + recorded in issue #6 body + client #9 mirrors 1:1. Issue #6
   UUID table + #45 acceptance boxes updated (kept as official docs).
 
