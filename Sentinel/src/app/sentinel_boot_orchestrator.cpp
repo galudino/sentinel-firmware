@@ -36,6 +36,7 @@ extern "C" {
 
 #include "sentinel_boot_orchestrator.hpp"
 
+#include "sentinel_ble_context.hpp"
 #include "sentinel_debug_print.hpp"
 #include "sentinel_orchestrator_entry.hpp"
 #include "sentinel_device_context.hpp"
@@ -177,9 +178,15 @@ void boot_orchestrator::run() {
     // reported duration is the true POST timing for #35's "< 100 ms" hardware AC
     // — the multi-second flash scans above are NOT part of POST.
     const auto post_start_ticks = xTaskGetTickCount();
+    // Read the real GATT-DB registration result live (#6): it is set from the
+    // asynchronous BTM_ENABLED path, which has already run by now (the flash-
+    // store scans above take multiple seconds). Falls back to the constructor
+    // value only if that path somehow has not completed.
+    const auto gatt_db_ok =
+        sentinel::ble_context_object.gatt_db_ok() || m_gatt_db_ok;
     const auto summary = diag::post::run(ctx.bme, ctx.rtc, ctx.flash,
                                          ctx.event_store, m_ble_stack_ok,
-                                         m_gatt_db_ok);
+                                         gatt_db_ok);
     const auto post_ms = static_cast<unsigned>(
         (xTaskGetTickCount() - post_start_ticks) * portTICK_PERIOD_MS);
     for (auto i = uint8_t{0}; i < summary.count; ++i) {

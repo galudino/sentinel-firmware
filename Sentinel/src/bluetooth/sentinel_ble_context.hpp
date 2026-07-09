@@ -72,6 +72,19 @@ public:
     bool connected() const noexcept { return m_connection_id > 0; }
 
     ///
+    /// \brief \c true once the GATT database registered successfully (#6).
+    ///
+    /// \details Set from \c ble_start_advertising after \c wiced_bt_gatt_db_init.
+    ///          The boot orchestrator reads this live for the POST \c gatt_db
+    ///          probe; by POST time (after the multi-second flash-store scan) the
+    ///          asynchronous \c BTM_ENABLED registration has already run.
+    ///
+    bool gatt_db_ok() const noexcept { return m_gatt_db_ok; }
+
+    /// \brief Record the GATT-DB registration result (called at registration).
+    void set_gatt_db_ok(bool ok) noexcept { m_gatt_db_ok = ok; }
+
+    ///
     /// \brief Handle BLE connection and disconnection events
     ///
     /// Updates connection state, stores peer address on connection, and
@@ -193,6 +206,8 @@ private:
     uint32_t m_tag; ///< Context validity tag for integrity checking
 
     uint16_t m_connection_id; ///< Current BLE connection ID (0 if disconnected)
+
+    bool m_gatt_db_ok{false}; ///< GATT-DB registration result (#6).
 
     std::array<uint8_t, BD_ADDR_LEN>
         m_peer_address; ///< Bluetooth address of connected peer

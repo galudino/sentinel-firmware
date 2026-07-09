@@ -52,9 +52,9 @@ int main(int argc, const char *argv[]) {
 
     // Create this target's one-shot orchestrator. Created before the scheduler
     // starts, but its body runs only once scheduling begins — so the bus
-    // arbiters can pump the I/O its work issues (decision #13). Phase I has no
-    // custom GATT DB yet (#6), so the GATT-DB-OK argument tracks the stack-init
-    // result.
+    // arbiters can pump the I/O its work issues (decision #13). The GATT DB (#6)
+    // registers asynchronously in BTM_ENABLED; the orchestrator reads that real
+    // result live at POST, so the argument here is only a pre-scheduler fallback.
     auto orchestrator_result =
         sentinel::create_orchestrator(ble_stack_ok, ble_stack_ok);
     configASSERT(orchestrator_result == pdPASS);

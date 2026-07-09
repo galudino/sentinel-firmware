@@ -400,6 +400,10 @@ static wiced_bt_gatt_status_t sentinel::ble_start_advertising() {
     gatt_status =
         wiced_bt_gatt_db_init(gatt_database, gatt_database_len, nullptr);
 
+    // Record the GATT-DB registration result for the POST gatt_db probe (#6).
+    sentinel::ble_context_object.set_gatt_db_ok(
+        gatt_status == wiced_bt_gatt_status_e::WICED_BT_GATT_SUCCESS);
+
     wiced_result = wiced_bt_start_advertisements(
         wiced_bt_ble_advert_mode_e::BTM_BLE_ADVERT_UNDIRECTED_HIGH, 0, nullptr);
 
