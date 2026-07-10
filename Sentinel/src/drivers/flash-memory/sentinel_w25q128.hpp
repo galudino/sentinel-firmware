@@ -540,6 +540,45 @@ public:
         return false;
     }
 
+    ///
+    /// \brief Block until a write/erase/program completes: BUSY clear \b and WEL
+    ///        clear.
+    ///
+    /// \details A completed write/erase/program auto-clears the Write Enable
+    ///          Latch (WEL, SR1 bit 1) — JEDEC-standard for all W25Q/GD25Q
+    ///          parts. Waiting on BUSY alone is racy: the very first poll can
+    ///          read \c BUSY==0 \e before the chip has asserted BUSY for the
+    ///          freshly issued op, so a still-running (or never-started) erase
+    ///          looks "done" and yields a false success (#56 — intermittently
+    ///          seen as "post-erase region not blank" with no error). Requiring
+    ///          WEL to have auto-cleared closes both cases: while the op runs (or
+    ///          if BUSY is polled early) WEL is still set, so we keep waiting; if
+    ///          the op never executed, WEL stays set and this times out honestly
+    ///          instead of returning a false success. Same single SR1 read per
+    ///          poll — no extra bus traffic, no added latency in the normal case
+    ///          (WEL and BUSY both clear at completion).
+    ///
+    bool wait_until_write_complete(uint32_t timeout_ms = 30000,
+                                   uint32_t poll_interval_ms = 1) noexcept {
+        auto guard = lock();
+        auto elapsed = uint32_t{0};
+        while (elapsed < timeout_ms) {
+            auto sr1 = read_status_register_1();
+            if (!sr1) {
+                return false; // transport error already in m_last_error
+            }
+            const bool busy = (*sr1 & (1u << status_register_1::BUSY_BIT)) != 0;
+            const bool wel = (*sr1 & (1u << status_register_1::WEL_BIT)) != 0;
+            if (!busy && !wel) {
+                return true;
+            }
+            m_bus.delay(poll_interval_ms);
+            elapsed += poll_interval_ms;
+        }
+        m_last_error = err::busy_timeout;
+        return false;
+    }
+
     // =====================================================================
     // Write control
     // =====================================================================
@@ -652,7 +691,7 @@ public:
             return false;
         }
 
-        return wait_until_ready();
+        return wait_until_write_complete();
     }
 
     // =====================================================================
@@ -683,7 +722,7 @@ public:
         auto guard = lock();
         if (!write_enable()) return false;
         if (!send_command(opcode::chip_erase)) return false;
-        return wait_until_ready(/*timeout_ms=*/250000);
+        return wait_until_write_complete(/*timeout_ms=*/250000);
     }
 
     // =====================================================================
@@ -968,7 +1007,7 @@ private:
         }
         if (!write_enable()) return false;
         if (!send_command_with_address(cmd, address)) return false;
-        return wait_until_ready(timeout_ms);
+        return wait_until_write_complete(timeout_ms);
     }
 
     ///
