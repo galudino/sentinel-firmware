@@ -93,3 +93,6 @@ Testing/
 # LLM
 .claude/
 
+# Generated Doxygen API docs (#53) — regenerate with `doxygen Doxyfile`
+docs/doxygen/
+
