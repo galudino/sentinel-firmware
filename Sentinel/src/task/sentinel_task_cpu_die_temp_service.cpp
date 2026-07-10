@@ -31,6 +31,21 @@ namespace {
 /// \brief Floor for the sampling cadence (ms).
 constexpr uint32_t MIN_PERIOD_MS = 250;
 
+///
+/// \brief How often the comparison line is logged, in sample cycles.
+///
+/// \details Matches the bme280_service / rtc_service convention: the GATT
+///          publish + notify run every cycle regardless; this only throttles the
+///          serial/BLE log. The testbench logs every cycle so all three sensor
+///          services appear together on the monitor; the application logs once
+///          per ~minute (30 cycles at the 2 s default) to keep the streams quiet.
+///
+#if defined(SENTINEL_TESTBENCH)
+constexpr uint32_t LOG_EVERY_N = 1;
+#else
+constexpr uint32_t LOG_EVERY_N = 30;
+#endif
+
 /// \brief Split a signed centi-value into sign / whole / two-digit fraction so
 ///        `%c%d.%02d` never prints strings like "-23.-05".
 void split_centi(int32_t centi, char &sign, int32_t &whole,
@@ -79,13 +94,25 @@ void cpu_die_temp_service::run() {
         loge("cpu_die_temp: die-temperature sensor init failed");
     }
 
+    uint32_t cycle = 0;
     while (true) {
         die.refresh();
+
+        // The GATT publish/notify runs every cycle; the comparison log is
+        // throttled to LOG_EVERY_N (every cycle in the testbench, ~1/min in the
+        // app) to match the bme280_service / rtc_service cadence.
+        const bool should_log = (cycle % LOG_EVERY_N) == 0;
+        ++cycle;
 
         int16_t die_centi = 0;
         if (die.cached_centi_c(die_centi)) {
             // Publish to the System CPU Temperature characteristic (R/Notify).
             sentinel::gatt::system::publish_cpu_temperature(die_centi);
+
+            if (!should_log) {
+                vTaskDelay(pdMS_TO_TICKS(m_period_ms));
+                continue;
+            }
 
             // Comparison log (#55 AC): die vs BME280 ambient vs DS3231 die.
             char die_sign, bme_sign, rtc_sign;
@@ -123,7 +150,7 @@ void cpu_die_temp_service::run() {
                      static_cast<long>(die_frac), rtc_sign,
                      static_cast<long>(rtc_whole), static_cast<long>(rtc_frac));
             }
-        } else {
+        } else if (should_log) {
             logw("cpu_die_temp: no reading yet (sensor not initialized?)");
         }
 
