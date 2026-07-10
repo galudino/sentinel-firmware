@@ -28,12 +28,15 @@ namespace sentinel {
 ///          This is particularly useful in embedded development where
 ///          variables may be conditionally used based on build configuration.
 ///
-/// \tparam T Type of the unused variable (automatically deduced)
-/// \param arg The variable to mark as unused
+/// \tparam Ts Types of the unused values (automatically deduced)
+/// \param args The values to mark as unused
 ///
-/// \note This function is constexpr and has zero runtime overhead.
-///       It simply casts the argument to void, which is the standard
-///       idiom for suppressing unused variable warnings.
+/// \note Binds each argument by \c const reference and discards it, so it works
+///       with non-copyable and expensive-to-copy types — e.g.
+///       \c sentinel::unused(sentinel::resource::context()) — unlike a by-value
+///       parameter, which would try to (and here, fail to) copy the argument.
+///       Accepts any number of arguments. \c constexpr with zero runtime
+///       overhead.
 ///
 /// \code{.cpp}
 /// void example_function(int used_param, int unused_param) {
@@ -45,9 +48,9 @@ namespace sentinel {
 /// }
 /// \endcode
 ///
-template <typename T>
-constexpr auto unused(T arg) -> void {
-    return static_cast<void>(arg);
+template <typename... Ts>
+constexpr void unused(const Ts &...args) noexcept {
+    (static_cast<void>(args), ...);
 }
 
 ///

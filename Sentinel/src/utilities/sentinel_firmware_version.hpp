@@ -74,9 +74,9 @@ public:
         pos += append_uint8(m_minor, m_buf + pos);
         m_buf[pos++] = '.';
         pos += append_uint8(m_patch, m_buf + pos);
-        m_buf[pos] = '\0';
-        pos += append_uint16(m_build, m_buf + pos);
         m_buf[pos++] = '.';
+        pos += append_uint16(m_build, m_buf + pos);
+        m_buf[pos] = '\0';
     }
 
     /// \brief Get major version component
@@ -227,6 +227,27 @@ private:
 ///       be the single source of truth for firmware version information.
 ///
 constexpr auto current_firmware_version = firmware_version();
+
+namespace detail {
+
+/// \brief constexpr C-string equality, for the version-format regression guard.
+constexpr bool cstr_equal(const char *a, const char *b) noexcept {
+    while (*a != '\0' && *a == *b) {
+        ++a;
+        ++b;
+    }
+    return *a == *b;
+}
+
+} // namespace detail
+
+// Lock the "major.minor.patch.build" c_str() format (regression guard: a prior
+// bug produced "0.0.01." — separator before build missing, stray trailing '.').
+static_assert(detail::cstr_equal(firmware_version(0, 0, 0, 1).c_str(), "0.0.0.1"),
+              "firmware_version::c_str() must be major.minor.patch.build");
+static_assert(detail::cstr_equal(firmware_version(255, 255, 255, 65535).c_str(),
+                                 "255.255.255.65535"),
+              "firmware_version::c_str() must fit + format the maximum version");
 
 /// \}
 

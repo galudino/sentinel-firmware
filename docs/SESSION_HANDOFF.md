@@ -20,10 +20,59 @@ than letting them accumulate here.
 
 ---
 
-**Last updated:** 2026-07-01 (sessions: #38, then #51). **#38 and #51 are both
-merged to `develop` and closed** (details below). The section immediately below
-documents #38 as-built; #51 (unify entry points + dedup BT/OTA config) is
-summarized under "Also this session." **NEXT: #6.**
+**Last updated:** 2026-07-08 (session: **#6/#45 GATT services**, in progress on
+branch `6-ble-gatt-services-phase-i`). Earlier: #38, #51 merged (below). **NEXT:
+finish #6 — see "#6 — in progress" below.**
+
+**#6/#45 (in progress, branch `6-ble-gatt-services-phase-i`, NOT yet merged):**
+the Phase I GATT catalog. **Landed + building clean (Release + testbench):**
+- Complete GATT database in `src/design.cybt` (regen via `bt-configurator-cli`
+  — output dir is relative to the config's parent, so use `-o GeneratedSource`,
+  not `-o src/GeneratedSource`; `GeneratedSource/` is gitignored + rebuilt).
+  8 custom services + DIS; CUD on every custom char, CCCD only on notifiers.
+- **`platform_id`/`vendor_id` enums + `vendor_of()`** (`sentinel_platform_id.hpp`,
+  append-only wire contract, #45).
+- **GATT accessor layer** (`src/bluetooth/sentinel_gatt_*.hpp`): the single seam
+  over generated `app_*`/`HDLC_*` symbols — `inline`+`noexcept` (never
+  `constexpr`), accessor/mutator (no raw-ref), notify sender in the layer.
+- **#45 done**: DIS populated (Manufacturer via `vendor_of`, Model/HW static,
+  FW/Serial mirrored) + System identity (Serial R/W, FW Version, Platform ID).
+- BME280 Ambient Sample (R/Notify, published from the bme280_service cache hook)
+  + DS3231 Unix Time (R/W — write sets the RTC via `ctx.rtc.set_unix_time()`,
+  the BLE time-sync path, **not** rtc_service) / RTC Temperature (R/Notify) /
+  Alarm Flags. Live Snapshot Stream sink attached; enable char drives start/stop.
+- Paged **Snapshot History** + **System Event Log** reads (Record Count / Index /
+  Record Block) over `resource::context()`'s stores, refreshed in
+  `gatt::paged::before_read` at the top of the read handler (relative cursor →
+  `tail_index()+cursor`; block = `floor(MAX_LEN/rec_size)` records).
+- **Async maintenance task** (`ble_maintenance_task`, `xTaskNotify` bits): Clear
+  Store (both stores; `erase_all` is multi-second) + Request Bootloader Mode
+  (deferred `NVIC_SystemReset`) — kept off the BT callback.
+- **Real `gatt_db_ok`**: `ble_context` stores the `wiced_bt_gatt_db_init` result;
+  the orchestrator reads it live at POST (BTM_ENABLED has run by then).
+- **`device_snapshot` fully populated**: BLE link metrics via
+  `ble_context::refresh_link_metrics()` (async, ~1 Hz throttled RSSI/TX-power
+  cached); **CPU die temp** via the new `drivers::psoc6_die_temperature` (SAR ADC
+  DieTemp channel + SFLASH dual-slope conversion; cache+throttle+mutex). No zero
+  fields left.
+- **CPU die-temp surfaced 3 ways**: a `System` **CPU Temperature** GATT char
+  (int16 0.01 °C, R/Notify — contract extension to #6, client #9 mirrors);
+  `cpu_die_temp_service` (periodic task, publishes the char + logs die vs
+  BME280-ambient vs DS3231 for the #55 comparison AC); and an on-target
+  `die_temperature` testbench suite (real SAR, decision #15).
+- UUIDs assigned + recorded in issue #6 body + client #9 mirrors 1:1. Issue #6
+  UUID table + #45 acceptance boxes updated (kept as official docs).
+
+**#6 remaining (next session) — all firmware wired; only bench validation left:**
+- **On-bench validation** (nRF Connect + serial): enumerate all services, DIS
+  reads, notifications, paged walk, Unix Time write sets the RTC, Clear/Bootloader.
+  Checklist: [`acceptance/gatt-nrf-connect-checklist.md`](acceptance/gatt-nrf-connect-checklist.md).
+- **Die-temp on-bench validation** tracked in **#55** (SFLASH calibration accuracy
+  + SAR 8-bit divider 6 conflict check).
+- Latent quirk noted: `firmware_version::build()` truncates to 8 bits; use
+  `array()[3]` for the full 16-bit build (done in `gatt::system`).
+- `bt-configurator-cli -o` is relative to the config's parent dir (`src/`), so
+  regenerate with `-o GeneratedSource` (not `-o src/GeneratedSource`).
 
 **#38 (merged):** boot orchestrator + shared device context + lane-1 snapshot
 persistence. Both configs build clean under `-Werror -Wall -Wextra -pedantic-errors`

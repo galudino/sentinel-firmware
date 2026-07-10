@@ -24,6 +24,8 @@ extern "C" {
 }
 #pragma GCC diagnostic pop
 
+#include "sentinel_utilities.hpp"
+
 #include "sentinel_test_orchestrator.hpp"
 
 ///< Logging
@@ -38,12 +40,14 @@ extern "C" {
 ///< Continuous reader / helper services started by the orchestrator
 #include "sentinel_task_battery_service.hpp"
 #include "sentinel_task_bme280_service.hpp"
+#include "sentinel_task_cpu_die_temp_service.hpp"
 #include "sentinel_task_rtc_service.hpp"
 #include "sentinel_task_snapshot_stream.hpp"
 
 ///< Test suites (each exposes a synchronous run_all() -> tally)
 #include "sentinel_test_bme280.hpp"
 #include "sentinel_test_device_snapshot.hpp"
+#include "sentinel_test_die_temperature.hpp"
 #include "sentinel_test_ds3231.hpp"
 #include "sentinel_test_post.hpp"
 #include "sentinel_test_record_store.hpp"
@@ -51,6 +55,8 @@ extern "C" {
 #include "sentinel_test_snapshot_stream.hpp"
 #include "sentinel_test_system_event_log.hpp"
 #include "sentinel_test_w25q128.hpp"
+
+namespace sentinel::testbench {
 
 namespace {
 
@@ -77,22 +83,19 @@ void banner(const char *title) noexcept {
     rule();
 }
 
+/// \brief Start a service task, logging on failure (boot continues regardless).
+void start_task(const char *name, BaseType_t rc) noexcept {
+    if (rc != pdPASS) {
+        loge("test: %s task create failed", name);
+    }
+}
+
 } // namespace
-
-namespace sentinel::testbench {
-
-// ============================================================================
-// test_orchestrator::instance
-// ============================================================================
 
 test_orchestrator &test_orchestrator::instance() noexcept {
     static test_orchestrator the_instance;
     return the_instance;
 }
-
-// ============================================================================
-// test_orchestrator::task_create
-// ============================================================================
 
 BaseType_t test_orchestrator::task_create(bool ble_stack_ok, bool gatt_db_ok,
                                           UBaseType_t priority,
@@ -103,17 +106,9 @@ BaseType_t test_orchestrator::task_create(bool ble_stack_ok, bool gatt_db_ok,
                        stack_words, this, priority, &m_handle);
 }
 
-// ============================================================================
-// test_orchestrator::task_trampoline
-// ============================================================================
-
 void test_orchestrator::task_trampoline(void *task_parameter) {
     static_cast<test_orchestrator *>(task_parameter)->run();
 }
-
-// ============================================================================
-// test_orchestrator::run
-// ============================================================================
 
 void test_orchestrator::run() {
     banner("SENTINEL TESTBENCH - bottom-up serial diagnostic");
@@ -126,12 +121,10 @@ void test_orchestrator::run() {
     //     so it must exist before that group runs; idle until #6 calls start().
     //   - battery_service: only acts when BLE-connected + notifications
     //   enabled.
-    if (task::snapshot_stream_task::instance().task_create() != pdPASS) {
-        loge("orchestrator: snapshot_stream_task create failed");
-    }
-    if (task::battery_service::instance().task_create() != pdPASS) {
-        loge("orchestrator: battery_service create failed");
-    }
+    start_task("snapshot stream",
+               task::snapshot_stream_task::instance().task_create());
+    start_task("battery service",
+               task::battery_service::instance().task_create());
 
     group_result groups[kMaxGroups]{};
     auto count = int{0};
@@ -165,6 +158,9 @@ void test_orchestrator::run() {
     run_group("record_store", &sentinel::test::record_store::run_all);
 #endif /* CYBSP_SPI_HW */
 
+    // PSoC 6 on-die temperature via the SAR ADC — no external bus (#55).
+    run_group("die_temperature", &sentinel::test::die_temperature::run_all);
+
     // RAM / fake-driven suites — independent of any physical bus being present.
     run_group("system_event_log", &sentinel::test::system_event_log::run_all);
     run_group("device_snapshot", &sentinel::test::device_snapshot::run_all);
@@ -174,7 +170,7 @@ void test_orchestrator::run() {
     // -------- Per-group + overall summary --------
     banner("TEST SUMMARY");
     auto overall = sentinel::test::tally{};
-    for (auto i = int{0}; i < count; ++i) {
+    for (auto i = int{0}; i < count; i++) {
         overall += groups[i].tally;
         logi("  %-20s %2u passed, %2u failed%s", groups[i].name,
              static_cast<unsigned>(groups[i].tally.passed),
@@ -191,24 +187,24 @@ void test_orchestrator::run() {
     // serial readers, so their output can never interleave the diagnostic above
     // (#48 AC readers_start_after).
     logi("testbench: starting continuous reader services "
-         "(rtc_service, bme280_service)...");
+         "(rtc_service, bme280_service, cpu_die_temp_service)...");
 
     // Build the shared device context HERE — a single first-touch from this one
-    // task — before either reader starts. With -fno-threadsafe-statics (decision
-    // #18) the Meyers-singleton guard is gone, so if rtc_service and
-    // bme280_service each first-touched context() from their own task they would
-    // RACE to construct it (the BME280 calibration read yields mid-construction,
-    // letting the second task enter with the guard byte still clear → double
-    // construction). Constructing it once here, up front, preserves decision
-    // #18's invariant and is why the app boot orchestrator does the same.
-    (void)sentinel::resource::context();
+    // task — before either reader starts. With -fno-threadsafe-statics
+    // (decision #18) the Meyers-singleton guard is gone, so if rtc_service and
+    // bme280_service each first-touched context() from their own task they
+    // would RACE to construct it (the BME280 calibration read yields
+    // mid-construction, letting the second task enter with the guard byte still
+    // clear → double construction). Constructing it once here, up front,
+    // preserves decision #18's invariant and is why the app boot orchestrator
+    // does the same.
+    static_cast<void>(sentinel::resource::context());
 
-    if (task::rtc_service::instance().task_create() != pdPASS) {
-        loge("orchestrator: rtc_service create failed");
-    }
-    if (task::bme280_service::instance().task_create() != pdPASS) {
-        loge("orchestrator: bme280_service create failed");
-    }
+    start_task("rtc service", task::rtc_service::instance().task_create());
+    start_task("bme280 service",
+               task::bme280_service::instance().task_create());
+    start_task("cpu die-temp service",
+               task::cpu_die_temp_service::instance().task_create());
 
     // One-shot: a FreeRTOS task must not fall off the end of its entry function
     // (that traps in prvTaskExitError with interrupts disabled), so delete it.
@@ -223,6 +219,6 @@ void test_orchestrator::run() {
 namespace sentinel {
 BaseType_t create_orchestrator(bool ble_stack_ok, bool gatt_db_ok) noexcept {
     return testbench::test_orchestrator::instance().task_create(ble_stack_ok,
-                                                               gatt_db_ok);
+                                                                gatt_db_ok);
 }
 } // namespace sentinel

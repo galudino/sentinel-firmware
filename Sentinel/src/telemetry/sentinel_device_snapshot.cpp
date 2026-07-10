@@ -30,6 +30,7 @@ extern "C" {
 #include "sentinel_device_context.hpp"
 #include "sentinel_device_snapshot.hpp"
 #include "sentinel_firmware_version.hpp"
+#include "sentinel_psoc6_die_temperature.hpp"
 #include "sentinel_task_bme280_service.hpp"
 #include "sentinel_task_rtc_service.hpp"
 
@@ -77,16 +78,36 @@ void device_snapshot::populate(device_snapshot &out) noexcept {
         out.post_last_status = ctx.post_last_status;
     }
 
-    // ---- BLE — live connection state (#29). TX power / RSSI remain 0 until #6
-    // publishes them through ble_context.
+    // ---- BLE — live connection state (#29) + link metrics (#6). ----
     out.ble_connected =
         sentinel::ble_context_object.connected() ? uint8_t{1} : uint8_t{0};
+    if (out.ble_connected) {
+        // Read the previously cached RSSI / TX power, then kick a fresh
+        // (non-blocking, ~1 Hz throttled) read for the next snapshot. RSSI is
+        // stored as its magnitude (60 => -60 dBm); TX power is a signed dBm
+        // value carried in the uint8 field (decoded as int8 by the client).
+        sentinel::ble_context_object.refresh_link_metrics();
+        const auto rssi = sentinel::ble_context_object.peer_rssi();
+        out.ble_peer_rssi_neg =
+            static_cast<uint8_t>(rssi < 0 ? -static_cast<int>(rssi) : 0);
+        out.ble_tx_power_dbm =
+            static_cast<uint8_t>(sentinel::ble_context_object.tx_power_dbm());
+    }
 
     // ---- System health ----
     out.uptime_seconds = static_cast<uint32_t>(xTaskGetTickCount()) /
                          static_cast<uint32_t>(configTICK_RATE_HZ);
     out.uptime_seconds_low = static_cast<uint8_t>(out.uptime_seconds & 0xFFu);
-    // cpu_temperature_001c: 0 until the on-die temp sensor is wired (#6).
+    // On-die CPU temperature via the SAR ADC (#6). Throttled (~1 Hz) + cached in
+    // the driver, so the 100 ms stream path does not re-convert every populate.
+    // Stays 0 off-bench / before the driver is initialized (its cache is invalid).
+    sentinel::drivers::psoc6_die_temperature::instance().refresh();
+    if (int16_t die_centi_c = 0;
+        sentinel::drivers::psoc6_die_temperature::instance().cached_centi_c(
+            die_centi_c)) {
+        out.cpu_temperature_001c =
+            die_centi_c < 0 ? uint16_t{0} : static_cast<uint16_t>(die_centi_c);
+    }
 
     // ---- Trailer (written last) ----
     out.trailer_magic = SNAPSHOT_TRAILER_MAGIC;
