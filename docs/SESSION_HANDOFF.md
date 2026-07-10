@@ -20,9 +20,49 @@ than letting them accumulate here.
 
 ---
 
-**Last updated:** 2026-07-10 (session: **#6 / #45 / #55 GATT services — MERGED +
-closed**). Earlier: #38, #51 merged. **NEXT: #49 + #56 (may be tackled
-autonomously), then #53; new docs roadmap #57.**
+**Last updated:** 2026-07-10 (session: **#56 + #49 MERGED to `develop`; #53 +
+#57 docs started on branches**). Earlier: #6/#45/#55 GATT, #38, #51 merged.
+**NEXT: on-bench sign-off of #56 + #49; review/merge the #53 + #57 docs
+branches; then the end-of-Phase-I clang-format sweep (#53) and OTA DFU
+validation (the Phase I finale).**
+
+**THIS SESSION (2026-07-10, autonomous):**
+- **#56 (MERGED to `develop`, squash `8ea30be`, tag
+  `56-w25q128-write-completion-history`; board → In Review).** w25q128
+  erase/program could report false success when the op was a silent no-op —
+  completion was inferred from BUSY-clear alone, which can't tell "finished"
+  from "never started". New `wait_until_write_complete()` requires **both** BUSY
+  and WEL (SR1 bit 1) to clear; a completed op auto-clears WEL (JEDEC), so a
+  never-started op leaves WEL latched and now times out honestly. Rewired
+  `page_program` / `chip_erase` / `erase_with_address`. **On-bench pending:**
+  AC #2 (deterministic `erase_program_read` across many runs) + AC #3 (a
+  WEL-injection regression test — not feasible off-bench today; the suites drive
+  the real device, no fake SPI transport exists).
+- **#49 (MERGED to `develop`, squash `c5b625d`, tag
+  `49-record-store-fast-scan-history`; board → In Review).**
+  `record_store::initialize()` was an unconditional O(capacity) min/max scan
+  (~8.7 s/region, ~17 s boot). Now classifies the region from **slot 0**: valid
+  seq 0 → never wrapped → binary-search the valid/empty boundary
+  (O(log capacity)); empty → `region_is_blank()` per-sector head probe
+  (O(sector_count)) distinguishes a truly blank region (fast, the ~17 s case)
+  from a power-loss-mid-recycle-of-sector-0 transient (falls through to the full
+  scan so no records are lost); else wrapped → the unchanged authoritative
+  `initialize_full_scan()`. No on-flash format change. New testbench
+  `recycle_transient_recovery` guards the transient. **Builds validated locally
+  (release firmware OTA image signs + fits; release + debug testbench link).**
+  **On-bench pending:** run the record_store suite (now 7 tests → expect 7/7)
+  and measure the empty-region boot scan (<1 s).
+- **#53 (branch `53-doxyfile-doc-infra`, NOT merged — review; board → In
+  Progress).** Added a curated repo-root `Doxyfile` (`OUTPUT_DIRECTORY =
+  docs/doxygen`, gitignored; `EXTRACT_ALL=NO` + `WARN_IF_UNDOCUMENTED` so the
+  coverage gap shows; MathJax, no dot). Verified `doxygen Doxyfile` runs clean
+  (1.11.0, exit 0). The `clang-format -i` + reviewer-rule sweep + doc backfill
+  stay the **end-of-Phase-I** task.
+- **#57 (branch `57-src-readme-docs`, NOT merged — review; board → In
+  Progress).** Added `Sentinel/src/README.md` — the module-map TOC + the four
+  core Mermaid diagrams (CRTP transport, bus-arbiter tasks, two-lane snapshot,
+  boot orchestrator). Per-directory module READMEs fan out from this anchor
+  (remainder of #57, left so the pattern can be reviewed first).
 
 **#6 / #45 / #55 (MERGED to `develop` 2026-07-10, squash `f573cb1`, history tag
 `6-ble-gatt-services-phase-i-history`; issues closed).** Phase I GATT catalog +
@@ -223,30 +263,33 @@ default.
   Device Information Service + Platform ID, and the PSoC 6 die-temperature
   driver/service (squash `f573cb1`, tag `6-ble-gatt-services-phase-i-history`).
 - **What's next (open, dependency-ordered):**
-  1. **#49** — `record_store::initialize()` is O(capacity); slow boot flash scan
-     (~17 s across two region scans). ← **NEXT**
-  2. **#56** — w25q128 erase/program can falsely report success when WEL doesn't
-     latch (verify WEL / BUSY-asserted before trusting BUSY-clear).
-  3. **#53** — formatting / house style / Doxygen (after #49 + #56).
-     **#57** — per-directory README docs (roadmap; complements #53).
+  1. **On-bench sign-off of #56 + #49** (both merged to `develop`, board In
+     Review). #56: `erase_program_read` deterministic across many runs.
+     #49: record_store suite 7/7 + empty-region boot-scan <1 s measurement.
+  2. **Review + merge the #53 + #57 docs branches** (`53-doxyfile-doc-infra`,
+     `57-src-readme-docs`) — then continue #57's per-directory README fan-out.
+  3. **End-of-Phase-I `clang-format` sweep (#53)** + **OTA DFU validation with
+     `sentinel-client`** — the Phase I finale.
 
 ---
 
-## Next issues (post #6/#45/#55 merge)
+## Next issues (post #56/#49 merge)
 
-1. **#49 — slow boot flash scan.** `record_store::initialize()` is O(capacity):
-   two region scans (~8.7 s each; ~17 s total) at boot. Optimize the scan (e.g.
-   binary-search the head/tail rather than a full linear sweep, or a stored
-   head/tail hint). Touches `src/storage/sentinel_record_store.hpp`.
-2. **#56 — w25q128 false-success erase/program.** After `write_enable`, the driver
-   trusts `wait_until_ready` (BUSY-clear) as completion — but if the WEL latch
-   didn't stick, the op is silently ignored, BUSY never asserts, and it returns a
-   false `true`. Fix: verify WEL set (or that BUSY asserted) before trusting the
-   clear. `src/drivers/flash-memory/sentinel_w25q128.hpp`; surfaced intermittently
-   by `sentinel_test_w25q128.cpp::erase_program_read`.
-3. **#53 — formatting / house style / Doxygen** (address after #49 + #56).
-4. **#57 — per-directory README docs** (roadmap; narrative module docs, GitHub-
-   rendered; complements #53's Doxygen API reference).
+1. **On-bench sign-off — #56 + #49** (both merged to `develop`, In Review).
+   Flash a testbench build to the GD25Q128/CYBLE-416045 and run:
+   - **#56:** `erase_program_read` deterministically across many consecutive
+     runs (was intermittent). Optionally add a WEL-injection regression test if
+     a fake SPI transport is introduced (AC #3).
+   - **#49:** the record_store suite — 7 tests now incl.
+     `recycle_transient_recovery` — expect 7/7; and confirm the empty-region
+     boot scan is well under 1 s (was ~8.7 s/region).
+2. **#53 — Doxyfile done (branch, review);** the `clang-format -i` +
+   reviewer-rule sweep (`RecordT`→`RecordType`, namespace-nested defs,
+   prefix/postfix, ref-for-mutation) + Doxygen backfill remain the
+   **end-of-Phase-I** task (deferred so it doesn't churn in-flight branches).
+3. **#57 — `src/README.md` anchor done (branch, review);** fan out the
+   per-directory module READMEs from it incrementally.
+4. **OTA DFU validation with `sentinel-client`** — the Phase I finale.
 
 Durable as-built detail lives in `docs/architecture/decisions.md` and the closed
 issues #6 / #45 / #55.
