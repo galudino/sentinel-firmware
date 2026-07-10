@@ -20,59 +20,48 @@ than letting them accumulate here.
 
 ---
 
-**Last updated:** 2026-07-08 (session: **#6/#45 GATT services**, in progress on
-branch `6-ble-gatt-services-phase-i`). Earlier: #38, #51 merged (below). **NEXT:
-finish #6 — see "#6 — in progress" below.**
+**Last updated:** 2026-07-10 (session: **#6 / #45 / #55 GATT services — MERGED +
+closed**). Earlier: #38, #51 merged. **NEXT: #49 + #56 (may be tackled
+autonomously), then #53; new docs roadmap #57.**
 
-**#6/#45 (in progress, branch `6-ble-gatt-services-phase-i`, NOT yet merged):**
-the Phase I GATT catalog. **Landed + building clean (Release + testbench):**
-- Complete GATT database in `src/design.cybt` (regen via `bt-configurator-cli`
-  — output dir is relative to the config's parent, so use `-o GeneratedSource`,
-  not `-o src/GeneratedSource`; `GeneratedSource/` is gitignored + rebuilt).
-  8 custom services + DIS; CUD on every custom char, CCCD only on notifiers.
-- **`platform_id`/`vendor_id` enums + `vendor_of()`** (`sentinel_platform_id.hpp`,
-  append-only wire contract, #45).
-- **GATT accessor layer** (`src/bluetooth/sentinel_gatt_*.hpp`): the single seam
-  over generated `app_*`/`HDLC_*` symbols — `inline`+`noexcept` (never
-  `constexpr`), accessor/mutator (no raw-ref), notify sender in the layer.
-- **#45 done**: DIS populated (Manufacturer via `vendor_of`, Model/HW static,
-  FW/Serial mirrored) + System identity (Serial R/W, FW Version, Platform ID).
-- BME280 Ambient Sample (R/Notify, published from the bme280_service cache hook)
-  + DS3231 Unix Time (R/W — write sets the RTC via `ctx.rtc.set_unix_time()`,
-  the BLE time-sync path, **not** rtc_service) / RTC Temperature (R/Notify) /
-  Alarm Flags. Live Snapshot Stream sink attached; enable char drives start/stop.
-- Paged **Snapshot History** + **System Event Log** reads (Record Count / Index /
-  Record Block) over `resource::context()`'s stores, refreshed in
-  `gatt::paged::before_read` at the top of the read handler (relative cursor →
-  `tail_index()+cursor`; block = `floor(MAX_LEN/rec_size)` records).
-- **Async maintenance task** (`ble_maintenance_task`, `xTaskNotify` bits): Clear
-  Store (both stores; `erase_all` is multi-second) + Request Bootloader Mode
-  (deferred `NVIC_SystemReset`) — kept off the BT callback.
-- **Real `gatt_db_ok`**: `ble_context` stores the `wiced_bt_gatt_db_init` result;
-  the orchestrator reads it live at POST (BTM_ENABLED has run by then).
-- **`device_snapshot` fully populated**: BLE link metrics via
-  `ble_context::refresh_link_metrics()` (async, ~1 Hz throttled RSSI/TX-power
-  cached); **CPU die temp** via the new `drivers::psoc6_die_temperature` (SAR ADC
-  DieTemp channel + SFLASH dual-slope conversion; cache+throttle+mutex). No zero
-  fields left.
-- **CPU die-temp surfaced 3 ways**: a `System` **CPU Temperature** GATT char
-  (int16 0.01 °C, R/Notify — contract extension to #6, client #9 mirrors);
-  `cpu_die_temp_service` (periodic task, publishes the char + logs die vs
-  BME280-ambient vs DS3231 for the #55 comparison AC); and an on-target
-  `die_temperature` testbench suite (real SAR, decision #15).
-- UUIDs assigned + recorded in issue #6 body + client #9 mirrors 1:1. Issue #6
-  UUID table + #45 acceptance boxes updated (kept as official docs).
+**#6 / #45 / #55 (MERGED to `develop` 2026-07-10, squash `f573cb1`, history tag
+`6-ble-gatt-services-phase-i-history`; issues closed).** Phase I GATT catalog +
+DIS/Platform ID + PSoC 6 die-temperature, validated on-bench (nRF Connect +
+testbench 46/46). As-built + durable notes:
+- **GATT DB** in `src/design.cybt`, regen via `bt-configurator-cli -c src/design.cybt
+  -o GeneratedSource` — the `-o` path is relative to the config's parent (`src/`),
+  so NOT `-o src/GeneratedSource`; `GeneratedSource/` is gitignored + rebuilt.
+  8 custom services + DIS + Battery; CUD on every custom char, CCCD only on
+  notifiers. UUIDs in the #6 body (client #9 mirrors 1:1).
+- **Accessor layer** (`src/bluetooth/sentinel_gatt_*.hpp`) = the single seam over
+  generated `app_*`/`HDLC_*`: `inline`+`noexcept` (never `constexpr` — they read
+  extern GATT-DB globals), accessor/mutator (no raw-ref), notify sender in-layer.
+- **Producers wired**: BME280 Ambient Sample; DS3231 Unix Time (R/W — the write is
+  the BLE time-sync path via `ctx.rtc.set_unix_time()`, **not** rtc_service, per
+  `[[project_rtc_time_design]]`) / RTC Temp / Alarm Flags; Snapshot Stream (sink +
+  enable char); paged Snapshot History + System Event Log; async
+  `ble_maintenance_task` for Clear Store + Request Bootloader (off the BT callback);
+  real `gatt_db_ok` into POST.
+- **#55 die-temp**: `drivers::psoc6_die_temperature` (SAR DieTemp channel, 1.2 V BGR,
+  32× avg, SFLASH dual-slope conversion; cache+throttle+mutex; SAR on free 8-bit
+  divider 6). Surfaced via System **CPU Temperature** char (R/Notify),
+  `cpu_die_temp_service` (heartbeat-gated log like the peers, `SENTINEL_TESTBENCH`
+  gate), and a real-SAR testbench suite. ~34 °C on-bench, correct vs BME280/DS3231.
+- **`device_snapshot`** fully populated (RSSI/TX-power async-cached + CPU die temp).
+- Bugs fixed en route: `firmware_version::c_str()` formatted `0.0.0.1` as `0.0.01.`
+  (now guarded by static_assert); `unused()` is const-ref variadic (accepts
+  non-copyable). Note `firmware_version::build()` still truncates to 8 bits — use
+  `array()[3]` for the full 16-bit build.
+- On-bench GATT checklist:
+  [`acceptance/gatt-nrf-connect-checklist.md`](acceptance/gatt-nrf-connect-checklist.md).
 
-**#6 remaining (next session) — all firmware wired; only bench validation left:**
-- **On-bench validation** (nRF Connect + serial): enumerate all services, DIS
-  reads, notifications, paged walk, Unix Time write sets the RTC, Clear/Bootloader.
-  Checklist: [`acceptance/gatt-nrf-connect-checklist.md`](acceptance/gatt-nrf-connect-checklist.md).
-- **Die-temp on-bench validation** tracked in **#55** (SFLASH calibration accuracy
-  + SAR 8-bit divider 6 conflict check).
-- Latent quirk noted: `firmware_version::build()` truncates to 8 bits; use
-  `array()[3]` for the full 16-bit build (done in `gatt::system`).
-- `bt-configurator-cli -o` is relative to the config's parent dir (`src/`), so
-  regenerate with `-o GeneratedSource` (not `-o src/GeneratedSource`).
+**NEXT (dependency-ordered):**
+1. **#49** — `record_store::initialize()` is O(capacity): slow boot flash scan
+   (~17 s, two region scans). Optimize the scan.
+2. **#56** — w25q128 erase/program can report false success when WEL doesn't latch
+   (verify WEL / that BUSY asserted before trusting BUSY-clear). Filed with diagnosis.
+3. **#53** — formatting / house style / Doxygen — address after #49 + #56.
+   **#57** — per-directory README docs across the tree (roadmap; complements #53).
 
 **#38 (merged):** boot orchestrator + shared device context + lane-1 snapshot
 persistence. Both configs build clean under `-Werror -Wall -Wextra -pedantic-errors`
@@ -170,7 +159,9 @@ components), #16 (all FreeRTOS tasks OO/class), **#17 (device context = post-
 scheduler Meyers singleton, amends #13)**. Full text in
 [`architecture/decisions.md`](architecture/decisions.md).
 
-**NEXT: #6 (BLE GATT services Phase I) — its deps #38 + #46 are now done.**
+**NEXT: #49 (slow boot flash scan) + #56 (w25q128 WEL false-success) — may be
+tackled autonomously — then #53 (formatting / Doxygen). #57 (per-dir READMEs) is
+a new docs roadmap item. #6 / #45 / #55 merged to `develop` + closed.**
 
 ---
 
@@ -228,33 +219,34 @@ default.
   (`resource::context()`, `app::boot_orchestrator`, `snapshot_persistence_task`;
   decision #17; both builds clean; **merged to `develop` 2026-07-01, on-bench
   POST hardware ACs signed off — AC 1/2/4/5/6 PASS, AC 3 bench-infeasible**).
+- **Also merged to `develop`:** **#6 / #45 / #55** — Phase I BLE GATT services,
+  Device Information Service + Platform ID, and the PSoC 6 die-temperature
+  driver/service (squash `f573cb1`, tag `6-ble-gatt-services-phase-i-history`).
 - **What's next (open, dependency-ordered):**
-  1. **#6** — BLE GATT services Phase I (wires producer notify-sinks →
-     characteristics, incl. attaching `snapshot_stream_task`'s notify sink +
-     driving `start()`/`stop()` from the `SnapshotStream` enable char, exposing
-     `snapshot_persistence_task` history reads, threading the real `gatt_db_ok`
-     into the orchestrator's POST, and publishing BLE tx-power/RSSI + CPU temp
-     into `populate_snapshot`; assigns UUIDs). Deps #38 + #46 now done. ← **NEXT**
+  1. **#49** — `record_store::initialize()` is O(capacity); slow boot flash scan
+     (~17 s across two region scans). ← **NEXT**
+  2. **#56** — w25q128 erase/program can falsely report success when WEL doesn't
+     latch (verify WEL / BUSY-asserted before trusting BUSY-clear).
+  3. **#53** — formatting / house style / Doxygen (after #49 + #56).
+     **#57** — per-directory README docs (roadmap; complements #53).
 
 ---
 
-## #6 — BLE GATT services Phase I (next)
+## Next issues (post #6/#45/#55 merge)
 
-With #38 merged, the producer side is complete and #6 is pure GATT wiring
-(decision #8 chip-named services, #9 one-shot-sample rule):
+1. **#49 — slow boot flash scan.** `record_store::initialize()` is O(capacity):
+   two region scans (~8.7 s each; ~17 s total) at boot. Optimize the scan (e.g.
+   binary-search the head/tail rather than a full linear sweep, or a stored
+   head/tail hint). Touches `src/storage/sentinel_record_store.hpp`.
+2. **#56 — w25q128 false-success erase/program.** After `write_enable`, the driver
+   trusts `wait_until_ready` (BUSY-clear) as completion — but if the WEL latch
+   didn't stick, the op is silently ignored, BUSY never asserts, and it returns a
+   false `true`. Fix: verify WEL set (or that BUSY asserted) before trusting the
+   clear. `src/drivers/flash-memory/sentinel_w25q128.hpp`; surfaced intermittently
+   by `sentinel_test_w25q128.cpp::erase_program_read`.
+3. **#53 — formatting / house style / Doxygen** (address after #49 + #56).
+4. **#57 — per-directory README docs** (roadmap; narrative module docs, GitHub-
+   rendered; complements #53's Doxygen API reference).
 
-- Attach `snapshot_stream_task::set_notify_sink` + drive `start()`/`stop()` from
-  the `SnapshotStream` enable characteristic (lane 2).
-- Expose `snapshot_persistence_task::read`/`read_range`/`count` as the
-  `SnapshotHistory` paged-read service (lane 1), mirroring the `SystemEventLog`
-  retrieval shape.
-- Thread the **real GATT-DB-registration result** into
-  `boot_orchestrator::task_create(ble_stack_ok, gatt_db_ok)` (Phase I currently
-  passes the stack-init result for both).
-- Publish BLE tx-power / peer RSSI (and the on-die CPU temp) so the remaining
-  zero `device_snapshot` fields fill in.
-- Assign the 128-bit service/characteristic UUIDs; client #9 mirrors 1:1.
-
-The as-built API detail for the System Event Log, POST, and the shared device
-context / boot orchestrator lives in decisions #11/#12/#13/#17 of
-[`architecture/decisions.md`](architecture/decisions.md).
+Durable as-built detail lives in `docs/architecture/decisions.md` and the closed
+issues #6 / #45 / #55.
