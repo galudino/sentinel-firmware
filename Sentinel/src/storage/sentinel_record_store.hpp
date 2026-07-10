@@ -229,55 +229,61 @@ public:
     // =====================================================================
 
     ///
-    /// \brief Recover \c head / \c tail by scanning the region.
+    /// \brief Recover \c head / \c tail from the on-flash state.
     ///
-    /// \details Reads each slot's header and locates the valid sequence
-    ///          range. On a freshly-erased region no slot is valid, so
-    ///          head == tail == 0 and \ref count() is 0. Safe to call again
-    ///          to re-scan (e.g. to emulate a warm boot in tests).
+    /// \details The authoritative recovery is a min/max \c sequence scan over
+    ///          every valid slot (\ref initialize_full_scan()) — O(capacity),
+    ///          i.e. ~8k slot reads per region on the production flash map, and
+    ///          the dominant boot cost (~8.7 s each; firmware #49). That
+    ///          exhaustive scan is only actually *required* once the log has
+    ///          **wrapped**, because only then can the newest record sit
+    ///          anywhere in the region. The common boot states are recovered
+    ///          far more cheaply by first classifying the region from slot 0:
+    ///
+    ///          - **slot 0 valid, \c sequence == 0** — never wrapped (slot 0 is
+    ///            only ever rewritten to a \c sequence \c >= \c capacity, and
+    ///            that first happens on the first wrap). Slots \c [0,head) are
+    ///            valid and \c [head,capacity) empty — one monotonic boundary,
+    ///            so \c head is found by binary search in O(log capacity)
+    ///            status reads and \c tail is 0 (\ref initialize_unwrapped()).
+    ///          - **slot 0 empty** — either a truly blank region or a power
+    ///            loss caught mid-recycle of sector 0 (sector 0 erased, later
+    ///            sectors still valid). \ref region_is_blank() tells them apart
+    ///            with a per-sector head probe (O(sector_count)); blank means
+    ///            \c head == tail == 0, the transient falls through to the full
+    ///            scan.
+    ///          - **otherwise (slot 0 valid, \c sequence != 0)** — wrapped; the
+    ///            full min/max scan is authoritative.
+    ///
+    ///          No on-flash format change. Safe to call again to re-scan (e.g.
+    ///          to emulate a warm boot in tests).
     ///
     /// \return \c true on success; \c false on a transport failure.
     ///
     bool initialize() noexcept {
-        auto have_any = false;
-        auto min_seq  = uint32_t{0};
-        auto max_seq  = uint32_t{0};
+        auto header = std::array<uint8_t, HEADER_SIZE>{};
+        if (!read_slot_header(0u, header.data())) {
+            return false; // m_last_error set by helper
+        }
 
-        for (auto slot = uint32_t{0}; slot < m_capacity; slot++) {
-            auto header = std::array<uint8_t, HEADER_SIZE>{};
-            if (!m_flash.read_data(slot_address(slot),
-                                   sentinel::make_span(header.data(),
-                                                       header.size()))) {
-                m_last_error = err::flash_failure;
+        const auto status0 = header[OFFSET_STATUS];
+        if (status0 == STATUS_VALID && load_sequence(header.data()) == 0u) {
+            return initialize_unwrapped();
+        }
+        if (status0 == STATUS_EMPTY) {
+            auto blank = false;
+            if (!region_is_blank(&blank)) {
                 return false;
             }
-
-            if (header[OFFSET_STATUS] != STATUS_VALID) {
-                continue;
-            }
-
-            auto seq = load_sequence(header.data());
-            if (!have_any) {
-                min_seq  = seq;
-                max_seq  = seq;
-                have_any = true;
-            } else {
-                if (seq < min_seq) min_seq = seq;
-                if (seq > max_seq) max_seq = seq;
+            if (blank) {
+                m_tail        = 0u;
+                m_head        = 0u;
+                m_initialized = true;
+                m_last_error  = err::ok;
+                return true;
             }
         }
-
-        if (have_any) {
-            m_tail = min_seq;
-            m_head = max_seq + 1u;
-        } else {
-            m_tail = 0u;
-            m_head = 0u;
-        }
-
-        m_initialized = true;
-        m_last_error  = err::ok;
-        return true;
+        return initialize_full_scan();
     }
 
     ///
@@ -420,6 +426,153 @@ private:
         auto seq = uint32_t{0};
         std::memcpy(&seq, header + OFFSET_SEQUENCE, sizeof(seq));
         return seq;
+    }
+
+    /// Read a slot's 8-byte header into \p out (caller-owned, HEADER_SIZE).
+    bool read_slot_header(uint32_t slot, uint8_t *out) noexcept {
+        if (!m_flash.read_data(slot_address(slot),
+                               sentinel::make_span(out, HEADER_SIZE))) {
+            m_last_error = err::flash_failure;
+            return false;
+        }
+        return true;
+    }
+
+    /// Read just a slot's 1-byte status field into \p out_status.
+    bool read_slot_status(uint32_t slot, uint8_t *out_status) noexcept {
+        if (!m_flash.read_data(slot_address(slot),
+                               sentinel::make_span(out_status, 1u))) {
+            m_last_error = err::flash_failure;
+            return false;
+        }
+        return true;
+    }
+
+    // =====================================================================
+    // Initialize internals (#49)
+    // =====================================================================
+
+    ///
+    /// \brief Authoritative O(capacity) recovery: min/max \c sequence over
+    ///        every valid slot.
+    ///
+    /// \details Reads each slot's header and locates the valid sequence range;
+    ///          \c tail = \c min(sequence), \c head = \c max(sequence)+1. On a
+    ///          region with no valid slot, \c head == tail == 0. Correct for
+    ///          any on-flash state — including a wrapped log, where the newest
+    ///          record can sit anywhere — so \ref initialize() falls back here
+    ///          whenever the cheaper classified paths do not apply.
+    ///
+    /// \return \c true on success; \c false on a transport failure.
+    ///
+    bool initialize_full_scan() noexcept {
+        auto have_any = false;
+        auto min_seq  = uint32_t{0};
+        auto max_seq  = uint32_t{0};
+
+        for (auto slot = uint32_t{0}; slot < m_capacity; slot++) {
+            auto header = std::array<uint8_t, HEADER_SIZE>{};
+            if (!read_slot_header(slot, header.data())) {
+                return false;
+            }
+
+            if (header[OFFSET_STATUS] != STATUS_VALID) {
+                continue;
+            }
+
+            auto seq = load_sequence(header.data());
+            if (!have_any) {
+                min_seq  = seq;
+                max_seq  = seq;
+                have_any = true;
+            } else {
+                if (seq < min_seq) {
+                    min_seq = seq;
+                }
+                if (seq > max_seq) {
+                    max_seq = seq;
+                }
+            }
+        }
+
+        if (have_any) {
+            m_tail = min_seq;
+            m_head = max_seq + 1u;
+        } else {
+            m_tail = 0u;
+            m_head = 0u;
+        }
+
+        m_initialized = true;
+        m_last_error  = err::ok;
+        return true;
+    }
+
+    ///
+    /// \brief Recover a never-wrapped region: binary-search the valid/empty
+    ///        boundary for \c head; \c tail is 0.
+    ///
+    /// \details Precondition (guaranteed by the slot-0 classification in
+    ///          \ref initialize()): slots \c [0,head) are \c STATUS_VALID and
+    ///          \c [head,capacity) are \c STATUS_EMPTY — a single monotonic
+    ///          transition. Probes only the 1-byte status field per step, so
+    ///          recovery is O(log capacity) reads. A region filled exactly to
+    ///          \c capacity but not yet wrapped has no empty slot, so the search
+    ///          yields \c head == \c capacity.
+    ///
+    /// \return \c true on success; \c false on a transport failure.
+    ///
+    bool initialize_unwrapped() noexcept {
+        auto lo = uint32_t{0};
+        auto hi = m_capacity; // first non-valid slot lies in [lo, hi]
+        while (lo < hi) {
+            const auto mid = lo + (hi - lo) / 2u;
+            auto status = uint8_t{};
+            if (!read_slot_status(mid, &status)) {
+                return false;
+            }
+            if (status == STATUS_VALID) {
+                lo = mid + 1u;
+            } else {
+                hi = mid;
+            }
+        }
+
+        m_tail        = 0u;
+        m_head        = lo;
+        m_initialized = true;
+        m_last_error  = err::ok;
+        return true;
+    }
+
+    ///
+    /// \brief Decide whether the region holds no valid record at all.
+    ///
+    /// \details Only called when slot 0 reads \c STATUS_EMPTY, to tell a truly
+    ///          blank region from a power loss caught mid-recycle of sector 0
+    ///          (sector 0 erased, later sectors still valid). Records fill each
+    ///          sector strictly first-slot-first and a sector is erased as a
+    ///          unit, so a sector holding any valid record has a valid first
+    ///          slot; probing every sector's first slot therefore settles
+    ///          blankness in \c sector_count reads (128 for a 512 KiB region)
+    ///          instead of a full O(capacity) scan.
+    ///
+    /// \param out_blank Set to \c true iff no sector-head slot is valid.
+    /// \return \c true on success; \c false on a transport failure.
+    ///
+    bool region_is_blank(bool *out_blank) noexcept {
+        for (auto s = uint32_t{0}; s < m_sector_count; s++) {
+            auto status = uint8_t{};
+            if (!read_slot_status(s * RECORDS_PER_SECTOR, &status)) {
+                return false;
+            }
+            if (status == STATUS_VALID) {
+                *out_blank = false;
+                return true;
+            }
+        }
+        *out_blank = true;
+        return true;
     }
 
     // =====================================================================
