@@ -119,6 +119,7 @@ struct fixture {
     bool wrap_around() noexcept;
     bool power_loss_simulation() noexcept;
     bool survive_reset() noexcept;
+    bool recycle_transient_recovery() noexcept;
 };
 
 } // namespace
@@ -460,6 +461,86 @@ bool fixture::survive_reset() noexcept {
 }
 
 // ============================================================================
+// fixture::recycle_transient_recovery
+// ============================================================================
+
+bool fixture::recycle_transient_recovery() noexcept {
+    auto flash = flash_t(flash_bus, sentinel::resource::flash_device_mutex);
+    auto store = store_t(flash, kRegionOffset, kRegionSize);
+    yield_for_debug_drain(200);
+
+    // Fill exactly to capacity so BOTH sectors hold valid records (slot 0 still
+    // carries sequence 0 — the log has not wrapped yet).
+    const auto cap = store.capacity();
+    if (!store.erase_all()) {
+        loge("recycle_transient FAIL: erase_all error %d",
+             static_cast<int>(store.last_error()));
+        return false;
+    }
+    for (auto i = uint32_t{0}; i < cap; i++) {
+        if (!store.append(make_record(i))) {
+            loge("recycle_transient FAIL: fill append %u error %d",
+                 static_cast<unsigned>(i),
+                 static_cast<int>(store.last_error()));
+            return false;
+        }
+    }
+
+    // Simulate a power loss caught mid-recycle of sector 0: the driver erases
+    // the whole sector before rewriting slot 0, so a crash in that window
+    // leaves sector 0 blank (slot 0 EMPTY) while the later sector still holds
+    // valid records. Reproduce it by erasing only the first sector directly.
+    if (!flash.sector_erase_4kb(kRegionOffset)) {
+        loge("recycle_transient FAIL: direct sector-0 erase error");
+        return false;
+    }
+
+    const auto per_sector = store_t::RECORDS_PER_SECTOR;
+
+    // Recovery must NOT mistake the blank sector 0 for a blank region and
+    // discard the surviving records — it must fall back to the full scan.
+    auto recovered = store_t(flash, kRegionOffset, kRegionSize);
+    if (!recovered.initialize()) {
+        loge("recycle_transient FAIL: initialize error %d",
+             static_cast<int>(recovered.last_error()));
+        return false;
+    }
+
+    if (recovered.count() != cap - per_sector ||
+        recovered.tail_index() != per_sector ||
+        recovered.head_index() != cap) {
+        loge("recycle_transient FAIL: recovery mismatch count=%u tail=%u "
+             "head=%u (expected count=%u tail=%u head=%u)",
+             static_cast<unsigned>(recovered.count()),
+             static_cast<unsigned>(recovered.tail_index()),
+             static_cast<unsigned>(recovered.head_index()),
+             static_cast<unsigned>(cap - per_sector),
+             static_cast<unsigned>(per_sector), static_cast<unsigned>(cap));
+        return false;
+    }
+
+    // The oldest surviving record (tail) and the newest must round-trip; the
+    // erased records must now be out of range.
+    auto out = test_record{};
+    if (!recovered.read(per_sector, &out) ||
+        !records_equal(make_record(per_sector), out) ||
+        !recovered.read(cap - 1u, &out) ||
+        !records_equal(make_record(cap - 1u), out)) {
+        loge("recycle_transient FAIL: surviving records not readable");
+        return false;
+    }
+    if (recovered.read(0, &out) || recovered.read(per_sector - 1u, &out)) {
+        loge("recycle_transient FAIL: erased record still readable");
+        return false;
+    }
+
+    logi("recycle_transient PASS: blank sector 0 not mistaken for blank region "
+         "(%u records survived)",
+         static_cast<unsigned>(recovered.count()));
+    return true;
+}
+
+// ============================================================================
 // sentinel::test::record_store::run_all
 // ============================================================================
 
@@ -483,6 +564,9 @@ sentinel::test::tally sentinel::test::record_store::run_all() noexcept {
     yield_for_debug_drain(200);
 
     t.record(fx.survive_reset());
+    yield_for_debug_drain(200);
+
+    t.record(fx.recycle_transient_recovery());
     yield_for_debug_drain(200);
 
     return t;
