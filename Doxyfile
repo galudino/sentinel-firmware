@@ -65,12 +65,15 @@ FILE_PATTERNS          = *.hpp *.cpp *.h *.md
 RECURSIVE              = YES
 USE_MDFILE_AS_MAINPAGE = README.md
 
-# Reference-only / generated / scaffold trees are excluded from the sweep.
+# Reference-only / generated / vendored / scaffold trees are excluded from the
+# sweep. `bosch/` is the third-party BSD-3-Clause Bosch Sensortec BME280 API
+# (vendored in-tree) — excluded like mtb_shared/, we do not document vendor code.
 EXCLUDE_PATTERNS       = */GeneratedSource/* \
                          */mtb_shared/* \
                          */libs/* \
                          */build/* \
-                         */driver_file_template/*
+                         */driver_file_template/* \
+                         */bosch/*
 EXCLUDE_SYMLINKS       = YES
 
 #---------------------------------------------------------------------------
