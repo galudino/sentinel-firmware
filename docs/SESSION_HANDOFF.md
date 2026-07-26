@@ -20,11 +20,30 @@ than letting them accumulate here.
 
 ---
 
-**Last updated:** 2026-07-10 (session: **#56 + #49 MERGED to `develop`; #53 +
-#57 docs started on branches**). Earlier: #6/#45/#55 GATT, #38, #51 merged.
-**NEXT: on-bench sign-off of #56 + #49; review/merge the #53 + #57 docs
-branches; then the end-of-Phase-I clang-format sweep (#53) and OTA DFU
-validation (the Phase I finale).**
+**Last updated:** 2026-07-26 (session: **#56 + #49 ON-BENCH SIGNED OFF + CLOSED**;
+testbench 47/47 on GD25Q128/CYBLE-416045). Earlier: #6/#45/#55 GATT, #38, #51
+merged. **NEXT: review/merge the #53 + #57 docs branches; then the
+end-of-Phase-I clang-format sweep (#53) and OTA DFU validation with
+`sentinel-client` (the Phase I finale).**
+
+**⚠️ BENCH RELIABILITY WATCH — marginal SPI (flash) connection.** The testbench
+first came up with **5 failures** (W25Q128 `erase_program_read` + 4 flash-backed
+`record_store` tests: `read -4`/`count=0`), then — with **zero code change**,
+just re-seating SPI VCC/GND and reflashing — went 5-fail → 1-fail → **47/47**,
+and has stayed 47/47 across the **three runs since (two reflashes + one bare
+reset, no reflash)**. The failing test *moved* between runs and it was
+**SPI-only** (I²C sensors never flaked). The clean bare-reset run makes a
+firmware power-up/ready sequencing gap unlikely (it re-ran full bring-up + suite
+without re-flashing). At the configured
+**100 kHz** SPI clock there is no signal-margin/opcode explanation → it is a
+**marginal physical contact** (loose jumper / breadboard / GND-VCC), not a
+firmware bug (record_store logic is separately proven by the RAM-backed
+`system_event_log` suite, 8/8 every run). **Currently seated well, NOT proven
+permanently fixed.** Before trusting OTA DFU (which writes flash), harden the
+flash wiring (short/solid leads, 100 nF decoupling at the module, solid GND) and
+get repeatable 47/47 across several *cold power-cycles* (not just debugger
+reflashes). Discriminator: if failures return only on cold boot (never on
+reflash), suspect a flash power-up/ready sequencing gap in bring-up instead.
 
 **THIS SESSION (2026-07-10, autonomous):**
 - **#56 (MERGED to `develop`, squash `8ea30be`, tag
