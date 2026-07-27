@@ -12,12 +12,13 @@
 ///          - Soft-reset behavior and post-reset chip-ID re-read
 ///          - Sensor settings round-trip (get / mutate / set / get-back)
 ///          - Power-mode transitions
-///            (\c SLEEP \c \xe2\x86\x92 \c FORCED \c \xe2\x86\x92 \c SLEEP)
+///            (\c SLEEP -> \c FORCED -> \c SLEEP)
 ///
 ///          Run-to-completion (#48): the suite runs synchronously and returns
 ///          a \ref sentinel::test::tally. It no longer self-schedules as a
 ///          FreeRTOS task and no longer owns a continuous ~1 Hz read loop —
-///          the serial test orchestrator calls \ref run_all directly, and the
+///          the serial test orchestrator calls
+///          \ref sentinel::test::bme280::run_all directly, and the
 ///          continuous BME280 read is owned by
 ///          \c sentinel::task::bme280_service once the one-shot suite finishes.
 ///
@@ -47,8 +48,9 @@ namespace sentinel::test::bme280 {
 ///
 /// \details Executes each test in sequence — chip-ID read, soft reset,
 ///          settings round-trip, power-mode transitions — over a fixture-owned
-///          bus transport, and returns the pass/fail \ref sentinel::test::tally.
-///          Intended to be called by the testbench serial orchestrator (#48).
+///          bus transport, and returns the pass/fail \ref
+///          sentinel::test::tally. Intended to be called by the testbench
+///          serial orchestrator (#48).
 ///
 /// \return The suite's pass/fail tally.
 ///

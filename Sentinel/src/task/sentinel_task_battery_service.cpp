@@ -1,5 +1,5 @@
 ///
-/// \file    sentinel_battery_service_task.cpp
+/// \file    sentinel_task_battery_service.cpp
 /// \brief   Battery Service Task implementation
 ///
 /// \details This file implements the Battery Service FreeRTOS task that
@@ -43,17 +43,22 @@ constexpr auto BATTERY_LEVEL_UPDATE_FREQ =
 /// Battery level is read from GATT DB and is reduced by `decrease_interval`
 /// percent by default, and initialized again to 100 once it reaches 0.
 ///
+/// \param decrease_interval Percent to subtract from the current level
+///                          (wraps to 100 once the level reaches 0).
+///
 inline void
 update_battery_percentage(uint8_t decrease_interval = BATTERY_LEVEL_CHANGE) {
-    using namespace sentinel::gatt::battery;
+    using sentinel::gatt::battery::level;
+    using sentinel::gatt::battery::set_level;
+
     set_level(level() == 0 ? 100 : level() - decrease_interval);
 }
 
+/// \brief Send a GATT notification of the current battery level to the
+///        connected peer.
 inline void send_notification_for_battery_percentage() {
-    wiced_bt_gatt_server_send_notification(
-        sentinel::ble_context_object.connection_id(),
-        HDLC_BAS_BATTERY_LEVEL_VALUE, app_bas_battery_level_len,
-        app_bas_battery_level, nullptr);
+    sentinel::gatt::battery::notify(
+        sentinel::ble_context_object.connection_id());
 }
 
 } // namespace
@@ -66,9 +71,9 @@ battery_service &battery_service::instance() noexcept {
 }
 
 BaseType_t battery_service::task_create() noexcept {
-    return xTaskCreate(&battery_service::task_trampoline, "Battery Service Task",
-                       (configMINIMAL_STACK_SIZE * 4), this,
-                       (configMAX_PRIORITIES - 3), &m_handle);
+    return xTaskCreate(&battery_service::task_trampoline,
+                       "Battery Service Task", (configMINIMAL_STACK_SIZE * 4),
+                       this, (configMAX_PRIORITIES - 3), &m_handle);
 }
 
 void battery_service::task_trampoline(void *task_parameter) {
@@ -77,9 +82,8 @@ void battery_service::task_trampoline(void *task_parameter) {
 
 void battery_service::run() {
     // Initialize the HAL timer used to count seconds
-    auto result =
-        cyhal_timer_init(&m_timer, cyhal_gpio_psoc6_01_116_bga_ble_t::NC,
-                         nullptr);
+    auto result = cyhal_timer_init(
+        &m_timer, cyhal_gpio_psoc6_01_116_bga_ble_t::NC, nullptr);
 
     if (result != CY_RSLT_SUCCESS) {
         CY_ASSERT(false);
@@ -139,7 +143,8 @@ cy_rslt_t battery_service::configure_timer() noexcept {
     };
 
     // Configure the timer for battery level updates (5 seconds)
-    auto result = cyhal_timer_configure(&m_timer, &battery_service_timer_config);
+    auto result =
+        cyhal_timer_configure(&m_timer, &battery_service_timer_config);
 
     if (result != CY_RSLT_SUCCESS) {
         CY_ASSERT(false);

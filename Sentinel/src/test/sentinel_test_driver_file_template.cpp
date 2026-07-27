@@ -86,7 +86,7 @@ bool fixture::write() noexcept {
 
 sentinel::test::tally sentinel::test::driver::run_all() noexcept {
     auto fx = fixture{};
-    auto t  = sentinel::test::tally{};
+    auto t = sentinel::test::tally{};
 
     t.record(fx.chip_id_read());
     t.record(fx.read());

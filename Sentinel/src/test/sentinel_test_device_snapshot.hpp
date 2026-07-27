@@ -13,7 +13,7 @@
 ///          same invariants observably and cover serialization behavior the
 ///          asserts cannot. The two populate acceptance criteria
 ///          (populate_default / populate_partial) need a live BME280 + DS3231
-///          and are manual on-bench steps — \ref populate_snapshot reads the
+///          and are manual on-bench steps — \c populate_snapshot() reads the
 ///          #37 / rtc_service caches, which only carry real values on hardware.
 ///
 /// \author  galudino
@@ -36,7 +36,7 @@ namespace sentinel::test::device_snapshot {
 ///          probe, trailer magic — returning the pass/fail
 ///          \ref sentinel::test::tally. Run-to-completion (#48): no longer
 ///          self-schedules as a FreeRTOS task; the serial test orchestrator
-///          calls \ref run_all directly.
+///          calls \ref sentinel::test::device_snapshot::run_all directly.
 ///
 /// \return The suite's pass/fail tally.
 ///

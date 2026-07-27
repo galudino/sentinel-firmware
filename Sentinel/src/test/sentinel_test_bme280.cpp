@@ -17,8 +17,9 @@
 ///          \c fixture that owns the bus-arbitrated transport, mirroring a
 ///          GoogleTest \c TEST_F fixture — the shared resource lives in the
 ///          fixture, not a file-static global. Each test returns \c true on
-///          pass / \c false on fail; \ref run_all constructs the fixture, folds
-///          every outcome into a \ref sentinel::test::tally, and returns it.
+///          pass / \c false on fail; \ref sentinel::test::bme280::run_all
+///          constructs the fixture, folds every outcome into a
+///          \ref sentinel::test::tally, and returns it.
 ///
 ///          Output strategy:
 ///          - Progress and PASS / FAIL summary lines are emitted via
@@ -83,18 +84,29 @@ inline void yield_for_debug_drain(uint32_t milliseconds) noexcept {
 /// \details Routes through \c sentinel::resource::cybsp_i2c_bus (the FreeRTOS
 ///          bus-arbiter task) so this suite's transactions serialize cleanly
 ///          with any other tasks sharing the same physical I²C bus — notably
-///          the DS3231 suite. Constructed fresh by \ref run_all (like a
+///          the DS3231 suite. Constructed fresh by
+///          \ref sentinel::test::bme280::run_all (like a
 ///          GoogleTest \c SetUp), so there is no file-static bus global. The
 ///          transport is inert until \c peripheral_initialize() has spawned the
-///          arbiter, which the orchestrator guarantees by running post-scheduler.
+///          arbiter, which the orchestrator guarantees by running
+///          post-scheduler.
 ///
 struct fixture {
-    sentinel::cyhal_i2c_bus_transport bme280_bus{sentinel::resource::cybsp_i2c_bus,
-                                                 BME280_I2C_ADDR_PRIM};
+    /// Bus-arbitrated I2C transport, shared by every test below.
+    sentinel::cyhal_i2c_bus_transport bme280_bus{
+        sentinel::resource::cybsp_i2c_bus, BME280_I2C_ADDR_PRIM};
 
+    /// \brief Read the chip ID and confirm it matches \c BME280_CHIP_ID.
+    /// \return \c true on match; \c false on transport error or mismatch.
     bool chip_id_read() noexcept;
+    /// \brief Soft-reset the sensor and confirm the chip ID re-reads clean.
+    /// \return \c true if the post-reset chip ID matches; \c false otherwise.
     bool soft_reset() noexcept;
+    /// \brief Mutate the filter setting, write it back, and read it back.
+    /// \return \c true if the readback matches the mutated value.
     bool settings_round_trip() noexcept;
+    /// \brief Exercise SLEEP -> FORCED -> SLEEP power-mode transitions.
+    /// \return \c true if each observed mode is one of the expected values.
     bool sensor_mode_transitions() noexcept;
 };
 
@@ -300,7 +312,7 @@ bool fixture::sensor_mode_transitions() noexcept {
 
 sentinel::test::tally sentinel::test::bme280::run_all() noexcept {
     auto fx = fixture{};
-    auto t  = sentinel::test::tally{};
+    auto t = sentinel::test::tally{};
 
     t.record(fx.chip_id_read());
     yield_for_debug_drain(200);

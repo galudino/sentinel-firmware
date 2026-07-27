@@ -36,7 +36,7 @@ namespace sentinel::task {
 /// \brief Single-owner FreeRTOS task that drains the debug ring buffer and
 ///        transmits log messages over BLE notifications.
 ///
-/// \details OO/class style, mirroring \ref sentinel::task::spi_bus: the task
+/// \details OO/class style, mirroring \ref sentinel::task::spi_bus — the task
 ///          handle lives in a private member rather than a \c .cpp file-static
 ///          global, and the loop runs as a private \ref run reached via a
 ///          static trampoline. Use the \ref instance singleton.
@@ -47,6 +47,8 @@ class debug_stream {
 public:
     ///
     /// \brief The single debug-stream instance.
+    ///
+    /// \return Reference to the singleton \ref debug_stream instance.
     ///
     static debug_stream &instance() noexcept;
 
@@ -80,6 +82,8 @@ public:
 private:
     debug_stream() = default;
 
+    /// \brief Static FreeRTOS task entry point; forwards to \ref run.
+    /// \param args Unused (\c this is captured via \ref instance).
     static void task_trampoline(void *args);
 
     ///

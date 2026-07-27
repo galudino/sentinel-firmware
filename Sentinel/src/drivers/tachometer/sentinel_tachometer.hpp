@@ -15,11 +15,11 @@
 ///          - on_edge(tick): Called from ISR context on each detected edge
 ///          - handle_edge(tick): CRTP compile-time dispatch target
 ///
-/// \example
+/// \par Example
 /// \code
 /// // Using CRTP for zero-overhead edge handling
-/// class my_tach_handler : public sentinel::tach_callback_crtp<my_tach_handler> {
-/// public:
+/// class my_tach_handler : public sentinel::tach_callback_crtp<my_tach_handler>
+/// { public:
 ///     void handle_edge(uint32_t tick) {
 ///         // Process the edge event with timestamp
 ///         last_tick_ = tick;
@@ -44,13 +44,6 @@
 
 namespace sentinel {
 
-class tachometer_input;
-
-template <typename Derived>
-class tach_callback_crtp;
-
-} // namespace sentinel
-
 ///
 /// \brief Abstract interface for tachometer edge event receivers
 ///
@@ -63,7 +56,7 @@ class tach_callback_crtp;
 ///          context and should keep processing minimal to avoid blocking
 ///          other interrupts.
 ///
-class sentinel::tachometer_input {
+class tachometer_input {
 public:
     ///
     /// \brief Virtual destructor for proper cleanup
@@ -92,7 +85,7 @@ public:
 ///
 /// \tparam Derived The derived class that implements handle_edge(uint32_t)
 ///
-/// \example
+/// \par Example
 /// \code
 /// class my_tach : public sentinel::tach_callback_crtp<my_tach> {
 /// public:
@@ -103,7 +96,7 @@ public:
 /// \endcode
 ///
 template <typename Derived>
-class sentinel::tach_callback_crtp : public tachometer_input {
+class tach_callback_crtp : public tachometer_input {
 public:
     ///
     /// \brief Dispatch edge event to derived class
@@ -117,9 +110,16 @@ public:
         static_cast<Derived *>(this)->on_edge(tick);
     }
 
+    ///
+    /// \brief Dispatch pulse-count query to the derived class.
+    ///
+    /// \return Number of pulses observed in the derived class's last window.
+    ///
     uint32_t pulses_in_last_window() const noexcept {
         return static_cast<Derived *>(this)->pulses_in_last_window();
     }
 };
+
+} // namespace sentinel
 
 #endif /* SENTINEL_TACHOMETER_HPP */

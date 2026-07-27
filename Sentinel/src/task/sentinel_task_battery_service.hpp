@@ -29,7 +29,7 @@ namespace sentinel::task {
 /// \brief Single-owner FreeRTOS task that periodically updates the battery
 ///        level and sends BLE notifications.
 ///
-/// \details OO/class style, mirroring \ref sentinel::task::spi_bus: the task's
+/// \details OO/class style, mirroring \ref sentinel::task::spi_bus — the task's
 ///          state (the HAL timer, the task handle) lives in private members
 ///          rather than \c .cpp file-static globals, and the loop runs as a
 ///          private \ref run reached via a static trampoline. Use the
@@ -42,6 +42,8 @@ class battery_service {
 public:
     ///
     /// \brief The single battery-service instance.
+    ///
+    /// \return Reference to the singleton \ref battery_service instance.
     ///
     static battery_service &instance() noexcept;
 
@@ -64,7 +66,13 @@ public:
 private:
     battery_service() = default;
 
+    /// \brief Static FreeRTOS task entry point; forwards to \ref run.
+    /// \param task_parameter Unused (\c this is captured via \ref instance).
     static void task_trampoline(void *task_parameter);
+
+    /// \brief HAL timer ISR; notifies the task to run another update cycle.
+    /// \param callback_arg Unused (\c this is captured via \ref instance).
+    /// \param event        Timer event that fired (unused; any event notifies).
     static void timer_isr(void *callback_arg, cyhal_timer_event_t event);
 
     ///
@@ -73,10 +81,12 @@ private:
     ///
     void run();
 
+    /// \brief Configure and start \ref m_timer to drive the update cadence.
+    /// \return \c CY_RSLT_SUCCESS on success; a CYHAL error code otherwise.
     cy_rslt_t configure_timer() noexcept;
 
-    cyhal_timer_t m_timer{};       ///< HAL timer driving the update cadence.
-    TaskHandle_t  m_handle{nullptr}; ///< FreeRTOS task handle.
+    cyhal_timer_t m_timer{};        ///< HAL timer driving the update cadence.
+    TaskHandle_t m_handle{nullptr}; ///< FreeRTOS task handle.
 };
 
 } // namespace sentinel::task

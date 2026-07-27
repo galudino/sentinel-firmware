@@ -31,7 +31,8 @@ namespace sentinel {
 ///
 /// \details Stores GPIO pin configuration and polarity information for
 ///          use with the sentinel::gpio_line abstraction. The context must
-///          remain valid for the lifetime of the associated sentinel::gpio_line.
+///          remain valid for the lifetime of the associated
+///          sentinel::gpio_line.
 ///
 struct cyhal_gpio_line_context {
     cyhal_gpio_t pin{
@@ -42,7 +43,8 @@ struct cyhal_gpio_line_context {
 ///
 /// \brief Write to a CYHAL GPIO pin with polarity handling
 ///
-/// \details Callback function used by sentinel::gpio_line to write to a GPIO pin.
+/// \details Callback function used by sentinel::gpio_line to write to a GPIO
+/// pin.
 ///          Automatically handles active-low/active-high polarity conversion.
 ///
 /// \param ctx Opaque context pointer (must be cyhal_gpio_line *)

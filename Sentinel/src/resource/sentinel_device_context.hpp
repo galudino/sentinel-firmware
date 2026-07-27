@@ -26,11 +26,12 @@
 ///          file-scope object is constructed before \c main() runs the
 ///          scheduler, so its calibration read would dead-lock on an arbiter
 ///          that never runs. The context is therefore a function-local
-///          \c static (\ref context()) first touched from the boot-orchestrator
-///          task — i.e. post-scheduler, on the production arbiter path — exactly
-///          like the testbench fixtures (#48). End state is identical to #13's
-///          intent: one instance owned by \c sentinel::resource, borrowed by
-///          reference; only the construction \e moment differs.
+///          \c static (\ref sentinel::resource::context()) first touched from
+///          the boot-orchestrator
+///          task — i.e. post-scheduler, on the production arbiter path —
+///          exactly like the testbench fixtures (#48). End state is identical
+///          to #13's intent: one instance owned by \c sentinel::resource,
+///          borrowed by reference; only the construction \e moment differs.
 ///
 /// \author  galudino
 /// \date    2026-06-30
@@ -80,7 +81,8 @@ namespace sentinel::resource {
 //   [0x180000 .. 0x280000)  Device Snapshots     1 MiB  (#38)
 //
 
-/// \brief Snapshot-history region base offset — immediately after the event log.
+/// \brief Snapshot-history region base offset — immediately after the event
+/// log.
 inline constexpr uint32_t kSnapshotRegionOffsetBytes =
     sentinel::diagnostics::kEventLogRegionOffsetBytes +
     sentinel::diagnostics::kEventLogRegionSizeBytes; // 0x180000
@@ -127,14 +129,19 @@ using event_log_t = sentinel::diagnostics::system_event_log<event_store_t>;
 ///          stays decoupled from the RTC driver (decision #11). Matches
 ///          \ref event_log_t::now_unix_fn.
 ///
+/// \return Current Unix time in seconds, or 0 if the RTC has not yet
+///         reported one.
+///
 inline uint32_t now_unix_seconds() noexcept {
     return sentinel::task::rtc_service::instance().last_unix_time();
 }
 
 ///
-/// \brief Aggregate of the shared drivers + flash stores, borrowed by reference.
+/// \brief Aggregate of the shared drivers + flash stores, borrowed by
+/// reference.
 ///
-/// \details One instance, reached via \ref context(). Public members so the boot
+/// \details One instance, reached via \ref context(). Public members so the
+/// boot
 ///          orchestrator can wire them directly (e.g.
 ///          \c post::run(ctx.bme, ctx.rtc, ctx.flash, ctx.event_store, …)).
 ///          Constructor order is significant: transports precede the drivers
@@ -144,24 +151,33 @@ inline uint32_t now_unix_seconds() noexcept {
 ///
 struct device_context {
     // ---- Bus transports (one per device; each carries its own target). ----
-    sentinel::cyhal_i2c_bus_transport bme_bus{sentinel::resource::cybsp_i2c_bus,
-                                              BME280_I2C_ADDR_PRIM};
+    sentinel::cyhal_i2c_bus_transport bme_bus{
+        sentinel::resource::cybsp_i2c_bus,
+        BME280_I2C_ADDR_PRIM}; ///< BME280's I2C transport.
     sentinel::cyhal_i2c_bus_transport rtc_bus{
         sentinel::resource::cybsp_i2c_bus,
-        static_cast<uint16_t>(ds3231_t::slave_address::primary)};
+        static_cast<uint16_t>(
+            ds3231_t::slave_address::primary)}; ///< DS3231's I2C transport.
     sentinel::cyhal_spi_bus_transport flash_bus{
-        sentinel::resource::cybsp_spi_bus, CYBSP_SPI_FLASH_CS};
+        sentinel::resource::cybsp_spi_bus,
+        CYBSP_SPI_FLASH_CS}; ///< W25Q128's SPI transport.
 
     // ---- Drivers. ----
-    bme280_t  bme{bme_bus, BME280_I2C_ADDR_PRIM};
-    ds3231_t  rtc{rtc_bus};
-    w25q128_t flash{flash_bus, sentinel::resource::flash_device_mutex};
+    bme280_t bme{
+        bme_bus,
+        BME280_I2C_ADDR_PRIM}; ///< Temperature/humidity/pressure sensor.
+    ds3231_t rtc{rtc_bus};     ///< Real-time clock.
+    w25q128_t flash{flash_bus,
+                    sentinel::resource::flash_device_mutex}; ///< SPI NOR flash.
 
     // ---- Flash-backed record stores. ----
-    event_store_t event_store{flash, sentinel::diagnostics::kEventLogRegionOffsetBytes,
-                              sentinel::diagnostics::kEventLogRegionSizeBytes};
-    snapshot_store_t snapshot_store{flash, kSnapshotRegionOffsetBytes,
-                                    kSnapshotRegionSizeBytes};
+    event_store_t event_store{
+        flash, sentinel::diagnostics::kEventLogRegionOffsetBytes,
+        sentinel::diagnostics::kEventLogRegionSizeBytes}; ///< System Event
+                                                          ///< Log's store.
+    snapshot_store_t snapshot_store{
+        flash, kSnapshotRegionOffsetBytes,
+        kSnapshotRegionSizeBytes}; ///< Snapshot history's store.
 
     ///
     /// \brief First failed POST subsystem id (0 = all passed), cached by the
@@ -171,14 +187,17 @@ struct device_context {
 
     /// \brief The application System Event Log singleton (bound by
     ///        \ref initialize_stores).
+    /// \return Reference to the singleton \ref event_log_t instance.
     static event_log_t &event_log() noexcept { return event_log_t::instance(); }
 
     /// \brief Valid records currently in the event log region.
+    /// \return Count of valid records in \ref event_store.
     uint32_t event_log_record_count() const noexcept {
         return event_store.count();
     }
 
     /// \brief Valid records currently in the snapshot history region.
+    /// \return Count of valid records in \ref snapshot_store.
     uint32_t snapshot_record_count() const noexcept {
         return snapshot_store.count();
     }
@@ -192,6 +211,8 @@ struct device_context {
 ///          scheduler has started — the boot orchestrator (app) or the test
 ///          orchestrator (testbench). Borrowed by reference everywhere else.
 ///
+/// \return Reference to the single application \ref device_context.
+///
 inline device_context &context() noexcept {
     static device_context ctx;
     return ctx;
@@ -201,13 +222,15 @@ inline device_context &context() noexcept {
 /// \brief \c true once \ref initialize_stores has scanned the flash regions and
 ///        bound the event log.
 ///
-/// \details Lets \c populate_snapshot (#36) read the store counts only when they
+/// \details Lets \c populate_snapshot (#36) read the store counts only when
+/// they
 ///          are meaningful, without forcing a (post-scheduler-only) context
 ///          construction on a caller that runs before the orchestrator.
 ///
 inline bool g_context_ready = false;
 
 /// \brief Has the context been built and its stores initialized?
+/// \return \c true once \ref initialize_stores has completed successfully.
 inline bool context_ready() noexcept { return g_context_ready; }
 
 ///
@@ -224,7 +247,7 @@ inline bool context_ready() noexcept { return g_context_ready; }
 ///
 inline bool initialize_stores() noexcept {
     auto &ctx = context();
-    const auto event_ok    = ctx.event_store.initialize();
+    const auto event_ok = ctx.event_store.initialize();
     const auto snapshot_ok = ctx.snapshot_store.initialize();
     const auto log_ok =
         event_log_t::instance().initialize(ctx.event_store, &now_unix_seconds);

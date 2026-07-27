@@ -1,5 +1,5 @@
 ///
-/// \file       sentinel_debug_stream_task.cpp
+/// \file       sentinel_task_debug_stream.cpp
 /// \brief      BLE Debug Output Stream - Implementation
 ///
 /// Implements a ring buffer-based debug output system that transmits log
@@ -144,6 +144,13 @@ bool debug_stream::is_enabled() noexcept {
 
 namespace {
 
+///
+/// \brief      Send a notification on the Output Stream characteristic.
+///
+/// \param      data    Data to send
+/// \param      length  Length of data
+/// \return     BLE API result
+///
 wiced_bt_gatt_status_t send_notification_for_output_stream(const uint8_t *data,
                                                            size_t length) {
     return wiced_bt_gatt_server_send_notification(

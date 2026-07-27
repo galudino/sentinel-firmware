@@ -17,20 +17,22 @@
 ///          Public API design (matches \ref sentinel::w25q128 /
 ///          \ref sentinel::bme280 / \ref sentinel::ds3231):
 ///          - Action / mutator members return \c bool (\c true on success).
-///          - The most recent error is exposed via \ref last_error(), typed
-///            as \ref err.
+///          - The most recent error is exposed via
+///            \ref sentinel::record_store::last_error(), typed as
+///            \ref sentinel::record_store::err.
 ///
 ///          === On-flash record layout ===
 ///
 ///          Every record is stored in a fixed-size *slot*. The slot begins
-///          with an 8-byte header followed by the caller's \c RecordT payload:
+///          with an 8-byte header followed by the caller's \c RecordType
+///          payload:
 ///
-///          \verbatim
+///          \code{.unparsed}
 ///          offset 0  : status   (1 byte)  0xFF empty / 0xA5 valid / 0x5A dead
 ///          offset 1  : reserved (3 bytes) padding -> 4-byte align
 ///          offset 4  : sequence (4 bytes) monotonic absolute record index
-///          offset 8  : payload  (sizeof(RecordT) bytes)
-///          \endverbatim
+///          offset 8  : payload  (sizeof(RecordType) bytes)
+///          \endcode
 ///
 ///          The slot size is the smallest power of two that holds the 8-byte
 ///          header plus the payload. Because every power of two <= 256 divides
@@ -47,7 +49,8 @@
 ///          after wrap, every slot's status byte is identical (0xA5) and the
 ///          newest record is indistinguishable from the oldest by status
 ///          alone. We therefore store a 4-byte monotonic \c sequence in each
-///          slot. On boot \ref initialize() scans the region, and head/tail
+///          slot. On boot \ref sentinel::record_store::initialize() scans the
+///          region, and head/tail
 ///          are recovered as \c max(sequence)+1 and \c min(sequence) over the
 ///          valid slots. CRC is still deferred to a future hardening pass, as
 ///          the issue notes — the status byte alone gives power-loss safety.
@@ -61,7 +64,8 @@
 ///          NOR programming only clears bits (1->0), so writing the status
 ///          byte after the payload is legal. If power is lost between the two
 ///          steps the slot keeps \c status == 0xFF and is treated as empty on
-///          the next \ref initialize() scan — a half-written record is never
+///          the next \ref sentinel::record_store::initialize() scan — a
+///          half-written record is never
 ///          read as valid.
 ///
 ///          === Concurrency ===
@@ -86,19 +90,15 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <optional>
 #include <type_traits>
 
 namespace sentinel {
 
-template <typename RecordT, typename Transport>
-class record_store;
-
-} // namespace sentinel
-
 ///
 /// \brief Flash-backed circular record store.
 ///
-/// \tparam RecordT   The caller's fixed-size record payload type. Must be
+/// \tparam RecordType   The caller's fixed-size record payload type. Must be
 ///                   trivially copyable, a multiple of 4 bytes in size, and
 ///                   small enough that the 8-byte slot header plus the payload
 ///                   fit within one 256-byte page (i.e. sizeof <= 248).
@@ -106,17 +106,20 @@ class record_store;
 ///                   parameterised over (e.g.
 ///                   \c sentinel::cyhal_spi_bus_transport).
 ///
-template <typename RecordT, typename Transport>
-class sentinel::record_store {
-    static_assert(std::is_trivially_copyable_v<RecordT>,
-                  "RecordT must be trivially copyable to live on flash");
-    static_assert(sizeof(RecordT) % 4 == 0,
-                  "RecordT must be a multiple of 4 bytes");
-    static_assert(sizeof(RecordT) <= 248,
-                  "8-byte slot header + RecordT must fit in one 256 B page");
+template <typename RecordType, typename Transport>
+class record_store {
+    static_assert(std::is_trivially_copyable_v<RecordType>,
+                  "RecordType must be trivially copyable to live on flash");
+    static_assert(sizeof(RecordType) % 4 == 0,
+                  "RecordType must be a multiple of 4 bytes");
+    static_assert(sizeof(RecordType) <= 248,
+                  "8-byte slot header + RecordType must fit in one 256 B page");
 
     // Declared first so the static data member SLOT_SIZE (whose initializer
     // is parsed immediately, not in the complete-class context) can call it.
+    /// \brief Smallest power of two that is >= \p value.
+    /// \param value Value to round up.
+    /// \return The smallest power of two >= \p value.
     static constexpr uint32_t next_power_of_two(uint32_t value) noexcept {
         auto p = uint32_t{1};
         while (p < value) {
@@ -130,14 +133,19 @@ public:
     // Types
     // =====================================================================
 
+    /// Backing \ref sentinel::w25q128 driver type for this store's \c
+    /// Transport.
     using flash_type = sentinel::w25q128<Transport>;
 
+    ///
+    /// \brief Error codes for the most recent operation (see \ref last_error).
+    ///
     enum class err : int8_t {
-        ok              =  0,
-        flash_failure   = -1, ///< An underlying W25Q128 operation failed.
+        ok = 0,
+        flash_failure = -1,    ///< An underlying W25Q128 operation failed.
         invalid_argument = -2, ///< Bad region geometry or out-of-range index.
-        not_initialized = -3, ///< Operation issued before \ref initialize().
-        corrupt_record  = -4, ///< A slot expected valid had a bad status byte.
+        not_initialized = -3,  ///< Operation issued before \ref initialize().
+        corrupt_record = -4,   ///< A slot expected valid had a bad status byte.
     };
 
     // =====================================================================
@@ -153,13 +161,13 @@ public:
     /// Per-slot header: status(1) + reserved(3) + sequence(4).
     static constexpr uint32_t HEADER_SIZE = 8u;
 
-    static constexpr uint32_t OFFSET_STATUS   = 0u;
-    static constexpr uint32_t OFFSET_SEQUENCE = 4u;
-    static constexpr uint32_t OFFSET_PAYLOAD  = 8u;
+    static constexpr uint32_t OFFSET_STATUS = 0u;   ///< Status byte offset.
+    static constexpr uint32_t OFFSET_SEQUENCE = 4u; ///< Sequence field offset.
+    static constexpr uint32_t OFFSET_PAYLOAD = 8u;  ///< Payload field offset.
 
     /// Size of a single record slot on flash (power-of-two padded).
-    static constexpr uint32_t SLOT_SIZE =
-        next_power_of_two(HEADER_SIZE + static_cast<uint32_t>(sizeof(RecordT)));
+    static constexpr uint32_t SLOT_SIZE = next_power_of_two(
+        HEADER_SIZE + static_cast<uint32_t>(sizeof(RecordType)));
 
     static_assert(SLOT_SIZE <= 256u,
                   "slot must fit within a single 256 B page");
@@ -169,8 +177,9 @@ public:
 
     // Status byte states. Flash erases to 0xFF, and NOR programming can only
     // clear bits, so EMPTY (all ones) -> VALID is a legal transition.
-    static constexpr uint8_t STATUS_EMPTY   = 0xFFu;
-    static constexpr uint8_t STATUS_VALID   = 0xA5u;
+    static constexpr uint8_t STATUS_EMPTY = 0xFFu;   ///< Slot never written.
+    static constexpr uint8_t STATUS_VALID = 0xA5u;   ///< Slot holds a valid
+                                                     ///< record.
     static constexpr uint8_t STATUS_INVALID = 0x5Au; ///< Reserved for future
                                                      ///< logical delete.
 
@@ -194,16 +203,20 @@ public:
     ///
     record_store(flash_type &flash, uint32_t region_offset_bytes,
                  uint32_t region_size_bytes) noexcept
-        : m_flash(flash),
-          m_region_offset(region_offset_bytes),
+        : m_flash(flash), m_region_offset(region_offset_bytes),
           m_sector_count(region_size_bytes / SECTOR_SIZE),
           m_capacity(m_sector_count * RECORDS_PER_SECTOR) {}
 
-    record_store(const record_store &)            = delete;
+    record_store(const record_store &) = delete;
     record_store &operator=(const record_store &) = delete;
-    record_store(record_store &&) noexcept        = default;
+    /// \brief Move-construct from another instance (defaulted).
+    record_store(record_store &&) noexcept = default;
+    /// \brief Move-assign from another instance (defaulted).
+    /// \return Reference to this instance.
     record_store &operator=(record_store &&) noexcept = default;
 
+    /// \brief The error code recorded by the most recent failed operation.
+    /// \return The most recent \ref err (\c err::ok if none).
     err last_error() const noexcept { return m_last_error; }
 
     // =====================================================================
@@ -211,17 +224,23 @@ public:
     // =====================================================================
 
     /// Total number of record slots the region can hold.
+    /// \return \ref m_capacity.
     uint32_t capacity() const noexcept { return m_capacity; }
 
     /// Number of valid records currently stored: \c head - \c tail.
+    /// \return Current record count.
     uint32_t count() const noexcept { return m_head - m_tail; }
 
     /// Absolute index where the next appended record will land.
+    /// \return \ref m_head.
     uint32_t head_index() const noexcept { return m_head; }
 
     /// Absolute index of the oldest still-valid record.
+    /// \return \ref m_tail.
     uint32_t tail_index() const noexcept { return m_tail; }
 
+    /// \brief Has \ref initialize() (or \ref erase_all()) run successfully?
+    /// \return \c true if the store is ready for append/read.
     bool initialized() const noexcept { return m_initialized; }
 
     // =====================================================================
@@ -229,55 +248,61 @@ public:
     // =====================================================================
 
     ///
-    /// \brief Recover \c head / \c tail by scanning the region.
+    /// \brief Recover \c head / \c tail from the on-flash state.
     ///
-    /// \details Reads each slot's header and locates the valid sequence
-    ///          range. On a freshly-erased region no slot is valid, so
-    ///          head == tail == 0 and \ref count() is 0. Safe to call again
-    ///          to re-scan (e.g. to emulate a warm boot in tests).
+    /// \details The authoritative recovery is a min/max \c sequence scan over
+    ///          every valid slot (\ref initialize_full_scan()) — O(capacity),
+    ///          i.e. ~8k slot reads per region on the production flash map, and
+    ///          the dominant boot cost (~8.7 s each; firmware #49). That
+    ///          exhaustive scan is only actually *required* once the log has
+    ///          **wrapped**, because only then can the newest record sit
+    ///          anywhere in the region. The common boot states are recovered
+    ///          far more cheaply by first classifying the region from slot 0:
+    ///
+    ///          - **slot 0 valid, \c sequence == 0** — never wrapped (slot 0 is
+    ///            only ever rewritten to a \c sequence \c >= \c capacity, and
+    ///            that first happens on the first wrap). Slots \c [0,head) are
+    ///            valid and \c [head,capacity) empty — one monotonic boundary,
+    ///            so \c head is found by binary search in O(log capacity)
+    ///            status reads and \c tail is 0 (\ref initialize_unwrapped()).
+    ///          - **slot 0 empty** — either a truly blank region or a power
+    ///            loss caught mid-recycle of sector 0 (sector 0 erased, later
+    ///            sectors still valid). \ref region_is_blank() tells them apart
+    ///            with a per-sector head probe (O(sector_count)); blank means
+    ///            \c head == tail == 0, the transient falls through to the full
+    ///            scan.
+    ///          - **otherwise (slot 0 valid, \c sequence != 0)** — wrapped; the
+    ///            full min/max scan is authoritative.
+    ///
+    ///          No on-flash format change. Safe to call again to re-scan (e.g.
+    ///          to emulate a warm boot in tests).
     ///
     /// \return \c true on success; \c false on a transport failure.
     ///
     bool initialize() noexcept {
-        auto have_any = false;
-        auto min_seq  = uint32_t{0};
-        auto max_seq  = uint32_t{0};
+        auto header = std::array<uint8_t, HEADER_SIZE>{};
+        if (!read_slot_header(0u, header.data())) {
+            return false; // m_last_error set by helper
+        }
 
-        for (auto slot = uint32_t{0}; slot < m_capacity; slot++) {
-            auto header = std::array<uint8_t, HEADER_SIZE>{};
-            if (!m_flash.read_data(slot_address(slot),
-                                   sentinel::make_span(header.data(),
-                                                       header.size()))) {
-                m_last_error = err::flash_failure;
+        const auto status0 = header[OFFSET_STATUS];
+        if (status0 == STATUS_VALID && load_sequence(header.data()) == 0u) {
+            return initialize_unwrapped();
+        }
+        if (status0 == STATUS_EMPTY) {
+            auto blank = false;
+            if (!region_is_blank(&blank)) {
                 return false;
             }
-
-            if (header[OFFSET_STATUS] != STATUS_VALID) {
-                continue;
-            }
-
-            auto seq = load_sequence(header.data());
-            if (!have_any) {
-                min_seq  = seq;
-                max_seq  = seq;
-                have_any = true;
-            } else {
-                if (seq < min_seq) min_seq = seq;
-                if (seq > max_seq) max_seq = seq;
+            if (blank) {
+                m_tail = 0u;
+                m_head = 0u;
+                m_initialized = true;
+                m_last_error = err::ok;
+                return true;
             }
         }
-
-        if (have_any) {
-            m_tail = min_seq;
-            m_head = max_seq + 1u;
-        } else {
-            m_tail = 0u;
-            m_head = 0u;
-        }
-
-        m_initialized = true;
-        m_last_error  = err::ok;
-        return true;
+        return initialize_full_scan();
     }
 
     ///
@@ -292,10 +317,10 @@ public:
                 return false;
             }
         }
-        m_head        = 0u;
-        m_tail        = 0u;
+        m_head = 0u;
+        m_tail = 0u;
         m_initialized = true;
-        m_last_error  = err::ok;
+        m_last_error = err::ok;
         return true;
     }
 
@@ -315,7 +340,7 @@ public:
     /// \param record The record to store.
     /// \return \c true on success; \c false on error (see \ref last_error()).
     ///
-    bool append(const RecordT &record) noexcept {
+    bool append(const RecordType &record) noexcept {
         if (!m_initialized) {
             m_last_error = err::not_initialized;
             return false;
@@ -334,7 +359,7 @@ public:
             return false;
         }
 
-        m_head++;
+        ++m_head;
         m_last_error = err::ok;
         return true;
     }
@@ -343,36 +368,37 @@ public:
     /// \brief Read the record stored at an absolute index.
     ///
     /// \param index Absolute record index; must be in <tt>[tail, head)</tt>.
-    /// \param out   Destination for the payload.
-    /// \return \c true on success; \c false if \p index is out of range, the
-    ///         slot is unexpectedly not valid, or a transport error occurs.
+    /// \return The record on success; \c std::nullopt if \p index is out of
+    ///         range, the slot is unexpectedly not valid, or a transport error
+    ///         occurs (see \ref last_error()).
     ///
-    bool read(uint32_t index, RecordT *out) const noexcept {
+    std::optional<RecordType> read(uint32_t index) const noexcept {
         if (!m_initialized) {
             m_last_error = err::not_initialized;
-            return false;
+            return std::nullopt;
         }
-        if (out == nullptr || index < m_tail || index >= m_head) {
+        if (index < m_tail || index >= m_head) {
             m_last_error = err::invalid_argument;
-            return false;
+            return std::nullopt;
         }
 
         const auto slot = index % m_capacity;
-        auto raw = std::array<uint8_t, HEADER_SIZE + sizeof(RecordT)>{};
+        auto raw = std::array<uint8_t, HEADER_SIZE + sizeof(RecordType)>{};
         if (!m_flash.read_data(slot_address(slot),
                                sentinel::make_span(raw.data(), raw.size()))) {
             m_last_error = err::flash_failure;
-            return false;
+            return std::nullopt;
         }
 
         if (raw[OFFSET_STATUS] != STATUS_VALID) {
             m_last_error = err::corrupt_record;
-            return false;
+            return std::nullopt;
         }
 
-        std::memcpy(out, raw.data() + OFFSET_PAYLOAD, sizeof(RecordT));
+        auto record = RecordType{};
+        std::memcpy(&record, raw.data() + OFFSET_PAYLOAD, sizeof(RecordType));
         m_last_error = err::ok;
-        return true;
+        return record;
     }
 
     // =====================================================================
@@ -391,7 +417,10 @@ public:
     ///          (\ref erase_all()) before normal appends resume, since the
     ///          partial slot's bytes are no longer all-ones.
     ///
-    bool append_uncommitted_for_test(const RecordT &record) noexcept {
+    /// \param record The record whose payload is written (uncommitted).
+    /// \return \c true on success; \c false on error (see \ref last_error()).
+    ///
+    bool append_uncommitted_for_test(const RecordType &record) noexcept {
         if (!m_initialized) {
             m_last_error = err::not_initialized;
             return false;
@@ -412,14 +441,173 @@ private:
     ///
     /// Because \ref SLOT_SIZE divides \ref SECTOR_SIZE evenly, the per-sector
     /// layout is gapless and the address reduces to a single multiply.
+    /// \param slot Region-relative slot index.
+    /// \return Absolute byte address of the slot on flash.
     uint32_t slot_address(uint32_t slot) const noexcept {
         return m_region_offset + slot * SLOT_SIZE;
     }
 
+    /// \brief Load a slot header's 4-byte sequence field.
+    /// \param header Pointer to a slot's 8-byte header (as read by
+    ///               \ref read_slot_header).
+    /// \return The slot's stored sequence number.
     static uint32_t load_sequence(const uint8_t *header) noexcept {
         auto seq = uint32_t{0};
         std::memcpy(&seq, header + OFFSET_SEQUENCE, sizeof(seq));
         return seq;
+    }
+
+    /// Read a slot's 8-byte header into \p out (caller-owned, HEADER_SIZE).
+    /// \param slot Region-relative slot index.
+    /// \param out  Destination buffer, at least \ref HEADER_SIZE bytes.
+    /// \return \c true on success; \c false on a transport failure.
+    bool read_slot_header(uint32_t slot, uint8_t *out) noexcept {
+        if (!m_flash.read_data(slot_address(slot),
+                               sentinel::make_span(out, HEADER_SIZE))) {
+            m_last_error = err::flash_failure;
+            return false;
+        }
+        return true;
+    }
+
+    /// Read just a slot's 1-byte status field into \p out_status.
+    /// \param slot       Region-relative slot index.
+    /// \param out_status Destination for the 1-byte status field.
+    /// \return \c true on success; \c false on a transport failure.
+    bool read_slot_status(uint32_t slot, uint8_t *out_status) noexcept {
+        if (!m_flash.read_data(slot_address(slot),
+                               sentinel::make_span(out_status, 1u))) {
+            m_last_error = err::flash_failure;
+            return false;
+        }
+        return true;
+    }
+
+    // =====================================================================
+    // Initialize internals (#49)
+    // =====================================================================
+
+    ///
+    /// \brief Authoritative O(capacity) recovery: min/max \c sequence over
+    ///        every valid slot.
+    ///
+    /// \details Reads each slot's header and locates the valid sequence range;
+    ///          \c tail = \c min(sequence), \c head = \c max(sequence)+1. On a
+    ///          region with no valid slot, \c head == tail == 0. Correct for
+    ///          any on-flash state — including a wrapped log, where the newest
+    ///          record can sit anywhere — so \ref initialize() falls back here
+    ///          whenever the cheaper classified paths do not apply.
+    ///
+    /// \return \c true on success; \c false on a transport failure.
+    ///
+    bool initialize_full_scan() noexcept {
+        auto have_any = false;
+        auto min_seq = uint32_t{0};
+        auto max_seq = uint32_t{0};
+
+        for (auto slot = uint32_t{0}; slot < m_capacity; slot++) {
+            auto header = std::array<uint8_t, HEADER_SIZE>{};
+            if (!read_slot_header(slot, header.data())) {
+                return false;
+            }
+
+            if (header[OFFSET_STATUS] != STATUS_VALID) {
+                continue;
+            }
+
+            auto seq = load_sequence(header.data());
+            if (!have_any) {
+                min_seq = seq;
+                max_seq = seq;
+                have_any = true;
+            } else {
+                if (seq < min_seq) {
+                    min_seq = seq;
+                }
+                if (seq > max_seq) {
+                    max_seq = seq;
+                }
+            }
+        }
+
+        if (have_any) {
+            m_tail = min_seq;
+            m_head = max_seq + 1u;
+        } else {
+            m_tail = 0u;
+            m_head = 0u;
+        }
+
+        m_initialized = true;
+        m_last_error = err::ok;
+        return true;
+    }
+
+    ///
+    /// \brief Recover a never-wrapped region: binary-search the valid/empty
+    ///        boundary for \c head; \c tail is 0.
+    ///
+    /// \details Precondition (guaranteed by the slot-0 classification in
+    ///          \ref initialize()): slots \c [0,head) are \c STATUS_VALID and
+    ///          \c [head,capacity) are \c STATUS_EMPTY — a single monotonic
+    ///          transition. Probes only the 1-byte status field per step, so
+    ///          recovery is O(log capacity) reads. A region filled exactly to
+    ///          \c capacity but not yet wrapped has no empty slot, so the
+    ///          search yields \c head == \c capacity.
+    ///
+    /// \return \c true on success; \c false on a transport failure.
+    ///
+    bool initialize_unwrapped() noexcept {
+        auto lo = uint32_t{0};
+        auto hi = m_capacity; // first non-valid slot lies in [lo, hi]
+        while (lo < hi) {
+            const auto mid = lo + (hi - lo) / 2u;
+            auto status = uint8_t{};
+            if (!read_slot_status(mid, &status)) {
+                return false;
+            }
+            if (status == STATUS_VALID) {
+                lo = mid + 1u;
+            } else {
+                hi = mid;
+            }
+        }
+
+        m_tail = 0u;
+        m_head = lo;
+        m_initialized = true;
+        m_last_error = err::ok;
+        return true;
+    }
+
+    ///
+    /// \brief Decide whether the region holds no valid record at all.
+    ///
+    /// \details Only called when slot 0 reads \c STATUS_EMPTY, to tell a truly
+    ///          blank region from a power loss caught mid-recycle of sector 0
+    ///          (sector 0 erased, later sectors still valid). Records fill each
+    ///          sector strictly first-slot-first and a sector is erased as a
+    ///          unit, so a sector holding any valid record has a valid first
+    ///          slot; probing every sector's first slot therefore settles
+    ///          blankness in \c sector_count reads (128 for a 512 KiB region)
+    ///          instead of a full O(capacity) scan.
+    ///
+    /// \param out_blank Set to \c true iff no sector-head slot is valid.
+    /// \return \c true on success; \c false on a transport failure.
+    ///
+    bool region_is_blank(bool *out_blank) noexcept {
+        for (auto s = uint32_t{0}; s < m_sector_count; s++) {
+            auto status = uint8_t{};
+            if (!read_slot_status(s * RECORDS_PER_SECTOR, &status)) {
+                return false;
+            }
+            if (status == STATUS_VALID) {
+                *out_blank = false;
+                return true;
+            }
+        }
+        *out_blank = true;
+        return true;
     }
 
     // =====================================================================
@@ -437,15 +625,18 @@ private:
     ///          sector is erased and \c tail advances past the records it
     ///          destroyed.
     ///
+    /// \param slot Region-relative slot about to be written.
+    /// \return \c true on success; \c false on a flash erase failure.
+    ///
     bool recycle_sector_if_needed(uint32_t slot) noexcept {
         if (slot % RECORDS_PER_SECTOR != 0u) {
             return true; // not a sector boundary; nothing to recycle
         }
 
         auto status = std::array<uint8_t, 1>{};
-        if (!m_flash.read_data(slot_address(slot),
-                               sentinel::make_span(status.data(),
-                                                   status.size()))) {
+        if (!m_flash.read_data(
+                slot_address(slot),
+                sentinel::make_span(status.data(), status.size()))) {
             m_last_error = err::flash_failure;
             return false;
         }
@@ -466,7 +657,7 @@ private:
         // also prevents unsigned underflow of (head - capacity).
         if (m_head >= m_capacity) {
             const auto recycled_oldest = m_head - m_capacity;
-            const auto recycled_end    = recycled_oldest + RECORDS_PER_SECTOR;
+            const auto recycled_end = recycled_oldest + RECORDS_PER_SECTOR;
             if (m_tail < recycled_end) {
                 m_tail = recycled_end;
             }
@@ -475,11 +666,15 @@ private:
     }
 
     /// Phase one: program sequence + payload, leaving status at 0xFF.
+    /// \param slot     Region-relative slot to write.
+    /// \param sequence Absolute record index to stamp into the slot.
+    /// \param record   Record payload to write.
+    /// \return \c true on success; \c false on a flash program failure.
     bool write_payload(uint32_t slot, uint32_t sequence,
-                       const RecordT &record) noexcept {
-        auto buffer = std::array<uint8_t, 4 + sizeof(RecordT)>{};
+                       const RecordType &record) noexcept {
+        auto buffer = std::array<uint8_t, 4 + sizeof(RecordType)>{};
         std::memcpy(buffer.data(), &sequence, sizeof(sequence));
-        std::memcpy(buffer.data() + 4, &record, sizeof(RecordT));
+        std::memcpy(buffer.data() + 4, &record, sizeof(RecordType));
 
         const auto addr = slot_address(slot) + OFFSET_SEQUENCE;
         if (!m_flash.page_program(
@@ -491,6 +686,8 @@ private:
     }
 
     /// Phase two: program the status byte to commit the record.
+    /// \param slot Region-relative slot to commit.
+    /// \return \c true on success; \c false on a flash program failure.
     bool commit_status(uint32_t slot) noexcept {
         auto status = std::array<uint8_t, 1>{STATUS_VALID};
         const auto addr = slot_address(slot) + OFFSET_STATUS;
@@ -506,16 +703,18 @@ private:
     // State
     // =====================================================================
 
-    flash_type    &m_flash;                       ///< Non-owning backing flash.
-    uint32_t       m_region_offset;               ///< Region base byte offset.
-    uint32_t       m_region_size;                 ///< Region size in bytes.
-    uint32_t       m_sector_count;                ///< Sectors in the region.
-    uint32_t       m_capacity;                    ///< Slot count in the region.
+    flash_type &m_flash;      ///< Non-owning backing flash.
+    uint32_t m_region_offset; ///< Region base byte offset.
+    uint32_t m_region_size;   ///< Region size in bytes.
+    uint32_t m_sector_count;  ///< Sectors in the region.
+    uint32_t m_capacity;      ///< Slot count in the region.
 
-    uint32_t       m_head{0};                     ///< Next write index.
-    uint32_t       m_tail{0};                     ///< Oldest valid index.
-    bool           m_initialized{false};
-    mutable err    m_last_error{err::ok};
+    uint32_t m_head{0};                ///< Next write index.
+    uint32_t m_tail{0};                ///< Oldest valid index.
+    bool m_initialized{false};         ///< Set once \ref initialize() runs.
+    mutable err m_last_error{err::ok}; ///< Cached most-recent error.
 };
+
+} // namespace sentinel
 
 #endif /* SENTINEL_RECORD_STORE_HPP */

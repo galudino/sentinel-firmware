@@ -8,7 +8,7 @@
 ///          (\c sentinel::resource::cybsp_spi_bus, device CS on
 ///          \c CYBSP_SPI_FLASH_CS), using a dedicated scratch region of the
 ///          flash that does not collide with the
-///          \ref sentinel::test::w25q128 erase/program scratch sector
+///          \c sentinel::test::w25q128 erase/program scratch sector
 ///          (\c 0xFFF000).
 ///
 ///          Test coverage maps 1:1 onto the issue's acceptance criteria:
@@ -21,9 +21,11 @@
 ///
 ///          Run-to-completion (#48): the suite runs synchronously and returns
 ///          a \ref sentinel::test::tally. It no longer self-schedules as a
-///          FreeRTOS task — the serial test orchestrator calls \ref run_all
-///          directly. Internally it uses a TU-local fixture that owns the
-///          bus-arbitrated SPI transport, so there is no file-static bus global.
+///          FreeRTOS task — the serial test orchestrator calls
+///          \ref sentinel::test::record_store::run_all directly. Internally it
+///          uses a TU-local fixture that owns the
+///          bus-arbitrated SPI transport, so there is no file-static bus
+///          global.
 ///
 /// \author  galudino
 /// \date    2026-06-28

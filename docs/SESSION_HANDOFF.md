@@ -20,10 +20,180 @@ than letting them accumulate here.
 
 ---
 
-**Last updated:** 2026-07-01 (sessions: #38, then #51). **#38 and #51 are both
-merged to `develop` and closed** (details below). The section immediately below
-documents #38 as-built; #51 (unify entry points + dedup BT/OTA config) is
-summarized under "Also this session." **NEXT: #6.**
+**Last updated:** 2026-07-27 (session: **#65 + #57 DONE, promoted `develop →
+main`**). #65 — Bosch C-driver adapter moved out of the transports into the bme280
+driver (In Review, bench AC pending). #57 — per-directory README fan-out across
+the whole `src/` tree, **COMPLETE + CLOSED**. Earlier: **#53 FULLY DONE + CLOSED**
+— Doxygen backfill (0 warnings) + end-of-Phase-I formatting/convention sweep;
+docs.yml CI added; #58–#64 filed. #56 + #49 on-bench signed off + closed;
+#6/#45/#55 GATT, #38, #51 merged. **NEXT: on-bench BME280 re-verify for #65 (AC
+#4); OTA DFU validation (#63) is the Phase I finale.**
+
+**#57 (this session — merged `develop`, tag `57-per-directory-readmes-history`;
+CLOSED):** every meaningful `src/` subdirectory now has a `README.md` fanning out
+from the `src/README.md` keystone — 22 pages (app, resource, drivers + 7 driver
+subdirs, transport + 2, task, storage, diagnostics, telemetry, bluetooth, logging,
+utilities, test, testbench). Uniform shape: purpose → key types/entry points →
+usage snippet → cross-links. All reachable from `src/README.md` (no orphans); 286
+relative links verified. Snippets checked against real APIs (e.g.
+`create_orchestrator`, `record_store` ctor, `jedec_id()`/`is_known_jedec`,
+`device_snapshot::populate(out)`, `current_firmware_version`). Vendored/generated
+dirs left undocumented by design.
+
+**#65 (this session — merged `develop`, tag `65-bosch-adapter-history`; issue
+closed):** the `byte_transport` CRTP base + all three CYHAL transports carried
+static `bosch_read`/`bosch_write`/`bosch_delay` (Bosch Sensortec function-pointer
+ABI) — an inverted dependency (reusable transport depending on a sensor-specific
+vendor lib). Moved the **entire** adapter into `bme280<Transport>` as private
+statics that cast `intf_ptr` back to `Transport*` and branch the register framing
+on the compile-time `is_i2c`/`is_spi` tag over the transport's generic
+`read`/`write`/`write_read`/`delay_us`. Transports are now vendor-agnostic
+byte-movers — **`grep bosch` under `transport/` is empty**. Wire framing preserved
+byte-for-byte on the bme280 I²C bus-transport path (net −201 LOC: one adapter
+replaces four duplicated copies). **Builds:** testbench release + firmware release
+both link + OTA-sign clean. **On-bench BME280 re-verification PENDING** (AC #4 —
+this changes the bytes on the wire: chip-id 0x60, soft-reset, settings round-trip,
+a plausible T/H/P sample).
+
+**#53 sweep (this session, merged `5cdb265`, tag `53-format-sweep-history`):**
+`clang-format -i` across `Sentinel/src`; reviewer rules — `RecordT`→`RecordType`,
+classes defined inside `namespace sentinel {}` (no out-of-line qualified defs),
+for-loop postfix / statement prefix, and **record-store reads C-style out-param
+→ `std::optional<T>`** (`record_store`/`ram_record_store`/`system_event_log`/
+`snapshot_persistence`/`gatt_paged` read chain; `read_range` kept its
+caller-array buffer form). Verified: testbench debug + firmware release
+(OTA-signed) link; `doxygen Doxyfile` = 0 warnings. Delivered partly via
+subagent fan-out (test call sites + namespace-nested), parent-fixed the bme280
+alias-ordering + missed `run_boot_sequence` reads that the build caught.
+
+**New issues filed this session:** #60 (CI: build + artifacts), #61 (CI:
+clang-format + doxygen-0-warnings gates — the *enforcement* so docs/style never
+regress, replacing per-phase cleanup), #62 (enable GitHub Pages — needs repo
+public, gated on #53/#57), #63 (**OTA DFU validation vs a known-good Infineon
+host** — Phase I finale; client DFU is a separate `sentinel-client` concern),
+#64 (evaluate `std::expected`/value-or-error error handling — C++23, so a
+`__cplusplus`-gated `result<T,E>` alias for the RPi5/nRF5340 ports).
+
+**Docs are decoupled by design:** Doxygen = code-only API reference (`INPUT =
+Sentinel/src`); the narrative Markdown (#57 READMEs, `docs/architecture/`)
+renders on GitHub. Doxygen HTML is gitignored + published by CI (never committed
+to source). See [[reference_doxygen]].
+
+**THIS SESSION (2026-07-27):**
+- **#53 Doxygen backfill — DONE (merged `90c42dc`, tag
+  `53-doxygen-backfill-history`).** `doxygen Doxyfile` emits **0 warnings**
+  tree-wide (was 1,248). Every entity in `Sentinel/src` documented; Doxyfile is
+  now a **code-only** build (`INPUT = Sentinel/src`; narrative Markdown renders
+  on GitHub per #57; `__attribute__(x)` stripped; vendored `bosch/`/
+  `app_bt_utils`/`cy_ota_config`/`*driver_file_template*` excluded). Delivered
+  by a 6-way subagent fan-out + parent mop-up. Comments only; both builds link.
+  **⚠️ Doxygen verify:** run `doxygen Doxyfile` **as-is** (HTML on) — the
+  `GENERATE_HTML=NO` shortcut hits a 1.11.0 false-positive on member
+  `\param`/`\return`. #53 stays **In Progress** for its *other* half: the
+  end-of-Phase-I `clang-format -i` + reviewer-rule sweep (`RecordT`→
+  `RecordType`, namespace-nested defs, prefix/postfix, ref-for-mutation).
+- **#57 — `Sentinel/src/README.md` keystone merged (`d7ba68e`).** Module map +
+  4 Mermaid diagrams. Remaining: per-directory README fan-out (In Progress).
+- **#58 (User button SW2/P0_4 driver) + #59 (on-demand diagnostics service =
+  extended POST, button + GATT triggered, non-destructive) — filed, Phase II
+  Backlog.** The exhaustive destructive testbench stays a separate app
+  (decision #15); #59 is the safe, live-unit "more involved POST".
+
+**⚠️ BENCH RELIABILITY WATCH — marginal SPI (flash) connection.** The testbench
+first came up with **5 failures** (W25Q128 `erase_program_read` + 4 flash-backed
+`record_store` tests: `read -4`/`count=0`), then — with **zero code change**,
+just re-seating SPI VCC/GND and reflashing — went 5-fail → 1-fail → **47/47**,
+and has stayed 47/47 across the **three runs since (two reflashes + one bare
+reset, no reflash)**. The failing test *moved* between runs and it was
+**SPI-only** (I²C sensors never flaked). The clean bare-reset run makes a
+firmware power-up/ready sequencing gap unlikely (it re-ran full bring-up + suite
+without re-flashing). At the configured
+**100 kHz** SPI clock there is no signal-margin/opcode explanation → it is a
+**marginal physical contact** (loose jumper / breadboard / GND-VCC), not a
+firmware bug (record_store logic is separately proven by the RAM-backed
+`system_event_log` suite, 8/8 every run). **Currently seated well, NOT proven
+permanently fixed.** Before trusting OTA DFU (which writes flash), harden the
+flash wiring (short/solid leads, 100 nF decoupling at the module, solid GND) and
+get repeatable 47/47 across several *cold power-cycles* (not just debugger
+reflashes). Discriminator: if failures return only on cold boot (never on
+reflash), suspect a flash power-up/ready sequencing gap in bring-up instead.
+
+**THIS SESSION (2026-07-10, autonomous):**
+- **#56 (MERGED to `develop`, squash `8ea30be`, tag
+  `56-w25q128-write-completion-history`; board → In Review).** w25q128
+  erase/program could report false success when the op was a silent no-op —
+  completion was inferred from BUSY-clear alone, which can't tell "finished"
+  from "never started". New `wait_until_write_complete()` requires **both** BUSY
+  and WEL (SR1 bit 1) to clear; a completed op auto-clears WEL (JEDEC), so a
+  never-started op leaves WEL latched and now times out honestly. Rewired
+  `page_program` / `chip_erase` / `erase_with_address`. **On-bench pending:**
+  AC #2 (deterministic `erase_program_read` across many runs) + AC #3 (a
+  WEL-injection regression test — not feasible off-bench today; the suites drive
+  the real device, no fake SPI transport exists).
+- **#49 (MERGED to `develop`, squash `c5b625d`, tag
+  `49-record-store-fast-scan-history`; board → In Review).**
+  `record_store::initialize()` was an unconditional O(capacity) min/max scan
+  (~8.7 s/region, ~17 s boot). Now classifies the region from **slot 0**: valid
+  seq 0 → never wrapped → binary-search the valid/empty boundary
+  (O(log capacity)); empty → `region_is_blank()` per-sector head probe
+  (O(sector_count)) distinguishes a truly blank region (fast, the ~17 s case)
+  from a power-loss-mid-recycle-of-sector-0 transient (falls through to the full
+  scan so no records are lost); else wrapped → the unchanged authoritative
+  `initialize_full_scan()`. No on-flash format change. New testbench
+  `recycle_transient_recovery` guards the transient. **Builds validated locally
+  (release firmware OTA image signs + fits; release + debug testbench link).**
+  **On-bench pending:** run the record_store suite (now 7 tests → expect 7/7)
+  and measure the empty-region boot scan (<1 s).
+- **#53 (branch `53-doxyfile-doc-infra`, NOT merged — review; board → In
+  Progress).** Added a curated repo-root `Doxyfile` (`OUTPUT_DIRECTORY =
+  docs/doxygen`, gitignored; `EXTRACT_ALL=NO` + `WARN_IF_UNDOCUMENTED` so the
+  coverage gap shows; MathJax, no dot). Verified `doxygen Doxyfile` runs clean
+  (1.11.0, exit 0). The `clang-format -i` + reviewer-rule sweep + doc backfill
+  stay the **end-of-Phase-I** task.
+- **#57 (branch `57-src-readme-docs`, NOT merged — review; board → In
+  Progress).** Added `Sentinel/src/README.md` — the module-map TOC + the four
+  core Mermaid diagrams (CRTP transport, bus-arbiter tasks, two-lane snapshot,
+  boot orchestrator). Per-directory module READMEs fan out from this anchor
+  (remainder of #57, left so the pattern can be reviewed first).
+
+**#6 / #45 / #55 (MERGED to `develop` 2026-07-10, squash `f573cb1`, history tag
+`6-ble-gatt-services-phase-i-history`; issues closed).** Phase I GATT catalog +
+DIS/Platform ID + PSoC 6 die-temperature, validated on-bench (nRF Connect +
+testbench 46/46). As-built + durable notes:
+- **GATT DB** in `src/design.cybt`, regen via `bt-configurator-cli -c src/design.cybt
+  -o GeneratedSource` — the `-o` path is relative to the config's parent (`src/`),
+  so NOT `-o src/GeneratedSource`; `GeneratedSource/` is gitignored + rebuilt.
+  8 custom services + DIS + Battery; CUD on every custom char, CCCD only on
+  notifiers. UUIDs in the #6 body (client #9 mirrors 1:1).
+- **Accessor layer** (`src/bluetooth/sentinel_gatt_*.hpp`) = the single seam over
+  generated `app_*`/`HDLC_*`: `inline`+`noexcept` (never `constexpr` — they read
+  extern GATT-DB globals), accessor/mutator (no raw-ref), notify sender in-layer.
+- **Producers wired**: BME280 Ambient Sample; DS3231 Unix Time (R/W — the write is
+  the BLE time-sync path via `ctx.rtc.set_unix_time()`, **not** rtc_service, per
+  `[[project_rtc_time_design]]`) / RTC Temp / Alarm Flags; Snapshot Stream (sink +
+  enable char); paged Snapshot History + System Event Log; async
+  `ble_maintenance_task` for Clear Store + Request Bootloader (off the BT callback);
+  real `gatt_db_ok` into POST.
+- **#55 die-temp**: `drivers::psoc6_die_temperature` (SAR DieTemp channel, 1.2 V BGR,
+  32× avg, SFLASH dual-slope conversion; cache+throttle+mutex; SAR on free 8-bit
+  divider 6). Surfaced via System **CPU Temperature** char (R/Notify),
+  `cpu_die_temp_service` (heartbeat-gated log like the peers, `SENTINEL_TESTBENCH`
+  gate), and a real-SAR testbench suite. ~34 °C on-bench, correct vs BME280/DS3231.
+- **`device_snapshot`** fully populated (RSSI/TX-power async-cached + CPU die temp).
+- Bugs fixed en route: `firmware_version::c_str()` formatted `0.0.0.1` as `0.0.01.`
+  (now guarded by static_assert); `unused()` is const-ref variadic (accepts
+  non-copyable). Note `firmware_version::build()` still truncates to 8 bits — use
+  `array()[3]` for the full 16-bit build.
+- On-bench GATT checklist:
+  [`acceptance/gatt-nrf-connect-checklist.md`](acceptance/gatt-nrf-connect-checklist.md).
+
+**NEXT (dependency-ordered):**
+1. **#49** — `record_store::initialize()` is O(capacity): slow boot flash scan
+   (~17 s, two region scans). Optimize the scan.
+2. **#56** — w25q128 erase/program can report false success when WEL doesn't latch
+   (verify WEL / that BUSY asserted before trusting BUSY-clear). Filed with diagnosis.
+3. **#53** — formatting / house style / Doxygen — address after #49 + #56.
+   **#57** — per-directory README docs across the tree (roadmap; complements #53).
 
 **#38 (merged):** boot orchestrator + shared device context + lane-1 snapshot
 persistence. Both configs build clean under `-Werror -Wall -Wextra -pedantic-errors`
@@ -121,7 +291,9 @@ components), #16 (all FreeRTOS tasks OO/class), **#17 (device context = post-
 scheduler Meyers singleton, amends #13)**. Full text in
 [`architecture/decisions.md`](architecture/decisions.md).
 
-**NEXT: #6 (BLE GATT services Phase I) — its deps #38 + #46 are now done.**
+**NEXT: #49 (slow boot flash scan) + #56 (w25q128 WEL false-success) — may be
+tackled autonomously — then #53 (formatting / Doxygen). #57 (per-dir READMEs) is
+a new docs roadmap item. #6 / #45 / #55 merged to `develop` + closed.**
 
 ---
 
@@ -179,33 +351,37 @@ default.
   (`resource::context()`, `app::boot_orchestrator`, `snapshot_persistence_task`;
   decision #17; both builds clean; **merged to `develop` 2026-07-01, on-bench
   POST hardware ACs signed off — AC 1/2/4/5/6 PASS, AC 3 bench-infeasible**).
+- **Also merged to `develop`:** **#6 / #45 / #55** — Phase I BLE GATT services,
+  Device Information Service + Platform ID, and the PSoC 6 die-temperature
+  driver/service (squash `f573cb1`, tag `6-ble-gatt-services-phase-i-history`).
 - **What's next (open, dependency-ordered):**
-  1. **#6** — BLE GATT services Phase I (wires producer notify-sinks →
-     characteristics, incl. attaching `snapshot_stream_task`'s notify sink +
-     driving `start()`/`stop()` from the `SnapshotStream` enable char, exposing
-     `snapshot_persistence_task` history reads, threading the real `gatt_db_ok`
-     into the orchestrator's POST, and publishing BLE tx-power/RSSI + CPU temp
-     into `populate_snapshot`; assigns UUIDs). Deps #38 + #46 now done. ← **NEXT**
+  1. **On-bench sign-off of #56 + #49** (both merged to `develop`, board In
+     Review). #56: `erase_program_read` deterministic across many runs.
+     #49: record_store suite 7/7 + empty-region boot-scan <1 s measurement.
+  2. **Review + merge the #53 + #57 docs branches** (`53-doxyfile-doc-infra`,
+     `57-src-readme-docs`) — then continue #57's per-directory README fan-out.
+  3. **End-of-Phase-I `clang-format` sweep (#53)** + **OTA DFU validation with
+     `sentinel-client`** — the Phase I finale.
 
 ---
 
-## #6 — BLE GATT services Phase I (next)
+## Next issues (post #56/#49 merge)
 
-With #38 merged, the producer side is complete and #6 is pure GATT wiring
-(decision #8 chip-named services, #9 one-shot-sample rule):
+1. **On-bench sign-off — #56 + #49** (both merged to `develop`, In Review).
+   Flash a testbench build to the GD25Q128/CYBLE-416045 and run:
+   - **#56:** `erase_program_read` deterministically across many consecutive
+     runs (was intermittent). Optionally add a WEL-injection regression test if
+     a fake SPI transport is introduced (AC #3).
+   - **#49:** the record_store suite — 7 tests now incl.
+     `recycle_transient_recovery` — expect 7/7; and confirm the empty-region
+     boot scan is well under 1 s (was ~8.7 s/region).
+2. **#53 — Doxyfile done (branch, review);** the `clang-format -i` +
+   reviewer-rule sweep (`RecordT`→`RecordType`, namespace-nested defs,
+   prefix/postfix, ref-for-mutation) + Doxygen backfill remain the
+   **end-of-Phase-I** task (deferred so it doesn't churn in-flight branches).
+3. **#57 — `src/README.md` anchor done (branch, review);** fan out the
+   per-directory module READMEs from it incrementally.
+4. **OTA DFU validation with `sentinel-client`** — the Phase I finale.
 
-- Attach `snapshot_stream_task::set_notify_sink` + drive `start()`/`stop()` from
-  the `SnapshotStream` enable characteristic (lane 2).
-- Expose `snapshot_persistence_task::read`/`read_range`/`count` as the
-  `SnapshotHistory` paged-read service (lane 1), mirroring the `SystemEventLog`
-  retrieval shape.
-- Thread the **real GATT-DB-registration result** into
-  `boot_orchestrator::task_create(ble_stack_ok, gatt_db_ok)` (Phase I currently
-  passes the stack-init result for both).
-- Publish BLE tx-power / peer RSSI (and the on-die CPU temp) so the remaining
-  zero `device_snapshot` fields fill in.
-- Assign the 128-bit service/characteristic UUIDs; client #9 mirrors 1:1.
-
-The as-built API detail for the System Event Log, POST, and the shared device
-context / boot orchestrator lives in decisions #11/#12/#13/#17 of
-[`architecture/decisions.md`](architecture/decisions.md).
+Durable as-built detail lives in `docs/architecture/decisions.md` and the closed
+issues #6 / #45 / #55.

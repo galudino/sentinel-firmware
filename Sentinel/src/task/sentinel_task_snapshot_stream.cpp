@@ -4,11 +4,12 @@
 ///
 /// \details Implements the snapshot stream task declared in
 ///          \c sentinel_task_snapshot_stream.hpp. The task is normally idle:
-///          it blocks on a task notification with zero CPU until \ref start
-///          wakes it, then loops \c populate_snapshot() → notify sink at the
-///          configured cadence while a capture session is active \b and a
-///          central is connected, auto-returning to idle on \ref stop or
-///          disconnect.
+///          it blocks on a task notification with zero CPU until
+///          \ref sentinel::task::snapshot_stream_task::start wakes it, then
+///          loops \c populate_snapshot() → notify sink at the configured
+///          cadence while a capture session is active \b and a central is
+///          connected, auto-returning to idle on
+///          \ref sentinel::task::snapshot_stream_task::stop or disconnect.
 ///
 ///          \c populate_snapshot() is cache-backed (decision #14): it reads the
 ///          BME280 sample cache (#37), the rtc_service caches, and FreeRTOS
@@ -51,6 +52,8 @@ constexpr uint32_t MIN_PERIOD_MS = 20;
 /// \details Used until #6 (or the testbench) overrides it. A snapshot stream is
 ///          never notified into the void — if no central is connected, the loop
 ///          falls back to idle.
+///
+/// \return \c true if a central is currently connected.
 ///
 bool default_connected() noexcept {
     return sentinel::ble_context_object.connected();

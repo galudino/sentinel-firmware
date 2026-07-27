@@ -3,15 +3,16 @@
 /// \brief   Snapshot persistence task test suite implementation (lane 1, #38)
 ///
 /// \details Implements the run-to-completion suite declared in
-///          \c sentinel_test_snapshot_persistence.hpp. A TU-local \c fixture owns
-///          a scratch \ref sentinel::resource::snapshot_store_t over two sectors
-///          near the top of flash (\ref kRegionOffset) — clear of the
+///          \c sentinel_test_snapshot_persistence.hpp. A TU-local \c fixture
+///          owns a scratch \ref sentinel::resource::snapshot_store_t over two
+///          sectors near the top of flash (\c kRegionOffset) — clear of the
 ///          record_store suite's region (0xF00000), the w25q128 scratch sector
 ///          (0xFFF000), and the production event-log / snapshot regions low in
 ///          flash — and binds it to the real
 ///          \ref sentinel::task::snapshot_persistence_task singleton so every
 ///          test drives the production code path. The default shared-context
-///          store is restored before \ref run_all returns.
+///          store is restored before
+///          \ref sentinel::test::snapshot_persistence::run_all returns.
 ///
 /// \author  galudino
 /// \date    2026-06-30
@@ -42,21 +43,27 @@ extern "C" {
 
 namespace {
 
+/// W25Q128 driver instantiated over the bus-arbitrated SPI transport.
 using flash_t = sentinel::w25q128<sentinel::cyhal_spi_bus_transport>;
+/// Snapshot record_store type shared with the production persistence task.
 using store_t = sentinel::resource::snapshot_store_t;
+/// Telemetry snapshot record persisted by the store.
 using snapshot = sentinel::telemetry::device_snapshot;
 using sentinel::task::snapshot_persistence_task;
 
 /// Scratch region: two sectors above the record_store suite's 0xF00000 region.
 constexpr uint32_t kRegionOffset = 0xF02000u;
-constexpr uint32_t kRegionSize   = 2u * flash_t::SECTOR_SIZE_BYTES; // 8 KiB
+constexpr uint32_t kRegionSize = 2u * flash_t::SECTOR_SIZE_BYTES; ///< 8 KiB.
 
 /// \brief Yield long enough for the BLE debug ring buffer to drain.
+/// \param milliseconds Delay duration, in milliseconds.
 inline void yield_for_debug_drain(uint32_t milliseconds) noexcept {
     vTaskDelay(pdMS_TO_TICKS(milliseconds));
 }
 
 /// \brief A captured snapshot is well-formed (written by populate_snapshot).
+/// \param s Snapshot to check.
+/// \return \c true if the trailer magic and version fields are correct.
 inline bool snapshot_well_formed(const snapshot &s) noexcept {
     return s.trailer_magic == sentinel::telemetry::SNAPSHOT_TRAILER_MAGIC &&
            s.snapshot_version == sentinel::telemetry::SNAPSHOT_VERSION;
@@ -66,27 +73,42 @@ inline bool snapshot_well_formed(const snapshot &s) noexcept {
 /// \brief Fixture: owns the scratch store and binds it to the real task.
 ///
 struct fixture {
-    // The flash driver holds a reference to its transport, so the transport must
-    // be a named member that outlives it (not a constructor temporary).
-    sentinel::cyhal_spi_bus_transport flash_bus{sentinel::resource::cybsp_spi_bus,
-                                                CYBSP_SPI_FLASH_CS};
+    // The flash driver holds a reference to its transport, so the transport
+    // must be a named member that outlives it (not a constructor temporary).
+    /// SPI transport backing \ref flash; must outlive it.
+    sentinel::cyhal_spi_bus_transport flash_bus{
+        sentinel::resource::cybsp_spi_bus, CYBSP_SPI_FLASH_CS};
+    /// W25Q128 driver bound to \ref flash_bus.
     flash_t flash{flash_bus, sentinel::resource::flash_device_mutex};
+    /// Scratch snapshot store over \ref kRegionOffset / \ref kRegionSize.
     store_t store{flash, kRegionOffset, kRegionSize};
 
+    /// \brief Erase the scratch store and bind it to the real persistence task.
     fixture() noexcept {
         store.erase_all(); // also marks the store initialized
         snapshot_persistence_task::instance().bind_store(&store);
     }
+    /// \brief Unbind the scratch store, restoring the production default.
     ~fixture() noexcept {
         // Restore the production default so nothing else picks up the scratch
         // store after the suite finishes.
         snapshot_persistence_task::instance().bind_store(nullptr);
     }
 
+    /// \brief Fresh store reports empty.
+    /// \return \c true on success.
     bool presence_check() noexcept;
+    /// \brief Capture a few snapshots and read them back.
+    /// \return \c true on success.
     bool capture_and_readback() noexcept;
+    /// \brief \c read_range returns well-formed, time-ordered snapshots.
+    /// \return \c true on success.
     bool read_range_ordered() noexcept;
+    /// \brief Each \c capture_now call increments the stored count by one.
+    /// \return \c true on success.
     bool capture_now_increments() noexcept;
+    /// \brief Capturing past capacity wraps: oldest overwritten, newest intact.
+    /// \return \c true on success.
     bool wrap_around() noexcept;
 };
 
@@ -143,8 +165,8 @@ bool fixture::capture_and_readback() noexcept {
     }
 
     for (auto i = uint32_t{0}; i < kCount; i++) {
-        auto s = snapshot{};
-        if (!task.read(i, &s) || !snapshot_well_formed(s)) {
+        auto s = task.read(i);
+        if (!s || !snapshot_well_formed(*s)) {
             loge("capture_and_readback FAIL: read/verify index %u",
                  static_cast<unsigned>(i));
             return false;
@@ -240,9 +262,10 @@ bool fixture::wrap_around() noexcept {
         return false;
     }
 
-    // Capture past capacity to force a sector recycle (oldest-overwritten-wins).
+    // Capture past capacity to force a sector recycle
+    // (oldest-overwritten-wins).
     const auto capacity = store.capacity();
-    const auto total    = capacity + store_t::RECORDS_PER_SECTOR + 1u;
+    const auto total = capacity + store_t::RECORDS_PER_SECTOR + 1u;
     for (auto i = uint32_t{0}; i < total; i++) {
         if (!task.capture_now()) {
             loge("wrap_around FAIL: capture %u error %d",
@@ -263,17 +286,16 @@ bool fixture::wrap_around() noexcept {
 
     const auto tail = store.tail_index();
     const auto head = store.head_index();
-    auto oldest = snapshot{};
-    auto newest = snapshot{};
-    if (!task.read(tail, &oldest) || !snapshot_well_formed(oldest) ||
-        !task.read(head - 1u, &newest) || !snapshot_well_formed(newest)) {
+    auto oldest = task.read(tail);
+    auto newest = task.read(head - 1u);
+    if (!oldest || !snapshot_well_formed(*oldest) || !newest ||
+        !snapshot_well_formed(*newest)) {
         loge("wrap_around FAIL: tail/head read (tail=%u head=%u)",
              static_cast<unsigned>(tail), static_cast<unsigned>(head));
         return false;
     }
 
-    auto evicted = snapshot{};
-    if (tail > 0u && task.read(tail - 1u, &evicted)) {
+    if (tail > 0u && task.read(tail - 1u)) {
         loge("wrap_around FAIL: evicted record %u still readable",
              static_cast<unsigned>(tail - 1u));
         return false;
@@ -291,10 +313,9 @@ bool fixture::wrap_around() noexcept {
 // sentinel::test::snapshot_persistence::run_all
 // ============================================================================
 
-sentinel::test::tally
-sentinel::test::snapshot_persistence::run_all() noexcept {
+sentinel::test::tally sentinel::test::snapshot_persistence::run_all() noexcept {
     auto fx = fixture{};
-    auto t  = sentinel::test::tally{};
+    auto t = sentinel::test::tally{};
 
     t.record(fx.presence_check());
     yield_for_debug_drain(200);

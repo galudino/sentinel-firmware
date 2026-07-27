@@ -3,31 +3,36 @@
 /// \brief   Live device_snapshot BLE stream service task (lane 2, #46)
 ///
 /// \details Declares the live snapshot stream task: a dedicated FreeRTOS task
-///          that streams the live \ref sentinel::telemetry::device_snapshot (#36)
-///          to a connected BLE central at a configurable cadence (default
+///          that streams the live \ref sentinel::telemetry::device_snapshot
+///          (#36) to a connected BLE central at a configurable cadence (default
 ///          ~100 ms), \b only while a capture session is active. This is
 ///          \b lane \b 2 of the two-lane snapshot model (handoff decision #14):
 ///          the fast, on-demand, connection-gated live stream — distinct from
 ///          the always-on slow flash persistence (#38, lane 1).
 ///
 ///          Default state is \b idle: the task blocks with zero CPU until the
-///          \c SnapshotStream enable characteristic (#6) calls \ref start. It
-///          then loops \c populate_snapshot() → notify sink at \ref period_ms
-///          until \ref stop, the central disconnects, or notifications are
-///          unsubscribed — then it returns to idle.
+///          \c SnapshotStream enable characteristic (#6) calls
+///          \ref sentinel::task::snapshot_stream_task::start. It then loops
+///          \c populate_snapshot() → notify sink at
+///          \ref sentinel::task::snapshot_stream_task::period_ms until
+///          \ref sentinel::task::snapshot_stream_task::stop, the central
+///          disconnects, or notifications are unsubscribed — then it returns
+///          to idle.
 ///
 ///          \b Producer/GATT \b split (decision #14, option a). This task only
 ///          \e produces the snapshot and hands it to a notify sink; the actual
 ///          \c wiced_bt_gatt notification lives in #6's GATT handler, attached
-///          here via \ref set_notify_sink. Keeping the producer loop here leaves
-///          #6 as pure GATT wiring rather than a producer loop embedded in the
-///          GATT callbacks.
+///          here via \ref
+///          sentinel::task::snapshot_stream_task::set_notify_sink. Keeping the
+///          producer loop here leaves #6 as pure GATT wiring rather than a
+///          producer loop embedded in the GATT callbacks.
 ///
 ///          OO/class style, mirroring \ref sentinel::task::bme280_service and
 ///          the bus arbiters (handoff decision #16): the task's state (enable
 ///          flag, cadence, sinks, handle) lives in private members rather than
 ///          \c .cpp file-static globals, and the loop runs as a private
-///          \ref run reached via a static trampoline.
+///          \ref sentinel::task::snapshot_stream_task::run reached via a static
+///          trampoline.
 ///
 /// \author  galudino
 /// \date    2026-06-29
@@ -59,8 +64,8 @@ namespace sentinel::task {
 ///
 /// \details Normally idle (blocked, zero CPU). The \c SnapshotStream enable
 ///          characteristic (#6) wakes it via \ref start; while enabled \b and
-///          a central is connected it loops \c populate_snapshot() → notify sink
-///          at \ref period_ms, then auto-returns to idle on \ref stop or
+///          a central is connected it loops \c populate_snapshot() → notify
+///          sink at \ref period_ms, then auto-returns to idle on \ref stop or
 ///          disconnect. Use the \ref instance singleton.
 ///
 /// \note    This class is non-copyable and non-movable.
@@ -78,7 +83,8 @@ public:
     using notify_fn = void (*)(const telemetry::device_snapshot &) noexcept;
 
     ///
-    /// \brief Connection-state predicate — \c true while a central is connected.
+    /// \brief Connection-state predicate — \c true while a central is
+    /// connected.
     ///
     /// \details Defaults to the live BLE context query
     ///          (\c ble_context_object.connected()). Overridable via
@@ -95,6 +101,8 @@ public:
     ///
     /// \brief The single snapshot-stream-task instance.
     ///
+    /// \return Reference to the singleton \ref snapshot_stream_task instance.
+    ///
     static snapshot_stream_task &instance() noexcept;
 
     /// Non-copyable, non-movable: the task entry point captures \c this.
@@ -104,7 +112,8 @@ public:
     snapshot_stream_task &operator=(snapshot_stream_task &&) = delete;
 
     ///
-    /// \brief Create and start the snapshot stream task (idle until \ref start).
+    /// \brief Create and start the snapshot stream task (idle until \ref
+    /// start).
     ///
     /// \param priority    FreeRTOS task priority.
     /// \param stack_words Stack depth in words.
@@ -112,8 +121,10 @@ public:
     /// \return \c pdPASS on success, otherwise the \c xTaskCreate failure code.
     ///
     BaseType_t task_create(
-        UBaseType_t priority = static_cast<UBaseType_t>(configMAX_PRIORITIES - 3),
-        uint16_t stack_words = static_cast<uint16_t>(configMINIMAL_STACK_SIZE * 6),
+        UBaseType_t priority = static_cast<UBaseType_t>(configMAX_PRIORITIES -
+                                                        3),
+        uint16_t stack_words = static_cast<uint16_t>(configMINIMAL_STACK_SIZE *
+                                                     6),
         uint32_t period_ms = DEFAULT_PERIOD_MS) noexcept;
 
     ///
@@ -137,6 +148,8 @@ public:
     ///
     /// \brief \c true while a capture session is active.
     ///
+    /// \return \c true between \ref start and \ref stop; \c false otherwise.
+    ///
     bool streaming() const noexcept;
 
     ///
@@ -149,6 +162,8 @@ public:
 
     ///
     /// \brief Current streaming cadence in milliseconds.
+    ///
+    /// \return Current \ref set_period_ms value, in milliseconds.
     ///
     uint32_t period_ms() const noexcept;
 
@@ -172,6 +187,8 @@ public:
 private:
     snapshot_stream_task() = default;
 
+    /// \brief Static FreeRTOS task entry point; forwards to \ref run.
+    /// \param task_parameter Unused (\c this is captured via \ref instance).
     static void task_trampoline(void *task_parameter);
 
     ///
@@ -181,13 +198,15 @@ private:
     void run();
 
     /// \brief Resolve the effective connection state (predicate or live BLE).
+    /// \return \c true if a central is currently connected.
     bool central_connected() const noexcept;
 
-    volatile bool     m_streaming{false};  ///< Session active? (requested state)
-    volatile uint32_t m_period_ms{DEFAULT_PERIOD_MS}; ///< Streaming cadence (ms).
-    notify_fn         m_notify_sink{nullptr};         ///< BLE notify sink (#6).
-    connected_fn      m_connected{nullptr};           ///< Connection predicate.
-    TaskHandle_t      m_handle{nullptr};              ///< FreeRTOS task handle.
+    volatile bool m_streaming{false}; ///< Session active? (requested state)
+    volatile uint32_t m_period_ms{
+        DEFAULT_PERIOD_MS};            ///< Streaming cadence (ms).
+    notify_fn m_notify_sink{nullptr};  ///< BLE notify sink (#6).
+    connected_fn m_connected{nullptr}; ///< Connection predicate.
+    TaskHandle_t m_handle{nullptr};    ///< FreeRTOS task handle.
 };
 
 } // namespace sentinel::task

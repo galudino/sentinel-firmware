@@ -64,10 +64,6 @@ extern "C" {
 
 namespace sentinel {
 
-class tachometer_psoc6;
-
-}
-
 ///
 /// \brief PSoC6 tachometer source using GPIO interrupt and TCPWM counter
 ///
@@ -87,7 +83,7 @@ class tachometer_psoc6;
 ///          - Timestamp capture and callback dispatch are minimal operations
 ///          - The tachometer_input::on_edge() implementation must be ISR-safe
 ///
-class sentinel::tachometer_psoc6 {
+class tachometer_psoc6 {
 public:
     ///
     /// \brief Construct PSoC6 tachometer source
@@ -99,7 +95,6 @@ public:
     /// \param cb           Reference to tachometer_input that receives events
     /// \param pin          GPIO pin connected to tachometer signal
     /// \param tcpwm_counter Pointer to initialized TCPWM timer for timestamps
-    /// \param edge         Edge type to detect (default: rising edge)
     ///
     tachometer_psoc6(sentinel::tachometer_input &cb, cyhal_gpio_t pin,
                      cyhal_timer_t *tcpwm_counter)
@@ -136,8 +131,9 @@ public:
     ///          the current counter value and forwards the event to the
     ///          tachometer_input callback.
     ///
-    /// \param arg   Pointer to tachometer_psoc6 instance (this)
-    /// \param event GPIO event type (unused, edge type set at registration)
+    /// \param arg Pointer to tachometer_psoc6 instance (this)
+    ///            (second parameter is the GPIO event type; unused here since
+    ///            the edge type is fixed at registration, so it is unnamed)
     ///
     static void gpio_isr_wrapper(void *arg, cyhal_gpio_event_t /*event*/) {
         auto *self = static_cast<tachometer_psoc6 *>(arg);
@@ -174,5 +170,7 @@ private:
     ///
     cyhal_timer_t *m_counter;
 };
+
+} // namespace sentinel
 
 #endif /* SENTINEL_TACHOMETER_PSOC6_HPP */

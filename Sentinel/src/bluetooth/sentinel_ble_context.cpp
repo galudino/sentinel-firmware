@@ -61,8 +61,11 @@ extern "C" {
 
 using sentinel::ble_context;
 
+/// \brief Local alias for the PWM signal type driving the advertising LED.
 using Signal = sentinel::cyhal_pwm_signal;
 
+/// \brief PWM signal bound to LED3, used to indicate advertising/connection
+///        state (see \ref sentinel::ble_context::update_advertising_led).
 static auto led3_pwm_block = Signal(&sentinel::resource::led3);
 
 namespace sentinel {
@@ -99,18 +102,14 @@ wiced_result_t ble_context::stack_initialize() noexcept {
 }
 
 wiced_bt_gatt_status_t ble_context::connection_event_handler(
-    wiced_bt_gatt_connection_status_t *connection_status) {
+    const wiced_bt_gatt_connection_status_t &connection_status) {
     auto status = wiced_bt_gatt_status_e::WICED_BT_GATT_ERROR;
     auto result = wiced_result_t::WICED_BT_ERROR;
 
-    if (connection_status == nullptr) {
-        return status;
-    }
+    if (connection_status.connected) {
+        m_connection_id = connection_status.conn_id;
 
-    if (connection_status->connected) {
-        m_connection_id = connection_status->conn_id;
-
-        std::copy_n(connection_status->bd_addr, BD_ADDR_LEN,
+        std::copy_n(connection_status.bd_addr, BD_ADDR_LEN,
                     m_peer_address.begin());
 
         m_connection_state = state::connected;
@@ -188,14 +187,14 @@ cy_rslt_t ble_context::ota_agent_initialize() noexcept {
 
 wiced_bt_gatt_status_t
 ble_context::ota_agent_write_handler(wiced_bt_gatt_event_data_t *event_data,
-                                     uint16_t *error_handle) noexcept {
+                                     uint16_t &error_handle) noexcept {
     auto *write_request = &event_data->attribute_request.data.write_req;
 
     cy_rslt_t result = cy_en_rslt_type_t::CY_RSLT_TYPE_ERROR;
 
     auto gatt_status = wiced_bt_gatt_status_e::WICED_BT_GATT_SUCCESS;
 
-    *error_handle = write_request->handle;
+    error_handle = write_request->handle;
 
     CY_ASSERT((event_data != nullptr) && (write_request != nullptr));
 
@@ -281,12 +280,61 @@ void ble_context::ota_agent_confirmation_handler() noexcept {
     }
 }
 
+namespace {
+
+/// \brief ~1 s throttle between link-metric HCI reads.
+constexpr uint32_t LINK_METRICS_MIN_INTERVAL_MS = 1000;
+
+/// \brief read-RSSI completion: cache the peer RSSI on the shared context.
+/// \param p_data Callback payload; expected to be a
+///               \c wiced_bt_dev_rssi_result_t*.
+void rssi_read_complete(void *p_data) {
+    auto *result = static_cast<wiced_bt_dev_rssi_result_t *>(p_data);
+    if (result != nullptr &&
+        result->status == wiced_result_t::WICED_BT_SUCCESS) {
+        sentinel::ble_context_object.set_peer_rssi(result->rssi);
+    }
+}
+
+/// \brief read-TX-power completion: cache the connection TX power.
+/// \param p_data Callback payload; expected to be a
+///               \c wiced_bt_tx_power_result_t*.
+void tx_power_read_complete(void *p_data) {
+    auto *result = static_cast<wiced_bt_tx_power_result_t *>(p_data);
+    if (result != nullptr &&
+        result->status == wiced_result_t::WICED_BT_SUCCESS) {
+        sentinel::ble_context_object.set_tx_power_dbm(result->tx_power);
+    }
+}
+
+} // namespace
+
+void ble_context::refresh_link_metrics() noexcept {
+    if (!connected()) {
+        return;
+    }
+
+    // Throttle: the snapshot populate path may call this every ~100 ms, but two
+    // HCI reads per second is plenty for a health metric.
+    const auto now_ms =
+        static_cast<uint32_t>(xTaskGetTickCount()) * portTICK_PERIOD_MS;
+    if ((now_ms - m_last_metrics_tick) < LINK_METRICS_MIN_INTERVAL_MS) {
+        return;
+    }
+    m_last_metrics_tick = now_ms;
+
+    // Non-blocking: results arrive later via the completion callbacks.
+    wiced_bt_dev_read_rssi(m_peer_address.data(), BT_TRANSPORT_LE,
+                           &rssi_read_complete);
+    wiced_bt_dev_read_tx_power(m_peer_address.data(), BT_TRANSPORT_LE,
+                               &tx_power_read_complete);
+}
+
 wiced_bt_dev_status_t ble_context::stack_management_callback(
     wiced_bt_management_evt_t event,
     wiced_bt_management_evt_data_t *event_data) noexcept {
     auto result = wiced_result_t::WICED_BT_ERROR;
     wiced_bt_device_address_t device_address{};
-    wiced_bt_ble_advert_mode_t *advertisement_mode = nullptr;
     wiced_bt_dev_encryption_status_t *encryption_status = nullptr;
 
     switch (event) {
@@ -373,9 +421,8 @@ wiced_bt_dev_status_t ble_context::stack_management_callback(
         break;
 
     case wiced_bt_management_evt_e::BTM_BLE_ADVERT_STATE_CHANGED_EVT:
-        advertisement_mode = &event_data->ble_advert_state_changed;
-
-        ble_context_object.set_advertising_mode(advertisement_mode);
+        ble_context_object.set_advertising_mode(
+            event_data->ble_advert_state_changed);
         ble_context_object.update_advertising_led();
 
         result = wiced_result_t::WICED_BT_SUCCESS;
@@ -399,6 +446,10 @@ static wiced_bt_gatt_status_t sentinel::ble_start_advertising() {
     gatt_status = wiced_bt_gatt_register(sentinel::ble_gatt_event_callback);
     gatt_status =
         wiced_bt_gatt_db_init(gatt_database, gatt_database_len, nullptr);
+
+    // Record the GATT-DB registration result for the POST gatt_db probe (#6).
+    sentinel::ble_context_object.set_gatt_db_ok(
+        gatt_status == wiced_bt_gatt_status_e::WICED_BT_GATT_SUCCESS);
 
     wiced_result = wiced_bt_start_advertisements(
         wiced_bt_ble_advert_mode_e::BTM_BLE_ADVERT_UNDIRECTED_HIGH, 0, nullptr);

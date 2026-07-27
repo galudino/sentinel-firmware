@@ -6,13 +6,13 @@
 ///          FreeRTOS task that serves as the single owner of one CYHAL SPI
 ///          peripheral handle (\c cyhal_spi_t*). Every other task in the
 ///          system that needs to transact on that bus does so by submitting
-///          a \ref spi_request to the bus's request queue and blocking on
-///          its own response queue. The bus task processes one request at
-///          a time, switches the SCB's active slave-select line to the one
-///          named in the request, performs the transfer, and posts an
-///          \ref spi_response back to the requester.
+///          a \ref sentinel::task::spi_request to the bus's request queue and
+///          blocking on its own response queue. The bus task processes one
+///          request at a time, switches the SCB's active slave-select line to
+///          the one named in the request, performs the transfer, and posts an
+///          \ref sentinel::task::spi_response back to the requester.
 ///
-///          Direct counterpart of \ref sentinel::task::i2c_bus: same
+///          Direct counterpart of \ref sentinel::task::i2c_bus — same
 ///          ownership model, same retry behaviour, same priority. The
 ///          differences:
 ///          - Each request carries a \c cyhal_gpio_t identifying the
@@ -21,8 +21,9 @@
 ///            once \c cyhal_spi_select_active_ssel has routed that SS line
 ///            as the active one; the arbiter never drives CS as a plain
 ///            GPIO.
-///          - SPI is full-duplex on the wire. The same \ref spi_request
-///            carries both \c tx and \c rx spans; whichever is non-empty
+///          - SPI is full-duplex on the wire. The same
+///            \ref sentinel::task::spi_request carries both \c tx and \c rx
+///            spans; whichever is non-empty
 ///            (or both) drives \c cyhal_spi_transfer with the appropriate
 ///            \c write_fill byte clocked out on MOSI when only reading.
 ///
@@ -167,16 +168,23 @@ public:
     // Defaults
     // =====================================================================
 
+    /// \brief Default request-queue depth.
     static constexpr UBaseType_t DEFAULT_QUEUE_LENGTH = 8;
 
+    /// \brief Default FreeRTOS priority for the bus task.
     static constexpr UBaseType_t DEFAULT_PRIORITY =
         static_cast<UBaseType_t>(configMAX_PRIORITIES - 2);
 
+    /// \brief Default stack size (in words) for the bus task.
     static constexpr uint16_t DEFAULT_STACK_WORDS =
         static_cast<uint16_t>(configMINIMAL_STACK_SIZE * 4);
 
-    static constexpr uint8_t  INNER_RETRIES   = 3;
-    static constexpr uint32_t RETRY_DELAY_MS  = 2;
+    /// \brief Number of immediate retries before the bus task gives up on a
+    ///        single request.
+    static constexpr uint8_t INNER_RETRIES = 3;
+
+    /// \brief Delay between retries, in milliseconds.
+    static constexpr uint32_t RETRY_DELAY_MS = 2;
 
     ///
     /// \brief Default fill byte clocked on MOSI when reading without a
@@ -203,8 +211,8 @@ public:
     /// Non-copyable, non-movable: the task entry-point captures \c this.
     spi_bus(const spi_bus &) = delete;
     spi_bus &operator=(const spi_bus &) = delete;
-    spi_bus(spi_bus &&)                 = delete;
-    spi_bus &operator=(spi_bus &&)      = delete;
+    spi_bus(spi_bus &&) = delete;
+    spi_bus &operator=(spi_bus &&) = delete;
 
     // =====================================================================
     // Lifecycle
@@ -213,17 +221,25 @@ public:
     ///
     /// \brief Create the request queue and spawn the FreeRTOS task.
     ///
+    /// \param priority      FreeRTOS task priority. Default:
+    ///                      \ref DEFAULT_PRIORITY.
+    /// \param stack_words   Task stack size in words. Default:
+    ///                      \ref DEFAULT_STACK_WORDS.
+    /// \param queue_length  Request-queue depth. Default:
+    ///                      \ref DEFAULT_QUEUE_LENGTH.
     /// \return \c pdPASS on success, otherwise the \c xTaskCreate or
     ///         \c xQueueCreate failure code.
     ///
-    BaseType_t task_create(
-        UBaseType_t priority      = DEFAULT_PRIORITY,
-        uint16_t    stack_words   = DEFAULT_STACK_WORDS,
-        UBaseType_t queue_length  = DEFAULT_QUEUE_LENGTH) noexcept;
+    BaseType_t
+    task_create(UBaseType_t priority = DEFAULT_PRIORITY,
+                uint16_t stack_words = DEFAULT_STACK_WORDS,
+                UBaseType_t queue_length = DEFAULT_QUEUE_LENGTH) noexcept;
 
     ///
     /// \brief \c true once the task has reached its main loop and is
     ///        ready to accept requests.
+    ///
+    /// \return \c true once \ref run has started; \c false beforehand.
     ///
     bool is_running() const noexcept { return m_up_and_running; }
 
@@ -234,28 +250,52 @@ public:
     ///
     /// \brief Submit a request and block on the response.
     ///
+    /// \param request                 The transaction to perform. Must
+    ///                                have a non-null \c response_queue.
+    /// \param request_submit_timeout  Max time to wait for a slot in the
+    ///                                bus's request queue.
+    /// \param response_wait_timeout   Max time to wait for the response.
+    /// \return \c true if the bus task reported \c success; \c false on
+    ///         any failure (submit timeout, response timeout, or bus error).
+    ///
     bool transact(const spi_request &request,
                   TickType_t request_submit_timeout = portMAX_DELAY,
-                  TickType_t response_wait_timeout  = portMAX_DELAY) noexcept;
+                  TickType_t response_wait_timeout = portMAX_DELAY) noexcept;
 
     ///
     /// \brief Submit a request without waiting for the response.
+    ///
+    /// \param request The transaction to perform.
+    /// \param timeout Max time to wait for a slot in the request queue.
+    /// \return \c pdTRUE on successful submit, \c errQUEUE_FULL on timeout.
     ///
     BaseType_t submit(const spi_request &request,
                       TickType_t timeout = portMAX_DELAY) noexcept;
 
 private:
+    /// \brief FreeRTOS task entry-point trampoline; recovers \c this and
+    ///        calls \ref run.
+    /// \param arg The \c spi_bus instance, passed as \c this at \ref
+    /// task_create.
     static void task_trampoline(void *arg);
 
+    /// \brief Main loop. Receives requests from the queue, processes them,
+    ///        posts responses. Never returns.
     [[noreturn]] void run();
 
+    ///
+    /// \brief Execute one request with internal retry logic.
+    ///
+    /// \param request The transaction to perform.
+    /// \return Populated \ref spi_response.
+    ///
     spi_response process(const spi_request &request) noexcept;
 
-    cyhal_spi_t      *m_spi_object;     ///< CYHAL SPI handle (non-owning).
-    const char       *m_task_name;
-    QueueHandle_t     m_request_queue;
-    volatile bool     m_up_and_running;
-    TaskHandle_t      m_task_handle;
+    cyhal_spi_t *m_spi_object;      ///< CYHAL SPI handle (non-owning).
+    const char *m_task_name;        ///< FreeRTOS task name string.
+    QueueHandle_t m_request_queue;  ///< Inbound request queue.
+    volatile bool m_up_and_running; ///< \c true after task reaches main loop.
+    TaskHandle_t m_task_handle;     ///< FreeRTOS task handle.
 };
 
 } // namespace sentinel::task

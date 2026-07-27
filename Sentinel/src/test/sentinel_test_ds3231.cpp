@@ -17,8 +17,9 @@
 ///          \c fixture that owns the bus-arbitrated transport, mirroring a
 ///          GoogleTest \c TEST_F fixture — the shared resource lives in the
 ///          fixture, not a file-static global. Each test returns \c true on
-///          pass / \c false on fail; \ref run_all constructs the fixture, folds
-///          every outcome into a \ref sentinel::test::tally, and returns it.
+///          pass / \c false on fail; \ref sentinel::test::ds3231::run_all
+///          constructs the fixture, folds every outcome into a
+///          \ref sentinel::test::tally, and returns it.
 ///
 ///          Output strategy:
 ///          - Progress and PASS / FAIL summary lines are emitted via
@@ -101,6 +102,9 @@ inline void split_centi(int32_t centi, char &sign_out, int32_t &whole_out,
 ///
 /// \brief ISO-day-of-week (1=Mon … 7=Sun) → short label.
 ///
+/// \param iso_dow ISO day-of-week number, 1..7 (Mon..Sun).
+/// \return Three-letter day name, or \c "?" if \p iso_dow is out of range.
+///
 inline const char *day_name(uint8_t iso_dow) noexcept {
     static constexpr const char *names[8] = {"?",   "Mon", "Tue", "Wed",
                                              "Thu", "Fri", "Sat", "Sun"};
@@ -123,22 +127,39 @@ using ds3231_t = sentinel::ds3231<sentinel::cyhal_i2c_bus_transport>;
 ///          the BME280 suite, which targets 0x76 on the same SCB. Each
 ///          transport instance carries its own target-address member, so the
 ///          arbiter routes requests to the correct slave automatically.
-///          Constructed fresh by \ref run_all (like a GoogleTest \c SetUp), so
-///          there is no file-static bus global. The transport is inert until
-///          \c peripheral_initialize() has spawned the arbiter, which the
-///          orchestrator guarantees by running post-scheduler.
+///          Constructed fresh by \ref sentinel::test::ds3231::run_all (like a
+///          GoogleTest \c SetUp), so there is no file-static bus global. The
+///          transport is inert until \c peripheral_initialize() has spawned
+///          the arbiter, which the orchestrator guarantees by running
+///          post-scheduler.
 ///
 struct fixture {
+    /// Bus-arbitrated I2C transport, shared by every test below.
     sentinel::cyhal_i2c_bus_transport ds3231_bus{
         sentinel::resource::cybsp_i2c_bus,
         static_cast<uint16_t>(ds3231_t::slave_address::primary)};
 
+    /// \brief Confirm the status register is reachable and log the OSF state.
+    /// \return \c true unless the status read fails or reads back 0xFF.
     bool presence_check() noexcept;
+    /// \brief Mutate the aging-offset register, write it back, and read it
+    ///        back, then restore the original value.
+    /// \return \c true if the readback matches the mutated value.
     bool register_round_trip() noexcept;
+    /// \brief Read the current time three times and look for a seconds tick.
+    /// \return \c true unless an I2C read fails (a stalled clock only warns).
     bool time_read() noexcept;
+    /// \brief Write a leap-year test pattern and read it back.
+    /// \return \c true if every field round-trips (seconds within drift).
     bool time_write() noexcept;
+    /// \brief Sync the RTC from the firmware build timestamp and verify it.
+    /// \return \c true unless the sync call or the post-sync read fails.
     bool time_sync_from_build() noexcept;
+    /// \brief Force a temperature conversion, poll BSY, and read the result.
+    /// \return \c true unless a register read/write fails or BSY never clears.
     bool temperature_read() noexcept;
+    /// \brief Set Alarm 1 and Alarm 2 to distinct match modes and read back.
+    /// \return \c true if both alarms round-trip their configured fields.
     bool alarm_round_trip() noexcept;
 };
 
@@ -262,7 +283,7 @@ bool fixture::time_read() noexcept {
     auto observed_change = false;
     auto previous_second = uint8_t{0xFF};
 
-    for (auto i = uint8_t{0}; i < 3; ++i) {
+    for (auto i = uint8_t{0}; i < 3; i++) {
         auto now = rtc.time();
         if (!now) {
             loge("time_read FAIL: read %d returned error %d",
@@ -353,7 +374,7 @@ bool fixture::time_write() noexcept {
     }
 
     auto seconds_drift_ok = false;
-    for (auto offset = uint8_t{0}; offset <= 2; ++offset) {
+    for (auto offset = uint8_t{0}; offset <= 2; offset++) {
         auto expected_second =
             static_cast<uint8_t>((target.second + offset) % 60);
         if (after->second == expected_second) {
@@ -498,7 +519,7 @@ bool fixture::temperature_read() noexcept {
     // Poll BSY for up to ~200 ms. The datasheet quotes typical conversion
     // time at ~125 ms.
     auto completed = false;
-    for (auto i = uint8_t{0}; i < 20; ++i) {
+    for (auto i = uint8_t{0}; i < 20; i++) {
         vTaskDelay(pdMS_TO_TICKS(10));
         auto busy = rtc.is_temperature_conversion_busy();
         if (!busy) {
@@ -648,7 +669,7 @@ bool fixture::alarm_round_trip() noexcept {
 
 sentinel::test::tally sentinel::test::ds3231::run_all() noexcept {
     auto fx = fixture{};
-    auto t  = sentinel::test::tally{};
+    auto t = sentinel::test::tally{};
 
     t.record(fx.presence_check());
     yield_for_debug_drain(200);
@@ -671,7 +692,8 @@ sentinel::test::tally sentinel::test::ds3231::run_all() noexcept {
     t.record(fx.alarm_round_trip());
     yield_for_debug_drain(200);
 
-    // Continuous time/temperature reads are owned by sentinel::task::rtc_service,
-    // which the orchestrator starts after this one-shot suite completes.
+    // Continuous time/temperature reads are owned by
+    // sentinel::task::rtc_service, which the orchestrator starts after this
+    // one-shot suite completes.
     return t;
 }

@@ -152,7 +152,7 @@ spi_response spi_bus::process(const spi_request &request) noexcept {
         return response;
     }
 
-    for (auto attempt = uint8_t{0}; attempt < INNER_RETRIES; ++attempt) {
+    for (auto attempt = uint8_t{0}; attempt < INNER_RETRIES; attempt++) {
         // cyhal_spi_transfer handles all four shapes uniformly:
         //   tx + rx     → full-duplex max(tx_len, rx_len) bytes
         //   tx + no rx  → write-only

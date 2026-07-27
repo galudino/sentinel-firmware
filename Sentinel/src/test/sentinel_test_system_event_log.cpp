@@ -10,7 +10,7 @@
 ///
 ///          Backing buffers are taken from the FreeRTOS heap with
 ///          \c pvPortMalloc and freed after each test. The largest
-///          (\ref record_burst, 1000 records) needs ~44 KiB, which is sized to
+///          (\c record_burst, 1000 records) needs ~44 KiB, which is sized to
 ///          live in the heap rather than as a static .bss array that would eat
 ///          the non-heap SRAM headroom.
 ///
@@ -46,16 +46,21 @@ namespace {
 
 using namespace sentinel::diagnostics;
 
+/// RAM-backed record_store over a \c system_event_record.
 using store_t = sentinel::ram_record_store<system_event_record>;
+/// System event log templated over \ref store_t.
 using log_t = sentinel::diagnostics::system_event_log<store_t>;
 
 /// Injected, controllable clock so timestamps are deterministic in tests.
 uint32_t g_test_clock = 0u;
+/// \brief Deterministic clock callback injected into \ref log_t::initialize.
+/// \return The current value of \ref g_test_clock.
 uint32_t test_now() noexcept { return g_test_clock; }
 
 ///
 /// \brief Allocate a RAM backing buffer for \p records slots from the heap.
 ///
+/// \param records Number of slots the buffer must hold.
 /// \return Pointer to the buffer, or \c nullptr on allocation failure.
 ///
 uint8_t *alloc_buffer(uint32_t records) noexcept {
@@ -65,6 +70,10 @@ uint8_t *alloc_buffer(uint32_t records) noexcept {
 ///
 /// \brief Report a single test's PASS/FAIL to both the BLE stream and UART.
 ///
+/// \param name   Test name.
+/// \param ok     \c true if the test passed.
+/// \param detail Failure reason (ignored when \p ok is \c true).
+///
 void report(const char *name, bool ok, const char *detail) noexcept {
     if (ok) {
         logi("%s PASS", name);
@@ -73,6 +82,8 @@ void report(const char *name, bool ok, const char *detail) noexcept {
     }
 }
 
+/// \brief Yield long enough for the BLE debug ring buffer to drain.
+/// \param milliseconds Delay duration, in milliseconds.
 void yield_for_debug_drain(uint32_t milliseconds) noexcept {
     vTaskDelay(pdMS_TO_TICKS(milliseconds));
 }
@@ -82,6 +93,11 @@ void yield_for_debug_drain(uint32_t milliseconds) noexcept {
 // The public wrappers own buffer lifetime + reporting.
 // ---------------------------------------------------------------------------
 
+/// \brief \c initialize() on a fresh store succeeds and \c count() == 0.
+/// \param buf  Backing buffer for the RAM record store.
+/// \param size Size of \p buf, in bytes.
+/// \param why  Set to a short failure reason when returning \c false.
+/// \return \c true on success.
 bool body_presence_check(uint8_t *buf, uint32_t size, const char **why) {
     auto store = store_t(buf, size);
     if (!store.erase_all()) {
@@ -100,6 +116,12 @@ bool body_presence_check(uint8_t *buf, uint32_t size, const char **why) {
     return true;
 }
 
+/// \brief Boot sequence yields one readable \c boot_complete with a non-zero
+///        timestamp.
+/// \param buf  Backing buffer for the RAM record store.
+/// \param size Size of \p buf, in bytes.
+/// \param why  Set to a short failure reason when returning \c false.
+/// \return \c true on success.
 bool body_record_and_read(uint8_t *buf, uint32_t size, const char **why) {
     auto store = store_t(buf, size);
     auto &log = log_t::instance();
@@ -118,22 +140,28 @@ bool body_record_and_read(uint8_t *buf, uint32_t size, const char **why) {
         return false;
     }
 
-    auto rec = system_event_record{};
-    if (!log.read(0, &rec)) {
+    auto rec = log.read(0);
+    if (!rec) {
         *why = "read(0)";
         return false;
     }
-    if (rec.header.event_type != system_event::boot_complete) {
+    if (rec->header.event_type != system_event::boot_complete) {
         *why = "not boot_complete";
         return false;
     }
-    if (rec.header.unix_timestamp == 0u) {
+    if (rec->header.unix_timestamp == 0u) {
         *why = "zero timestamp";
         return false;
     }
     return true;
 }
 
+/// \brief A \c firmware_update_record survives memcpy through the untyped
+///        store and back.
+/// \param buf  Backing buffer for the RAM record store.
+/// \param size Size of \p buf, in bytes.
+/// \param why  Set to a short failure reason when returning \c false.
+/// \return \c true on success.
 bool body_typed_round_trip(uint8_t *buf, uint32_t size, const char **why) {
     auto store = store_t(buf, size);
     auto &log = log_t::instance();
@@ -155,13 +183,13 @@ bool body_typed_round_trip(uint8_t *buf, uint32_t size, const char **why) {
         return false;
     }
 
-    auto rec = system_event_record{};
-    if (!log.read(0, &rec)) {
+    auto rec = log.read(0);
+    if (!rec) {
         *why = "read(0)";
         return false;
     }
     auto fur = firmware_update_record{};
-    std::memcpy(&fur, &rec, sizeof(fur));
+    std::memcpy(&fur, &*rec, sizeof(fur));
     if (fur.from_version.major != 1u || fur.from_version.build != 1u ||
         fur.to_version.minor != 2u || fur.to_version.patch != 3u ||
         fur.to_version.build != 7u || fur.mcuboot_result != 0xABu) {
@@ -171,6 +199,11 @@ bool body_typed_round_trip(uint8_t *buf, uint32_t size, const char **why) {
     return true;
 }
 
+/// \brief 1000 mixed events all persist.
+/// \param buf  Backing buffer for the RAM record store.
+/// \param size Size of \p buf, in bytes.
+/// \param why  Set to a short failure reason when returning \c false.
+/// \return \c true on success.
 bool body_record_burst(uint8_t *buf, uint32_t size, const char **why) {
     auto store = store_t(buf, size);
     auto &log = log_t::instance();
@@ -203,20 +236,25 @@ bool body_record_burst(uint8_t *buf, uint32_t size, const char **why) {
     }
 
     // Spot-check the alternating event types persisted in order.
-    auto rec = system_event_record{};
-    if (!log.read(0, &rec) ||
-        rec.header.event_type != system_event::post_passed) {
+    auto r0 = log.read(0);
+    if (!r0 || r0->header.event_type != system_event::post_passed) {
         *why = "record 0 wrong";
         return false;
     }
-    if (!log.read(1, &rec) ||
-        rec.header.event_type != system_event::mode_changed) {
+    auto r1 = log.read(1);
+    if (!r1 || r1->header.event_type != system_event::mode_changed) {
         *why = "record 1 wrong";
         return false;
     }
     return true;
 }
 
+/// \brief Records and ordering survive a simulated warm reboot; boot adds
+///        exactly one record.
+/// \param buf  Backing buffer for the RAM record store.
+/// \param size Size of \p buf, in bytes.
+/// \param why  Set to a short failure reason when returning \c false.
+/// \return \c true on success.
 bool body_survive_reset(uint8_t *buf, uint32_t size, const char **why) {
     auto store = store_t(buf, size);
     auto &log = log_t::instance();
@@ -264,33 +302,39 @@ bool body_survive_reset(uint8_t *buf, uint32_t size, const char **why) {
     }
 
     // Original records intact and in order.
-    auto rec = system_event_record{};
-    if (!log.read(0, &rec) ||
-        rec.header.event_type != system_event::boot_complete) {
+    auto rec0 = log.read(0);
+    if (!rec0 || rec0->header.event_type != system_event::boot_complete) {
         *why = "record 0";
         return false;
     }
     for (auto i = uint32_t{0}; i < kEvents; i++) {
-        if (!log.read(1u + i, &rec) ||
-            rec.header.event_type != system_event::fault_raised) {
+        auto rec = log.read(1u + i);
+        if (!rec || rec->header.event_type != system_event::fault_raised) {
             *why = "fault order";
             return false;
         }
         auto fr = fault_record{};
-        std::memcpy(&fr, &rec, sizeof(fr));
+        std::memcpy(&fr, &*rec, sizeof(fr));
         if (fr.fault_id != static_cast<uint8_t>(i)) {
             *why = "fault id";
             return false;
         }
     }
-    if (!log.read(1u + kEvents, &rec) ||
-        rec.header.event_type != system_event::shutdown_clean) {
+    auto rec_shutdown = log.read(1u + kEvents);
+    if (!rec_shutdown ||
+        rec_shutdown->header.event_type != system_event::shutdown_clean) {
         *why = "shutdown order";
         return false;
     }
     return true;
 }
 
+/// \brief An unclean reboot synthesizes a \c shutdown_unexpected for the
+///        prior session.
+/// \param buf  Backing buffer for the RAM record store.
+/// \param size Size of \p buf, in bytes.
+/// \param why  Set to a short failure reason when returning \c false.
+/// \return \c true on success.
 bool body_unexpected_shutdown_synthesis(uint8_t *buf, uint32_t size,
                                         const char **why) {
     auto store = store_t(buf, size);
@@ -324,20 +368,19 @@ bool body_unexpected_shutdown_synthesis(uint8_t *buf, uint32_t size,
         *why = "count != 3";
         return false;
     }
-    auto rec = system_event_record{};
-    if (!log.read(1, &rec) ||
-        rec.header.event_type != system_event::shutdown_unexpected ||
-        rec.header.unix_timestamp != 5000u) {
+    auto r1 = log.read(1);
+    if (!r1 || r1->header.event_type != system_event::shutdown_unexpected ||
+        r1->header.unix_timestamp != 5000u) {
         *why = "no synthesized shutdown";
         return false;
     }
-    if (!log.read(2, &rec) ||
-        rec.header.event_type != system_event::boot_complete) {
+    auto r2 = log.read(2);
+    if (!r2 || r2->header.event_type != system_event::boot_complete) {
         *why = "no fresh boot";
         return false;
     }
     auto blr = boot_lifecycle_record{};
-    std::memcpy(&blr, &rec, sizeof(blr));
+    std::memcpy(&blr, &*r2, sizeof(blr));
     if (blr.boot_count != 2u) {
         *why = "boot_count != 2";
         return false;
@@ -345,6 +388,11 @@ bool body_unexpected_shutdown_synthesis(uint8_t *buf, uint32_t size,
     return true;
 }
 
+/// \brief Erase resets count to 0 and new records still append.
+/// \param buf  Backing buffer for the RAM record store.
+/// \param size Size of \p buf, in bytes.
+/// \param why  Set to a short failure reason when returning \c false.
+/// \return \c true on success.
 bool body_erase_all(uint8_t *buf, uint32_t size, const char **why) {
     auto store = store_t(buf, size);
     auto &log = log_t::instance();
@@ -378,6 +426,11 @@ bool body_erase_all(uint8_t *buf, uint32_t size, const char **why) {
     return true;
 }
 
+/// \brief Wrap overwrites the oldest record, keeps the newest readable.
+/// \param buf  Backing buffer for the RAM record store.
+/// \param size Size of \p buf, in bytes.
+/// \param why  Set to a short failure reason when returning \c false.
+/// \return \c true on success.
 bool body_crossing_size_threshold(uint8_t *buf, uint32_t size,
                                   const char **why) {
     auto store = store_t(buf, size);
@@ -410,13 +463,12 @@ bool body_crossing_size_threshold(uint8_t *buf, uint32_t size,
         return false;
     }
 
-    auto rec = system_event_record{};
-    if (!log.read(cap, &rec) ||
-        rec.header.event_type != system_event::mode_changed) {
+    auto newest = log.read(cap);
+    if (!newest || newest->header.event_type != system_event::mode_changed) {
         *why = "newest unreadable";
         return false;
     }
-    if (log.read(0, &rec)) {
+    if (log.read(0)) {
         *why = "oldest still readable";
         return false;
     }
@@ -425,6 +477,13 @@ bool body_crossing_size_threshold(uint8_t *buf, uint32_t size,
 
 ///
 /// \brief Run one test: allocate the buffer, run \p body, free, report.
+///
+/// \param name    Test name, used for the PASS/FAIL log line.
+/// \param records Number of record slots to allocate for the backing buffer.
+/// \param body    Test body; returns \c true on success and sets \c *why on
+///                failure.
+/// \return \c true if \p body passed; \c false on failure or if the backing
+///         buffer could not be allocated.
 ///
 bool run_one(const char *name, uint32_t records,
              bool (*body)(uint8_t *, uint32_t, const char **)) noexcept {
@@ -472,8 +531,8 @@ sentinel::test::tally sentinel::test::system_event_log::run_all() noexcept {
     t.record(run_one("erase_all", 16u, body_erase_all));
     yield_for_debug_drain(200);
 
-    t.record(run_one("crossing_size_threshold", 16u,
-                     body_crossing_size_threshold));
+    t.record(
+        run_one("crossing_size_threshold", 16u, body_crossing_size_threshold));
     yield_for_debug_drain(200);
 
     return t;

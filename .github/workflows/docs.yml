@@ -1,0 +1,61 @@
+name: Docs
+
+# Generate the Doxygen API reference and publish it to GitHub Pages.
+# Nothing is committed to a branch — the built HTML is uploaded as a Pages
+# artifact and deployed (the modern, no-gh-pages-branch approach), so the
+# source tree stays free of generated output (docs/doxygen/ is gitignored).
+#
+# One-time repo setup: Settings -> Pages -> Build and deployment ->
+# Source: "GitHub Actions".
+#
+# Publishes on push to main (docs track releases). Use the "Run workflow"
+# button (workflow_dispatch) to publish on demand from any branch.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one concurrent deployment; don't cancel an in-flight publish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Ubuntu's packaged Doxygen may lag the 1.11.0 used locally; pin here if
+      # output ever diverges. Graphviz is installed so HAVE_DOT can be flipped
+      # on later without a workflow change.
+      - name: Install Doxygen + Graphviz
+        run: sudo apt-get update && sudo apt-get install -y doxygen graphviz
+
+      - name: Generate API reference
+        run: doxygen Doxyfile
+
+      - name: Verify HTML was produced
+        run: test -f docs/doxygen/html/index.html
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/doxygen/html
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

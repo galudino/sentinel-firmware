@@ -2,7 +2,8 @@
 /// \file    sentinel_cyhal_uart_port.hpp
 /// \brief   CYHAL (Cypress HAL) UART transport implementation
 ///
-/// \details Implements the \ref sentinel::serial_port façade for PSoC 6 UART using
+/// \details Implements the \ref sentinel::serial_port façade for PSoC 6 UART
+/// using
 ///          CYHAL. Reception is interrupt-driven into a single-producer/single-
 ///          consumer ring buffer (ISR producer, foreground consumer).
 ///          Provides convenience helpers for non-blocking drains, “read exact”
@@ -78,7 +79,7 @@ public:
     /// \brief Configure UART parameters (baud, data bits, parity, stop bits,
     /// flow control)
     ///
-    /// \details Flow control (\ref sentinel::flow_control_mode::rts_cts) requires
+    /// \details Flow control (\c sentinel::flow_control_mode::rts_cts) requires
     ///          RTS/CTS pins to be assigned in the Device Configurator or via
     ///          your board init. If your project enables/disables RTS/CTS at
     ///          runtime, call the appropriate HAL API here where marked.
@@ -277,11 +278,13 @@ public:
 
     ///
     /// \brief Bytes currently available in the RX ring
+    /// \return Number of bytes currently buffered and ready to read.
     ///
     size_t available() const noexcept { return m_rx.size(); }
 
     ///
     /// \brief Wait for TX to become idle
+    /// \return \c cy_rslt_t (\c CY_RSLT_SUCCESS on success).
     ///
     cy_rslt_t flush_tx() noexcept {
         // TODO: check if this block actually works?
@@ -299,6 +302,7 @@ public:
 
     ///
     /// \brief Number of RX error events observed since construction
+    /// \return Cumulative count of RX error events.
     ///
     uint32_t rx_error_count() const noexcept { return m_rx_error_count; }
 
@@ -335,6 +339,10 @@ private:
     ///
     /// \brief C callback trampoline
     ///
+    /// \param arg   Opaque context; the \c cyhal_uart_port instance that
+    ///              registered this callback.
+    /// \param event Bitmask of CYHAL UART events that fired.
+    ///
     static void interrupt_request_callback(void *arg,
                                            cyhal_uart_event_t event) noexcept {
         static_cast<cyhal_uart_port *>(arg)->on_irq(event);
@@ -346,6 +354,8 @@ private:
     /// \details Pushes all readable bytes into the ring buffer. On overflow,
     ///          either overwrites oldest or drops new (policy is the template
     ///          parameter \c OverwriteOldestOnFull).
+    ///
+    /// \param event Bitmask of CYHAL UART events that fired.
     ///
     void on_irq(cyhal_uart_event_t event) noexcept {
         if ((event & cyhal_uart_event_t::CYHAL_UART_IRQ_RX_ERROR) != 0) {
@@ -375,13 +385,14 @@ private:
 
 private:
     // Note: m_rx is SPSC: ISR producer, foreground consumer.
-    cyhal_uart_t *m_uart_object;
+    cyhal_uart_t *m_uart_object; ///< Non-owning CYHAL UART handle.
 
-    serial_config m_config{};
-    uint32_t m_actual_baud_rate{0};
+    serial_config m_config{};       ///< Last-applied port configuration.
+    uint32_t m_actual_baud_rate{0}; ///< Baud rate actually achieved by HAL.
 
-    sentinel::ring_buffer_<uint8_t, RXBufferCapacity> m_rx{};
-    uint32_t m_rx_error_count{0};
+    sentinel::ring_buffer_<uint8_t, RXBufferCapacity> m_rx{}; ///< RX ring
+                                                              ///< (SPSC).
+    uint32_t m_rx_error_count{0}; ///< Count of RX error events since ctor.
 };
 
 } // namespace sentinel

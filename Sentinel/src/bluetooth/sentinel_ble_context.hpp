@@ -69,7 +69,54 @@ public:
     ///
     uint16_t connection_id() const noexcept { return m_connection_id; }
 
+    /// \brief \c true while a central is connected.
+    /// \return \c true if \ref connection_id is nonzero.
     bool connected() const noexcept { return m_connection_id > 0; }
+
+    ///
+    /// \brief \c true once the GATT database registered successfully (#6).
+    ///
+    /// \details Set from \c ble_start_advertising after \c
+    /// wiced_bt_gatt_db_init.
+    ///          The boot orchestrator reads this live for the POST \c gatt_db
+    ///          probe; by POST time (after the multi-second flash-store scan)
+    ///          the asynchronous \c BTM_ENABLED registration has already run.
+    ///
+    /// \return \c true once the GATT database has registered successfully.
+    ///
+    bool gatt_db_ok() const noexcept { return m_gatt_db_ok; }
+
+    /// \brief Record the GATT-DB registration result (called at registration).
+    /// \param ok \c true if the GATT database registered successfully.
+    void set_gatt_db_ok(bool ok) noexcept { m_gatt_db_ok = ok; }
+
+    /// \brief Last cached peer RSSI in dBm (negative; 0 if not yet read). #6
+    /// \return The cached peer RSSI in dBm.
+    int8_t peer_rssi() const noexcept { return m_peer_rssi; }
+
+    /// \brief Last cached connection TX power in dBm (0 if not yet read). #6
+    /// \return The cached connection TX power in dBm.
+    int8_t tx_power_dbm() const noexcept { return m_tx_power_dbm; }
+
+    ///
+    /// \brief Kick asynchronous reads of peer RSSI + connection TX power.
+    ///
+    /// \details Non-blocking: issues the HCI reads (throttled to ~1 Hz) and
+    ///          returns immediately; the results land in \ref m_peer_rssi /
+    ///          \ref m_tx_power_dbm via the completion callbacks. Callers read
+    ///          the \e previously cached value (\ref peer_rssi / \ref
+    ///          tx_power_dbm). A no-op when not connected. Feeds the
+    ///          \c device_snapshot BLE fields (#6/#36).
+    ///
+    void refresh_link_metrics() noexcept;
+
+    /// \brief Cache a freshly read peer RSSI (from the read-RSSI callback).
+    /// \param rssi Freshly read peer RSSI in dBm.
+    void set_peer_rssi(int8_t rssi) noexcept { m_peer_rssi = rssi; }
+
+    /// \brief Cache a freshly read TX power (from the read-TX-power callback).
+    /// \param dbm Freshly read connection TX power in dBm.
+    void set_tx_power_dbm(int8_t dbm) noexcept { m_tx_power_dbm = dbm; }
 
     ///
     /// \brief Handle BLE connection and disconnection events
@@ -78,17 +125,15 @@ public:
     /// restarts advertising on disconnection. Updates the advertising LED to
     /// reflect the current state.
     ///
-    /// \param connection_status Pointer to connection status structure
-    /// containing
-    ///        connection state, connection ID, and peer address
+    /// \param connection_status Reference to the connection status structure
+    ///        containing connection state, connection ID, and peer address.
     ///
     /// \return wiced_bt_gatt_status_t WICED_BT_GATT_SUCCESS if handled
-    /// successfully,
-    ///         WICED_BT_GATT_ERROR if connection_status is null. Assertion
-    ///         triggered if advertising restart fails after disconnection.
+    ///         successfully. Assertion triggered if advertising restart fails
+    ///         after disconnection.
     ///
     wiced_bt_gatt_status_t connection_event_handler(
-        wiced_bt_gatt_connection_status_t *connection_status);
+        const wiced_bt_gatt_connection_status_t &connection_status);
 
     ///
     /// \brief Update advertising LED based on current state
@@ -107,13 +152,12 @@ public:
     ///
     /// \brief Set advertising/connection state
     ///
-    /// \param advertisement_mode Pointer to advertisement mode
+    /// \param advertisement_mode The current advertisement mode.
     ///
     void set_advertising_mode(
-        wiced_bt_ble_advert_mode_t *advertisement_mode) noexcept {
+        wiced_bt_ble_advert_mode_t advertisement_mode) noexcept {
         m_connection_state =
-            *advertisement_mode ==
-                    wiced_bt_ble_advert_mode_e::BTM_BLE_ADVERT_OFF
+            advertisement_mode == wiced_bt_ble_advert_mode_e::BTM_BLE_ADVERT_OFF
                 ? (m_connection_id == 0 ? state::disconnected_not_advertising
                                         : state::connected)
                 : state::disconnected_and_advertising;
@@ -141,7 +185,8 @@ public:
     ///
     /// \param event_data Pointer to GATT event data containing write request
     /// details
-    /// \param error_handle Pointer to error handle, set to the attribute handle
+    /// \param error_handle Reference to error handle, set to the attribute
+    /// handle
     ///        that caused an error for error reporting
     ///
     /// \return wiced_bt_gatt_status_t WICED_BT_GATT_SUCCESS if handled
@@ -151,7 +196,7 @@ public:
     ///
     wiced_bt_gatt_status_t
     ota_agent_write_handler(wiced_bt_gatt_event_data_t *event_data,
-                            uint16_t *error_handle) noexcept;
+                            uint16_t &error_handle) noexcept;
 
     ///
     /// \brief Handle OTA operation confirmation
@@ -194,6 +239,12 @@ private:
 
     uint16_t m_connection_id; ///< Current BLE connection ID (0 if disconnected)
 
+    bool m_gatt_db_ok{false}; ///< GATT-DB registration result (#6).
+
+    volatile int8_t m_peer_rssi{0};    ///< Last cached peer RSSI, dBm (#6).
+    volatile int8_t m_tx_power_dbm{0}; ///< Last cached TX power, dBm (#6).
+    uint32_t m_last_metrics_tick{0};   ///< Throttle for refresh_link_metrics.
+
     std::array<uint8_t, BD_ADDR_LEN>
         m_peer_address; ///< Bluetooth address of connected peer
 
@@ -217,7 +268,8 @@ private:
     cy_ota_network_params_t
         m_ota_network_params; ///< OTA network configuration parameters
 
-    uint16_t m_mtu; ///< Negotiated MTU value for BLE notifications (default 23, updated on connection)
+    uint16_t m_mtu; ///< Negotiated MTU value for BLE notifications (default 23,
+                    ///< updated on connection)
 
     ///
     /// \brief Initialize BLE context with default values
@@ -237,6 +289,12 @@ private:
         m_mtu = 23; // Default MTU before negotiation
     }
 
+    ///
+    /// \brief Initialize OTA-related member state to its default values.
+    ///
+    /// \details Sets the OTA connection type to BLE, enables automatic reboot
+    ///          after a successful OTA, and resets the OTA context/descriptor.
+    ///
     void ota_value_initialize() noexcept {
         // Will be assigned from cy_ota_agent_start() function call
         m_ota_context = nullptr;

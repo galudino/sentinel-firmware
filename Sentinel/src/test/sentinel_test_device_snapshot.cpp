@@ -2,7 +2,8 @@
 /// \file    sentinel_test_device_snapshot.cpp
 /// \brief   device_snapshot test implementations (#36)
 ///
-/// \details Implements the tests declared in \c sentinel_test_device_snapshot.hpp.
+/// \details Implements the tests declared in \c
+/// sentinel_test_device_snapshot.hpp.
 ///          All tests are pure and off-bench: they build a snapshot in RAM,
 ///          serialize it through a raw byte buffer, and assert on the bytes.
 ///          They mirror the harness style of the POST / event-log suites
@@ -38,6 +39,13 @@ using sentinel::telemetry::device_snapshot;
 using sentinel::telemetry::SNAPSHOT_TRAILER_MAGIC;
 using sentinel::telemetry::SNAPSHOT_VERSION;
 
+///
+/// \brief Log a test's PASS/FAIL verdict.
+///
+/// \param name   Test name, printed in the log line.
+/// \param ok     \c true to log PASS, \c false to log FAIL with \p detail.
+/// \param detail Failure reason, logged only when \p ok is \c false.
+///
 void report(const char *name, bool ok, const char *detail) noexcept {
     if (ok) {
         logi("%s PASS", name);
@@ -46,10 +54,21 @@ void report(const char *name, bool ok, const char *detail) noexcept {
     }
 }
 
+///
+/// \brief Yield long enough for the BLE debug ring buffer to drain.
+///
+/// \param milliseconds Yield duration in milliseconds.
+///
 void yield_for_debug_drain(uint32_t milliseconds) noexcept {
     vTaskDelay(pdMS_TO_TICKS(milliseconds));
 }
 
+///
+/// \brief Check \c sizeof(device_snapshot) matches the wire-contract size.
+///
+/// \param why Set to a failure reason when the check fails.
+/// \return \c true if the size invariant holds.
+///
 bool body_size_invariant(const char **why) {
     if (sizeof(device_snapshot) != 80u) {
         *why = "sizeof != 80";
@@ -58,12 +77,18 @@ bool body_size_invariant(const char **why) {
     return true;
 }
 
+///
+/// \brief Verify the little-endian byte offsets of key fields.
+///
+/// \param why Set to a failure reason when the check fails.
+/// \return \c true if every checked field lands at its documented offset.
+///
 bool body_byte_layout(const char **why) {
     auto s = device_snapshot{};
     std::memset(&s, 0, sizeof(s));
-    s.unix_timestamp = 0x11223344u;   // offset 0, little-endian
-    s.snapshot_version = 0x55u;       // offset 4
-    s.temperature_001c = 0x0102;      // offset 16, little-endian
+    s.unix_timestamp = 0x11223344u;           // offset 0, little-endian
+    s.snapshot_version = 0x55u;               // offset 4
+    s.temperature_001c = 0x0102;              // offset 16, little-endian
     s.trailer_magic = SNAPSHOT_TRAILER_MAGIC; // offset 78 (0xA5C3)
 
     uint8_t buf[sizeof(device_snapshot)];
@@ -89,6 +114,12 @@ bool body_byte_layout(const char **why) {
     return true;
 }
 
+///
+/// \brief Serialize a populated snapshot to bytes and back, then compare.
+///
+/// \param why Set to a failure reason when the check fails.
+/// \return \c true if the restored snapshot matches the original exactly.
+///
 bool body_round_trip(const char **why) {
     auto original = device_snapshot{};
     std::memset(&original, 0, sizeof(original));
@@ -128,9 +159,17 @@ bool body_round_trip(const char **why) {
     return true;
 }
 
+///
+/// \brief Confirm an unknown \c snapshot_version does not hide the fixed
+///        header fields from an older decoder.
+///
+/// \param why Set to a failure reason when the check fails.
+/// \return \c true if the header fields remain readable under an unknown
+///         version.
+///
 bool body_forward_compat_probe(const char **why) {
-    // A snapshot from a *newer* firmware (unknown version) must still expose its
-    // fixed-offset header fields to an older decoder.
+    // A snapshot from a *newer* firmware (unknown version) must still expose
+    // its fixed-offset header fields to an older decoder.
     auto s = device_snapshot{};
     std::memset(&s, 0, sizeof(s));
     s.unix_timestamp = 1700000000u;
@@ -156,6 +195,13 @@ bool body_forward_compat_probe(const char **why) {
     return true;
 }
 
+///
+/// \brief Confirm a zeroed (torn/never-written) record does not read as
+///        valid, and a written trailer magic reads back correctly.
+///
+/// \param why Set to a failure reason when the check fails.
+/// \return \c true if both the zeroed and the valid cases behave correctly.
+///
 bool body_trailer_magic(const char **why) {
     // A zero-filled (never-written / torn) record must NOT look valid.
     auto zeroed = device_snapshot{};
@@ -175,9 +221,16 @@ bool body_trailer_magic(const char **why) {
     return true;
 }
 
+///
+/// \brief Run one test body, report its verdict, and return the outcome.
+///
+/// \param name Test name, forwarded to \ref report.
+/// \param body Test body function; receives a failure-reason out-param.
+/// \return \c true if \p body reported success.
+///
 bool run_one(const char *name, bool (*body)(const char **)) noexcept {
     const char *why = "assertion";
-    const auto  ok  = body(&why);
+    const auto ok = body(&why);
     report(name, ok, why);
     return ok;
 }

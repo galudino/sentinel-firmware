@@ -40,13 +40,15 @@ extern "C" {
 
 namespace sentinel::resource {
 
-inline cyhal_pwm_t led1;
-inline cyhal_pwm_t led2;
-inline cyhal_pwm_t led3;
+inline cyhal_pwm_t led1; ///< CYHAL PWM handle for LED1 (Device Configurator).
+inline cyhal_pwm_t led2; ///< CYHAL PWM handle for LED2 (Device Configurator).
+inline cyhal_pwm_t led3; ///< CYHAL PWM handle for LED3 (Device Configurator).
 
-inline cyhal_i2c_t cybsp_i2c;
+inline cyhal_i2c_t
+    cybsp_i2c; ///< Shared CYHAL I2C handle (Device Configurator).
 
-inline cyhal_spi_t cybsp_spi;
+inline cyhal_spi_t
+    cybsp_spi; ///< Shared CYHAL SPI handle (Device Configurator).
 
 ///
 /// \brief Bus-arbiter task singleton for \ref cybsp_i2c.
@@ -55,7 +57,7 @@ inline cyhal_spi_t cybsp_spi;
 ///          serialises access for every requester that goes through
 ///          \c sentinel::cyhal_i2c_bus_transport. Construct here (file-
 ///          scope inline so storage is in BSS) but call
-///          \ref cybsp_i2c_bus.task_create() during system init —
+///          \c cybsp_i2c_bus.task_create() during system init —
 ///          \ref peripheral_initialize handles that.
 ///
 inline sentinel::task::i2c_bus cybsp_i2c_bus{&cybsp_i2c, "I2C Bus"};
@@ -67,7 +69,7 @@ inline sentinel::task::i2c_bus cybsp_i2c_bus{&cybsp_i2c, "I2C Bus"};
 ///          serialises access for every requester that goes through
 ///          \c sentinel::cyhal_spi_bus_transport. Construct here (file-
 ///          scope inline so storage is in BSS) but call
-///          \ref cybsp_spi_bus.task_create() during system init —
+///          \c cybsp_spi_bus.task_create() during system init —
 ///          \ref peripheral_initialize handles that.
 ///
 inline sentinel::task::spi_bus cybsp_spi_bus{&cybsp_spi, "SPI Bus"};
@@ -193,14 +195,14 @@ inline void peripheral_initialize() noexcept {
 ///
 /// \brief One-time system bring-up shared by both firmware targets.
 ///
-/// \details The layer above \ref peripheral_initialize: BSP init, retarget-IO +
-///          cy_log, OTA validation/QSPI, the watchdog kick, \ref
-///          peripheral_initialize, the BLE debug-stream task, and the BLE stack.
-///          Hoisted out of the (previously near-identical) \c main.cpp /
-///          \c testbench.cpp so the boot bring-up has a \b single definition and
-///          cannot drift between the two targets; each target's entry point now
-///          only calls this, then creates its orchestrator. The serial banner
-///          interpolates the \c APP_NAME_STRING build define
+/// \details The layer above \ref peripheral_initialize, covering BSP init,
+///          retarget-IO + cy_log, OTA validation/QSPI, the watchdog kick, \ref
+///          peripheral_initialize, the BLE debug-stream task, and the BLE
+///          stack. Hoisted out of the (previously near-identical) \c main.cpp /
+///          \c testbench.cpp so the boot bring-up has a \b single definition
+///          and cannot drift between the two targets; each target's entry point
+///          now only calls this, then creates its orchestrator. The serial
+///          banner interpolates the \c APP_NAME_STRING build define
 ///          (\c "sentinel-firmware" vs \c "sentinel-testbench").
 ///
 ///          Declared here (in the \c resource namespace, alongside
@@ -212,8 +214,9 @@ inline void peripheral_initialize() noexcept {
 ///          touches the device context.
 ///
 /// \return \c true if the BLE stack initialized successfully. The boot
-///         orchestrator forwards this to POST, which records a BLE-stack failure
-///         rather than bricking the boot (degraded operation, decision #12).
+///         orchestrator forwards this to POST, which records a BLE-stack
+///         failure rather than bricking the boot (degraded operation, decision
+///         #12).
 ///
 bool system_initialize() noexcept;
 

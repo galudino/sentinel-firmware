@@ -34,16 +34,14 @@ struct spi_flash_pins {
     sentinel::gpio_line cs{};    ///< Chip Select
 };
 
-template <typename SPITransport>
-class spi_flash_bus_controller;
-
-} // namespace sentinel
-
+///
+/// \brief SPI flash CS/RESET bus helper: wraps an SPI transport with
+///        automatic chip-select management.
 ///
 /// \tparam SPITransport Transport deriving from byte_transport<..., spi_tag>
 ///
 template <typename SPITransport>
-class sentinel::spi_flash_bus_controller {
+class spi_flash_bus_controller {
     static_assert(std::is_base_of<byte_transport<SPITransport, spi_tag>,
                                   SPITransport>::value,
                   "SPITransport must derive from "
@@ -52,6 +50,9 @@ class sentinel::spi_flash_bus_controller {
 public:
     ///
     /// \brief Construct over a transport, pins, and delay API
+    ///
+    /// \param spi  SPI transport reference. Must outlive this controller.
+    /// \param pins CS/RESET line description for the target device.
     ///
     explicit spi_flash_bus_controller(SPITransport &spi,
                                       const spi_flash_pins &pins) noexcept
@@ -66,6 +67,8 @@ public:
     ///
     /// \note This should be called once during display initialization to
     ///       ensure all control lines start in known states.
+    ///
+    /// \return Nothing (\c void).
     ///
     auto prime() const noexcept {
         // CS idle = inactive (true means "deassert" at the logical level)
@@ -88,6 +91,8 @@ public:
     ///
     /// \note No-op if RESET line is not valid or delay_api is not valid.
     ///       The reset timing should match the display controller's datasheet.
+    ///
+    /// \return Nothing (\c void).
     ///
     auto reset_pulse(uint32_t assert_ms = 10,
                      uint32_t settle_ms = 120) const noexcept {
@@ -161,6 +166,8 @@ public:
     ///
     /// \details Sets chip select to active state. Does nothing if CS pin is NC.
     ///
+    /// \return Nothing (\c void).
+    ///
     auto chip_enable() const noexcept {
         set_chip_enable(true);
         // If the transport also exposes chip_enable(), it’s harmless to skip it
@@ -173,6 +180,8 @@ public:
     /// \details Sets chip select to inactive state. Does nothing if CS pin is
     /// NC.
     ///
+    /// \return Nothing (\c void).
+    ///
     auto chip_disable() const noexcept { set_chip_enable(false); }
 
     ///
@@ -184,6 +193,8 @@ public:
     ///
     /// \note No-op if RESET line is not valid. Polarity is handled by the
     ///       gpio_line adapter (active-low/active-high).
+    ///
+    /// \return Nothing (\c void).
     ///
     auto set_reset(bool asserted) const noexcept {
         if (!m_pins.reset.valid()) {
@@ -205,6 +216,8 @@ private:
     /// \note No-op if CS line is not valid. Polarity is handled by the
     ///       gpio_line adapter (active-low/active-high).
     ///
+    /// \return Nothing (\c void).
+    ///
     auto set_chip_enable(bool asserted) const noexcept {
         if (!m_pins.cs.valid()) {
             return;
@@ -216,8 +229,10 @@ private:
     }
 
 private:
-    SPITransport &m_spi;
-    spi_flash_pins m_pins;
+    SPITransport &m_spi;   ///< Non-owning SPI transport reference.
+    spi_flash_pins m_pins; ///< CS/RESET line description.
 };
+
+} // namespace sentinel
 
 #endif /* SENTINEL_SPI_FLASH_BUS_HPP */

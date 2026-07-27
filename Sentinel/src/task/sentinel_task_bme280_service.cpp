@@ -14,9 +14,9 @@
 ///          tasks to consume, and all bus traffic happens in task context (the
 ///          arbiter cannot be touched from an ISR). A read failure is logged
 ///          but never fatal — the loop keeps running so the task survives a
-///          sensor that is absent at boot and appears later, and \ref latest
-///          keeps reporting the last good reading (or \c valid == false until
-///          the first success).
+///          sensor that is absent at boot and appears later, and
+///          \ref sentinel::task::bme280_service::latest keeps reporting the
+///          last good reading (or \c valid == false until the first success).
 ///
 /// \author  galudino
 /// \date    2026-06-29
@@ -39,6 +39,7 @@ extern "C" {
 #include "sentinel_cyhal_i2c_bus_transport.hpp"
 #include "sentinel_debug_print.hpp"
 #include "sentinel_device_context.hpp"
+#include "sentinel_gatt_bme280.hpp"
 #include "sentinel_resource.hpp"
 #include "sentinel_task_bme280_service.hpp"
 #include "sentinel_task_rtc_service.hpp"
@@ -81,6 +82,11 @@ constexpr uint32_t HEARTBEAT_LOG_EVERY_N = 60;
 /// \details Pulls the sign apart from the magnitude so the \c %d.%02d trick
 ///          does not produce strings like \c "-23.-05".
 ///
+/// \param centi     Signed centi-unit value to format (e.g. centi-degrees C).
+/// \param sign_out  Set to \c '-' if \p centi is negative, \c '+' otherwise.
+/// \param whole_out Set to the whole-unit magnitude of \p centi.
+/// \param frac_out  Set to the fractional (hundredths) magnitude of \p centi.
+///
 inline void split_centi(int32_t centi, char &sign_out, int32_t &whole_out,
                         int32_t &frac_out) noexcept {
     sign_out = centi < 0 ? '-' : '+';
@@ -99,6 +105,12 @@ inline void split_centi(int32_t centi, char &sign_out, int32_t &whole_out,
 ///          °C, %RH, and Pa. Scale to the struct's integer units; this is the
 ///          only place doubles touch the data path (no \c %f formatting — see
 ///          \c sentinel_debug_print.hpp).
+///
+/// \param data           Bosch-compensated reading (double-precision).
+/// \param unix_timestamp Unix seconds to latch onto the sample (0 if the RTC
+///                        has not yet ticked).
+/// \return A fixed-point \ref sentinel::task::bme280_service::sample with
+///         \c valid set to \c true.
 ///
 sentinel::task::bme280_service::sample
 build_sample(const bme280_data &data, uint32_t unix_timestamp) noexcept {
@@ -131,6 +143,15 @@ void bme280_service::publish(const sample &s) noexcept {
         // Zero timeout: drop the sample if the handler's queue is full rather
         // than stall the sample cadence on a slow consumer.
         xQueueSendToBack(m_notify_queue, &s, 0);
+    }
+
+    // Publish to the BME280 Ambient Sample GATT characteristic (#6): refresh
+    // the read value and notify a subscribed central. A no-op on the wire when
+    // no central is connected/subscribed; the notify gate lives in the gatt
+    // layer.
+    if (s.valid) {
+        sentinel::gatt::bme280::publish(s.temperature_centi_c,
+                                        s.humidity_centi_pct, s.pressure_pa);
     }
 }
 

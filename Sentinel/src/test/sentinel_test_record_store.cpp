@@ -10,8 +10,8 @@
 ///          \c sentinel::resource::cybsp_spi_bus.
 ///
 ///          All tests operate on a dedicated scratch region near the top of
-///          flash (\ref kRegionOffset), two sectors wide. This is clear of
-///          the \ref sentinel::test::w25q128 scratch sector (\c 0xFFF000)
+///          flash (\c kRegionOffset), two sectors wide. This is clear of
+///          the \c sentinel::test::w25q128 scratch sector (\c 0xFFF000)
 ///          and of any plausible application data, so the suites do not
 ///          interfere with one another.
 ///
@@ -19,8 +19,9 @@
 ///          \c fixture that owns the bus-arbitrated SPI transport, mirroring a
 ///          GoogleTest \c TEST_F fixture — the shared resource lives in the
 ///          fixture, not a file-static global. Each test returns \c true on
-///          pass / \c false on fail; \ref run_all constructs the fixture, folds
-///          every outcome into a \ref sentinel::test::tally, and returns it.
+///          pass / \c false on fail; \ref sentinel::test::record_store::run_all
+///          constructs the fixture, folds every outcome into a
+///          \ref sentinel::test::tally, and returns it.
 ///
 /// \author  galudino
 /// \date    2026-06-28
@@ -53,6 +54,7 @@ extern "C" {
 
 namespace {
 
+/// W25Q128 driver instantiated over the bus-arbitrated SPI transport.
 using flash_t = sentinel::w25q128<sentinel::cyhal_spi_bus_transport>;
 
 ///
@@ -62,20 +64,23 @@ using flash_t = sentinel::w25q128<sentinel::cyhal_spi_bus_transport>;
 ///          this yields a 32-byte slot, i.e. 128 records per 4 KiB sector.
 ///
 struct test_record {
-    uint32_t value;
-    uint8_t tag[20];
+    uint32_t value;  ///< Seed value the record was built from.
+    uint8_t tag[20]; ///< Bytes derived from \ref value for a memcmp check.
 };
 static_assert(sizeof(test_record) % 4 == 0, "test_record must be 4-aligned");
 
+/// Circular record_store over \c test_record, backed by \ref flash_t.
 using store_t =
     sentinel::record_store<test_record, sentinel::cyhal_spi_bus_transport>;
 
 /// Scratch region: two sectors near the top of flash, clear of 0xFFF000.
 constexpr uint32_t kRegionOffset = 0xF00000u;
-constexpr uint32_t kRegionSize = 2u * flash_t::SECTOR_SIZE_BYTES; // 8 KiB
+constexpr uint32_t kRegionSize = 2u * flash_t::SECTOR_SIZE_BYTES; ///< 8 KiB.
 
 ///
 /// \brief Yield long enough for the BLE debug ring buffer to drain.
+///
+/// \param milliseconds Delay duration, in milliseconds.
 ///
 inline void yield_for_debug_drain(uint32_t milliseconds) noexcept {
     vTaskDelay(pdMS_TO_TICKS(milliseconds));
@@ -83,6 +88,9 @@ inline void yield_for_debug_drain(uint32_t milliseconds) noexcept {
 
 ///
 /// \brief Build a deterministic record from a seed value.
+///
+/// \param seed Seed value; becomes \c value and derives every \c tag byte.
+/// \return The constructed \ref test_record.
 ///
 inline test_record make_record(uint32_t seed) noexcept {
     auto r = test_record{};
@@ -96,29 +104,53 @@ inline test_record make_record(uint32_t seed) noexcept {
 ///
 /// \brief Byte-for-byte record comparison.
 ///
+/// \param a First record.
+/// \param b Second record.
+/// \return \c true if \p a and \p b are identical.
+///
 inline bool records_equal(const test_record &a, const test_record &b) noexcept {
     return a.value == b.value && std::memcmp(a.tag, b.tag, sizeof(a.tag)) == 0;
 }
 
 ///
-/// \brief Test fixture: owns the bus-arbitrated SPI transport every test shares.
+/// \brief Test fixture: owns the bus-arbitrated SPI transport every test
+/// shares.
 ///
 /// \details Targets the same flash CS line (\c CYBSP_SPI_FLASH_CS / SS0) as the
-///          W25Q128 driver suite. Constructed fresh by \ref run_all (like a
+///          W25Q128 driver suite. Constructed fresh by
+///          \ref sentinel::test::record_store::run_all (like a
 ///          GoogleTest \c SetUp), so there is no file-static bus global. The
 ///          transport is inert until \c peripheral_initialize() has spawned the
-///          arbiter, which the orchestrator guarantees by running post-scheduler.
+///          arbiter, which the orchestrator guarantees by running
+///          post-scheduler.
 ///
 struct fixture {
+    /// Bus-arbitrated SPI transport shared by every test in this fixture.
     sentinel::cyhal_spi_bus_transport flash_bus{
         sentinel::resource::cybsp_spi_bus, CYBSP_SPI_FLASH_CS};
 
+    /// \brief Fresh store reports empty.
+    /// \return \c true on success.
     bool presence_check() noexcept;
+    /// \brief Append one record, read it back.
+    /// \return \c true on success.
     bool append_round_trip() noexcept;
+    /// \brief Append 100 records, read them back in order.
+    /// \return \c true on success.
     bool many_append() noexcept;
+    /// \brief Fill to capacity + 1; the oldest record is overwritten.
+    /// \return \c true on success.
     bool wrap_around() noexcept;
+    /// \brief A partial (uncommitted) record is skipped by recovery scan.
+    /// \return \c true on success.
     bool power_loss_simulation() noexcept;
+    /// \brief A fresh store re-derives head/tail from on-flash state.
+    /// \return \c true on success.
     bool survive_reset() noexcept;
+    /// \brief A blank recycled sector 0 is not mistaken for a blank region;
+    ///        recovery falls back to the full scan.
+    /// \return \c true on success.
+    bool recycle_transient_recovery() noexcept;
 };
 
 } // namespace
@@ -189,15 +221,15 @@ bool fixture::append_round_trip() noexcept {
         return false;
     }
 
-    auto out = test_record{};
-    if (!store.read(0, &out)) {
+    auto out = store.read(0);
+    if (!out) {
         loge("append_round_trip FAIL: read error %d",
              static_cast<int>(store.last_error()));
         return false;
     }
-    if (!records_equal(in, out)) {
+    if (!records_equal(in, *out)) {
         loge("append_round_trip FAIL: readback mismatch (value=%u)",
-             static_cast<unsigned>(out.value));
+             static_cast<unsigned>(out->value));
         return false;
     }
 
@@ -238,15 +270,15 @@ bool fixture::many_append() noexcept {
     }
 
     for (auto i = uint32_t{0}; i < kCount; i++) {
-        auto out = test_record{};
-        if (!store.read(i, &out)) {
+        auto out = store.read(i);
+        if (!out) {
             loge("many_append FAIL: read %u error %d", static_cast<unsigned>(i),
                  static_cast<int>(store.last_error()));
             return false;
         }
-        if (!records_equal(make_record(1000u + i), out)) {
+        if (!records_equal(make_record(1000u + i), *out)) {
             loge("many_append FAIL: record %u mismatch (value=%u)",
-                 static_cast<unsigned>(i), static_cast<unsigned>(out.value));
+                 static_cast<unsigned>(i), static_cast<unsigned>(out->value));
             return false;
         }
     }
@@ -309,12 +341,12 @@ bool fixture::wrap_around() noexcept {
 
     // Newest record must still be readable; the oldest (index 0) must now be
     // out of range.
-    auto out = test_record{};
-    if (!store.read(cap, &out) || !records_equal(make_record(cap), out)) {
+    auto out = store.read(cap);
+    if (!out || !records_equal(make_record(cap), *out)) {
         loge("wrap_around FAIL: newest record not readable after wrap");
         return false;
     }
-    if (store.read(0, &out)) {
+    if (store.read(0)) {
         loge("wrap_around FAIL: overwritten record 0 still readable");
         return false;
     }
@@ -388,8 +420,7 @@ bool fixture::power_loss_simulation() noexcept {
         return false;
     }
 
-    auto out = test_record{};
-    if (recovered.read(kCommitted, &out)) {
+    if (recovered.read(kCommitted)) {
         loge("power_loss FAIL: partial record readable at index %u",
              static_cast<unsigned>(kCommitted));
         return false;
@@ -444,12 +475,10 @@ bool fixture::survive_reset() noexcept {
         return false;
     }
 
-    auto last = test_record{};
-    auto first = test_record{};
-    if (!rebooted.read(kCount - 1u, &last) ||
-        !records_equal(make_record(kBase + kCount - 1u), last) ||
-        !rebooted.read(0, &first) ||
-        !records_equal(make_record(kBase), first)) {
+    auto last = rebooted.read(kCount - 1u);
+    auto first = rebooted.read(0);
+    if (!last || !records_equal(make_record(kBase + kCount - 1u), *last) ||
+        !first || !records_equal(make_record(kBase), *first)) {
         loge("survive_reset FAIL: post-boot read/verify failed");
         return false;
     }
@@ -460,12 +489,90 @@ bool fixture::survive_reset() noexcept {
 }
 
 // ============================================================================
+// fixture::recycle_transient_recovery
+// ============================================================================
+
+bool fixture::recycle_transient_recovery() noexcept {
+    auto flash = flash_t(flash_bus, sentinel::resource::flash_device_mutex);
+    auto store = store_t(flash, kRegionOffset, kRegionSize);
+    yield_for_debug_drain(200);
+
+    // Fill exactly to capacity so BOTH sectors hold valid records (slot 0 still
+    // carries sequence 0 — the log has not wrapped yet).
+    const auto cap = store.capacity();
+    if (!store.erase_all()) {
+        loge("recycle_transient FAIL: erase_all error %d",
+             static_cast<int>(store.last_error()));
+        return false;
+    }
+    for (auto i = uint32_t{0}; i < cap; i++) {
+        if (!store.append(make_record(i))) {
+            loge("recycle_transient FAIL: fill append %u error %d",
+                 static_cast<unsigned>(i),
+                 static_cast<int>(store.last_error()));
+            return false;
+        }
+    }
+
+    // Simulate a power loss caught mid-recycle of sector 0: the driver erases
+    // the whole sector before rewriting slot 0, so a crash in that window
+    // leaves sector 0 blank (slot 0 EMPTY) while the later sector still holds
+    // valid records. Reproduce it by erasing only the first sector directly.
+    if (!flash.sector_erase_4kb(kRegionOffset)) {
+        loge("recycle_transient FAIL: direct sector-0 erase error");
+        return false;
+    }
+
+    const auto per_sector = store_t::RECORDS_PER_SECTOR;
+
+    // Recovery must NOT mistake the blank sector 0 for a blank region and
+    // discard the surviving records — it must fall back to the full scan.
+    auto recovered = store_t(flash, kRegionOffset, kRegionSize);
+    if (!recovered.initialize()) {
+        loge("recycle_transient FAIL: initialize error %d",
+             static_cast<int>(recovered.last_error()));
+        return false;
+    }
+
+    if (recovered.count() != cap - per_sector ||
+        recovered.tail_index() != per_sector || recovered.head_index() != cap) {
+        loge("recycle_transient FAIL: recovery mismatch count=%u tail=%u "
+             "head=%u (expected count=%u tail=%u head=%u)",
+             static_cast<unsigned>(recovered.count()),
+             static_cast<unsigned>(recovered.tail_index()),
+             static_cast<unsigned>(recovered.head_index()),
+             static_cast<unsigned>(cap - per_sector),
+             static_cast<unsigned>(per_sector), static_cast<unsigned>(cap));
+        return false;
+    }
+
+    // The oldest surviving record (tail) and the newest must round-trip; the
+    // erased records must now be out of range.
+    auto oldest = recovered.read(per_sector);
+    auto newest = recovered.read(cap - 1u);
+    if (!oldest || !records_equal(make_record(per_sector), *oldest) ||
+        !newest || !records_equal(make_record(cap - 1u), *newest)) {
+        loge("recycle_transient FAIL: surviving records not readable");
+        return false;
+    }
+    if (recovered.read(0) || recovered.read(per_sector - 1u)) {
+        loge("recycle_transient FAIL: erased record still readable");
+        return false;
+    }
+
+    logi("recycle_transient PASS: blank sector 0 not mistaken for blank region "
+         "(%u records survived)",
+         static_cast<unsigned>(recovered.count()));
+    return true;
+}
+
+// ============================================================================
 // sentinel::test::record_store::run_all
 // ============================================================================
 
 sentinel::test::tally sentinel::test::record_store::run_all() noexcept {
     auto fx = fixture{};
-    auto t  = sentinel::test::tally{};
+    auto t = sentinel::test::tally{};
 
     t.record(fx.presence_check());
     yield_for_debug_drain(200);
@@ -483,6 +590,9 @@ sentinel::test::tally sentinel::test::record_store::run_all() noexcept {
     yield_for_debug_drain(200);
 
     t.record(fx.survive_reset());
+    yield_for_debug_drain(200);
+
+    t.record(fx.recycle_transient_recovery());
     yield_for_debug_drain(200);
 
     return t;

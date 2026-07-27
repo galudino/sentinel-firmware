@@ -21,8 +21,14 @@
 
 namespace sentinel {
 
+///
 /// \ingroup transport
 /// \brief Platform-agnostic PWM façade (CRTP)
+///
+/// \tparam Implementation Platform-specific implementation (CRTP derived)
+///                        providing the same member functions (e.g.
+///                        \c sentinel::cyhal_pwm_signal).
+///
 template <typename Implementation>
 class pwm_signal {
 public:
@@ -70,12 +76,6 @@ public:
     }
 
     ///
-    /// \brief Delay in milliseconds
-    ///
-    /// \param milliseconds Delay in milliseconds
-    /// \return Implementation-specific status/result code
-    ///
-    ///
     /// \brief Delay execution
     ///
     /// \param milliseconds Delay duration in milliseconds
@@ -86,13 +86,7 @@ public:
     }
 
     ///
-    /// \brief Delay in microseconds
-    ///
-    /// \param milliseconds Delay in microseconds
-    /// \return Implementation-specific status/result code
-    ///
-    ///
-    /// \brief Delay execution
+    /// \brief Delay execution (microseconds)
     ///
     /// \param microseconds Delay duration in microseconds
     /// \return Implementation-specific status/result code

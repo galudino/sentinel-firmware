@@ -33,10 +33,6 @@ extern "C" {
 
 namespace sentinel {
 
-class cyhal_i2c_transport;
-
-} // namespace sentinel
-
 ///
 /// \brief CYHAL-based I2C master transport implementation
 ///
@@ -45,7 +41,7 @@ class cyhal_i2c_transport;
 ///          write, read, and repeated-start sequences for accessing target
 ///          devices.
 ///
-class sentinel::cyhal_i2c_transport
+class cyhal_i2c_transport
     : public byte_transport<cyhal_i2c_transport, i2c_tag> {
 public:
     ///
@@ -103,25 +99,6 @@ public:
                                       timeout, send_stop);
     }
 
-    static int8_t bosch_write(uint8_t reg_addr, const uint8_t *reg_data,
-                              uint32_t length, void *intf_ptr) noexcept {
-        auto *self = static_cast<cyhal_i2c_transport *>(intf_ptr);
-        // Allocate buffer to combine register address and data
-        // I2C write operations require register address followed by write_data
-        // bytes
-        auto buffer = std::array<uint8_t, 256>();
-
-        // Prepare the complete write buffer: [register_address, write_data]
-        buffer[0] = reg_addr;
-        std::copy(reg_data, reg_data + length, buffer.data() + 1);
-
-        // Perform the complete I2C write operation in a single transaction
-        // This ensures atomic register write operation
-        auto result = self->write(buffer.data(), length + 1);
-
-        return result;
-    }
-
     ///
     /// \brief Read bytes from I2C target device
     ///
@@ -135,14 +112,6 @@ public:
                    bool send_stop = true) noexcept {
         return cyhal_i2c_master_read(m_i2c_object, m_target_address, rx, size,
                                      timeout, send_stop);
-    }
-
-    static int8_t bosch_read(uint8_t reg_addr, uint8_t *reg_data,
-                             uint32_t length, void *intf_ptr) noexcept {
-        auto *self = static_cast<cyhal_i2c_transport *>(intf_ptr);
-        auto result = self->write_read(&reg_addr, sizeof(reg_addr), reg_data,
-                                       length, 100, false, true);
-        return result;
     }
 
     ///
@@ -215,26 +184,11 @@ public:
         return CY_RSLT_SUCCESS;
     }
 
-    static void bosch_delay(uint32_t period, void *intf_ptr) noexcept {
-        // Interface pointer is unused but required by Bosch API signature
-        auto *self = static_cast<cyhal_i2c_transport *>(intf_ptr);
-
-        // Convert microseconds to milliseconds with proper rounding
-        // PSoC HAL only supports millisecond delays, so we round up
-        auto delay_ms = (period + 999) / 1000;
-
-        // Ensure minimum delay of 1ms for very short microsecond delays
-        if (delay_ms == 0) {
-            delay_ms = 1;
-        }
-
-        // Perform the delay using PSoC HAL system delay function
-        self->delay(delay_ms);
-    }
-
 private:
     cyhal_i2c_t *m_i2c_object; ///< Pointer to CYHAL I2C object
     uint16_t m_target_address; ///< Current I2C target device address
 };
+
+} // namespace sentinel
 
 #endif /* SENTINEL_CYHAL_I2C_TRANSPORT_HPP */

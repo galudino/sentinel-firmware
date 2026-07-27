@@ -89,7 +89,7 @@ ble_gatt_event_callback(wiced_bt_gatt_evt_t event,
 /// \param event_data Pointer to GATT event data containing attribute request
 ///        details including operation code, connection ID, and request
 ///        parameters
-/// \param error_handle Pointer to variable that receives the attribute handle
+/// \param error_handle Reference to variable that receives the attribute handle
 ///        that caused an error, used for error response generation
 ///
 /// \return wiced_bt_gatt_status_t WICED_BT_GATT_SUCCESS if request handled
@@ -97,7 +97,7 @@ ble_gatt_event_callback(wiced_bt_gatt_evt_t event,
 ///
 wiced_bt_gatt_status_t
 ble_gatt_event_handler(wiced_bt_gatt_event_data_t *event_data,
-                       uint16_t *error_handle) noexcept;
+                       uint16_t &error_handle) noexcept;
 
 ///
 /// \brief Handle GATT read request
@@ -112,7 +112,8 @@ ble_gatt_event_handler(wiced_bt_gatt_event_data_t *event_data,
 /// \param read_request Pointer to read request structure containing handle and
 ///        offset information
 /// \param length_requested Maximum length of data that can be returned
-/// \param error_handle Pointer to variable that receives the handle causing an
+/// \param error_handle Reference to variable that receives the handle causing
+/// an
 ///        error for error response generation
 ///
 /// \return wiced_bt_gatt_status_t WICED_BT_GATT_SUCCESS if read successful,
@@ -122,7 +123,7 @@ ble_gatt_event_handler(wiced_bt_gatt_event_data_t *event_data,
 wiced_bt_gatt_status_t ble_gatt_request_read_handler(
     uint16_t connection_id, wiced_bt_gatt_opcode_t opcode,
     wiced_bt_gatt_read_t *read_request, uint16_t length_requested,
-    uint16_t *error_handle) noexcept;
+    uint16_t &error_handle) noexcept;
 
 ///
 /// \brief Handle GATT read by type request
@@ -137,7 +138,8 @@ wiced_bt_gatt_status_t ble_gatt_request_read_handler(
 /// \param read_request Pointer to read by type request containing handle range
 ///        (s_handle to e_handle) and UUID type to match
 /// \param length_requested Maximum length of data that can be returned
-/// \param error_handle Pointer to variable that receives the handle causing an
+/// \param error_handle Reference to variable that receives the handle causing
+/// an
 ///        error for error response generation
 ///
 /// \return wiced_bt_gatt_status_t WICED_BT_GATT_SUCCESS if read successful,
@@ -147,7 +149,7 @@ wiced_bt_gatt_status_t ble_gatt_request_read_handler(
 wiced_bt_gatt_status_t ble_gatt_request_read_by_type_handler(
     uint16_t connection_id, wiced_bt_gatt_opcode_t opcode,
     wiced_bt_gatt_read_by_type_t *read_request, uint16_t length_requested,
-    uint16_t *error_handle) noexcept;
+    uint16_t &error_handle) noexcept;
 
 ///
 /// \brief Handle GATT read multiple request
@@ -163,7 +165,8 @@ wiced_bt_gatt_status_t ble_gatt_request_read_by_type_handler(
 /// \param read_multiple_request Pointer to read multiple request containing
 ///        handle stream and count of handles to read
 /// \param length_requested Maximum length of data that can be returned
-/// \param error_handle Pointer to variable that receives the handle causing an
+/// \param error_handle Reference to variable that receives the handle causing
+/// an
 ///        error for error response generation
 ///
 /// \return wiced_bt_gatt_status_t WICED_BT_GATT_SUCCESS if read successful,
@@ -174,7 +177,7 @@ wiced_bt_gatt_status_t ble_gatt_request_read_by_type_handler(
 wiced_bt_gatt_status_t ble_gatt_request_read_multi_handler(
     uint16_t connection_id, wiced_bt_gatt_opcode_t opcode,
     wiced_bt_gatt_read_multiple_req_t *read_multiple_request,
-    uint16_t length_requested, uint16_t *error_handle) noexcept;
+    uint16_t length_requested, uint16_t &error_handle) noexcept;
 
 ///
 /// \brief Handle GATT write request
@@ -186,7 +189,8 @@ wiced_bt_gatt_status_t ble_gatt_request_read_multi_handler(
 ///
 /// \param event_data Pointer to GATT event data containing write request with
 ///        handle, value, and length information
-/// \param error_handle Pointer to variable that receives the handle causing an
+/// \param error_handle Reference to variable that receives the handle causing
+/// an
 ///        error for error response generation
 ///
 /// \return wiced_bt_gatt_status_t WICED_BT_GATT_SUCCESS if write successful,
@@ -194,7 +198,7 @@ wiced_bt_gatt_status_t ble_gatt_request_read_multi_handler(
 ///
 wiced_bt_gatt_status_t
 ble_gatt_command_write_handler(wiced_bt_gatt_event_data_t *event_data,
-                               uint16_t *error_handle) noexcept;
+                               uint16_t &error_handle) noexcept;
 
 } // namespace sentinel
 

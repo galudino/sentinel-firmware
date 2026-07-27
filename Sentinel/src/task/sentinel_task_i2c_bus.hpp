@@ -6,10 +6,10 @@
 ///          FreeRTOS task that serves as the single owner of one CYHAL I²C
 ///          peripheral handle (\c cyhal_i2c_t*). Every other task in the
 ///          system that needs to transact on that bus does so by submitting
-///          an \ref i2c_request to the bus's request queue and blocking on
-///          its own response queue. The bus task processes one request at
-///          a time, manages retries and bus-level recovery, and posts an
-///          \ref i2c_response back to the requester.
+///          an \ref sentinel::task::i2c_request to the bus's request queue and
+///          blocking on its own response queue. The bus task processes one
+///          request at a time, manages retries and bus-level recovery, and
+///          posts an \ref sentinel::task::i2c_response back to the requester.
 ///
 ///          This model is functionally equivalent to a mutex protecting
 ///          \c cyhal_i2c_master_write* calls, but it also provides:
@@ -19,10 +19,11 @@
 ///            bus wedges (planned; not yet implemented in the skeleton)
 ///          - decoupling: callers never touch the CYHAL handle directly
 ///
-///          One \ref i2c_bus instance per physical I²C SCB. For the
-///          current CYBLE-416045-EVAL hardware that is one instance over
+///          One \ref sentinel::task::i2c_bus instance per physical I²C SCB. For
+///          the current CYBLE-416045-EVAL hardware that is one instance over
 ///          \c sentinel::resource::cybsp_i2c; if a second SCB is later
-///          repurposed as I²C, construct a second \ref i2c_bus over it.
+///          repurposed as I²C, construct a second
+///          \ref sentinel::task::i2c_bus over it.
 ///
 ///          A higher-level \c byte_transport adapter
 ///          (\c sentinel::cyhal_i2c_bus_transport, declared in
@@ -257,14 +258,16 @@ public:
     /// \return \c pdPASS on success, otherwise the \c xTaskCreate or
     ///         \c xQueueCreate failure code.
     ///
-    BaseType_t task_create(
-        UBaseType_t priority = DEFAULT_PRIORITY,
-        uint16_t stack_words = DEFAULT_STACK_WORDS,
-        UBaseType_t queue_length = DEFAULT_QUEUE_LENGTH) noexcept;
+    BaseType_t
+    task_create(UBaseType_t priority = DEFAULT_PRIORITY,
+                uint16_t stack_words = DEFAULT_STACK_WORDS,
+                UBaseType_t queue_length = DEFAULT_QUEUE_LENGTH) noexcept;
 
     ///
     /// \brief \c true once the task has reached its main loop and is
     ///        ready to accept requests.
+    ///
+    /// \return \c true once \ref run has started; \c false beforehand.
     ///
     bool is_running() const noexcept { return m_up_and_running; }
 
@@ -323,6 +326,9 @@ private:
     /// \brief FreeRTOS task entry-point trampoline; recovers \c this and
     ///        calls \ref run.
     ///
+    /// \param arg The \c i2c_bus instance, passed as \c this at \ref
+    /// task_create.
+    ///
     static void task_trampoline(void *arg);
 
     ///
@@ -345,12 +351,12 @@ private:
     ///
     i2c_response process(const i2c_request &request) noexcept;
 
-    cyhal_i2c_t      *m_i2c_object;     ///< CYHAL I²C handle (non-owning).
-    const char       *m_task_name;      ///< FreeRTOS task name string.
-    QueueHandle_t     m_request_queue;  ///< Inbound request queue.
-    volatile bool     m_up_and_running; ///< \c true after task reaches
-                                        ///< main loop.
-    TaskHandle_t      m_task_handle;    ///< FreeRTOS task handle.
+    cyhal_i2c_t *m_i2c_object;      ///< CYHAL I²C handle (non-owning).
+    const char *m_task_name;        ///< FreeRTOS task name string.
+    QueueHandle_t m_request_queue;  ///< Inbound request queue.
+    volatile bool m_up_and_running; ///< \c true after task reaches
+                                    ///< main loop.
+    TaskHandle_t m_task_handle;     ///< FreeRTOS task handle.
 };
 
 } // namespace sentinel::task

@@ -35,6 +35,7 @@ extern "C" {
 #include "sentinel_debug_print.hpp"
 #include "sentinel_device_context.hpp"
 #include "sentinel_ds3231.hpp"
+#include "sentinel_gatt_ds3231.hpp"
 #include "sentinel_resource.hpp"
 #include "sentinel_task_rtc_service.hpp"
 #include "sentinel_utilities.hpp"
@@ -62,8 +63,9 @@ constexpr uint8_t SQW_IRQ_PRIORITY = 3;
 ///
 /// \brief How often the latched time/temperature is logged, in seconds.
 ///
-/// \details The SQW interrupt and the \ref last_unix_time latch always run at
-///          1 Hz; this only throttles log output. The testbench logs every
+/// \details The SQW interrupt and the
+///          \ref sentinel::task::rtc_service::last_unix_time latch always run
+///          at 1 Hz; this only throttles log output. The testbench logs every
 ///          tick so the 1 Hz interrupt is visibly confirmed on the serial
 ///          monitor; the application logs once per minute to keep the serial
 ///          and BLE debug streams quiet. Must evenly divide 60.
@@ -76,6 +78,9 @@ constexpr uint8_t HEARTBEAT_LOG_PERIOD_SECONDS = 60;
 
 ///
 /// \brief ISO-day-of-week (1=Mon … 7=Sun) → short label, for log lines.
+///
+/// \param iso_dow ISO day-of-week, 1 (Monday) through 7 (Sunday).
+/// \return Three-letter day label, or \c "?" if \p iso_dow is out of range.
 ///
 inline const char *day_name(uint8_t iso_dow) noexcept {
     static constexpr const char *names[8] = {"?",   "Mon", "Tue", "Wed",
@@ -150,10 +155,11 @@ void rtc_service::task_trampoline(void *task_parameter) {
 /// \details Kept minimal: unblock the service task and request a context
 ///          switch if it is now the highest-priority ready task. All bus
 ///          work happens back in task context. The instance is recovered from
-///          the callback argument stored at registration time.
+///          the callback argument stored at registration time. See
+///          \ref sentinel::task::rtc_service::sqw_event_isr for the
+///          \c \\param documentation.
 ///
-void rtc_service::sqw_event_isr(void *callback_arg,
-                                cyhal_gpio_event_t event) {
+void rtc_service::sqw_event_isr(void *callback_arg, cyhal_gpio_event_t event) {
     sentinel::unused(event);
 
     auto *self = static_cast<rtc_service *>(callback_arg);
@@ -189,11 +195,11 @@ void rtc_service::configure_sqw_interrupt() noexcept {
 void rtc_service::run() {
     // Borrow the shared DS3231 from the application device context (decision
     // #13): one driver instance serves the RTC service, POST, and the device
-    // snapshot, rather than each task constructing its own. The context is built
-    // by the boot orchestrator (post-scheduler) before this task is started, so
-    // it is live by the time we reach here. Its transport still routes through
-    // sentinel::resource::cybsp_i2c_bus, so the per-second reads serialize
-    // cleanly with every other task on the shared I²C bus.
+    // snapshot, rather than each task constructing its own. The context is
+    // built by the boot orchestrator (post-scheduler) before this task is
+    // started, so it is live by the time we reach here. Its transport still
+    // routes through sentinel::resource::cybsp_i2c_bus, so the per-second reads
+    // serialize cleanly with every other task on the shared I²C bus.
     auto &rtc = sentinel::resource::context().rtc;
 
     logd("rtc_service: arming 1 Hz SQW (P6_3 falling-edge)");
@@ -225,6 +231,8 @@ void rtc_service::run() {
         auto unix = ds3231_t::datetime::to_unix_time(*now);
         if (unix) {
             m_last_unix_seconds = *unix;
+            // Refresh the Unix Time GATT read value at 1 Hz (#6; no notify).
+            sentinel::gatt::ds3231::set_unix_time(*unix);
         }
 
         // Throttle logging to HEARTBEAT_LOG_PERIOD_SECONDS; the time latch
@@ -244,6 +252,10 @@ void rtc_service::run() {
         // Publish the latest temperature for cross-task consumers (the device
         // snapshot #36 reads this cache rather than issuing its own I²C read).
         m_last_temperature_centi = *temp;
+
+        // Publish to the DS3231 RTC Temperature GATT characteristic (#6):
+        // refresh the read value and notify a subscribed central.
+        sentinel::gatt::ds3231::publish_temperature(*temp);
 
         auto sign = char{};
         auto whole = int32_t{};

@@ -10,19 +10,21 @@
 ///
 ///          Every register documented in the DS3231 datasheet
 ///          (registers \c 0x00 – \c 0x12) has a named entry in
-///          \ref register_address, and every named feature in the datasheet
-///          has a corresponding typed accessor on the class. Bit positions
-///          for the Control (\c 0x0E) and Status (\c 0x0F) registers are
-///          collected in \ref control_register and \ref status_register
-///          nested types so callers never refer to magic numbers.
+///          \ref sentinel::ds3231::register_address, and every named feature
+///          in the datasheet has a corresponding typed accessor on the class.
+///          Bit positions for the Control (\c 0x0E) and Status (\c 0x0F)
+///          registers are collected in \ref sentinel::ds3231::control_register
+///          and \ref sentinel::ds3231::status_register nested types so callers
+///          never refer to magic numbers.
 ///
 ///          Public API design (matches \ref sentinel::bme280):
 ///          - Operations that produce a value return \c std::optional<T>.
 ///          - Operations that just act on the device return \c bool
 ///            (\c true on success).
 ///          - The most recent low-level error from the bus or from input
-///            validation is exposed via \ref last_error(), typed as
-///            \ref err. The "value-or-nullopt" idiom keeps the happy path
+///            validation is exposed via \ref sentinel::ds3231::last_error(),
+///            typed as \ref sentinel::ds3231::err. The "value-or-nullopt"
+///            idiom keeps the happy path
 ///            compact; the forensic accessor keeps granular error
 ///            information recoverable from a debugger or log line.
 ///
@@ -34,7 +36,7 @@
 ///            have to think about the AM/PM bit.
 ///          - The day-of-week field is a single byte that the DS3231 leaves
 ///            entirely up to the user. This driver adopts the ISO 8601
-///            convention encoded in \ref day_of_week:
+///            convention encoded in \ref sentinel::ds3231::day_of_week --
 ///            \c 1 = Monday, …, \c 7 = Sunday.
 ///          - The century bit in register \c 0x05 distinguishes the
 ///            21st century (\c 0 → years 2000–2099) from the 22nd
@@ -44,8 +46,10 @@
 ///          Temperature:
 ///          - The on-die temperature sensor (\c 0x11 / \c 0x12) updates
 ///            every 64 s during normal operation. A user-forced conversion
-///            can be triggered via \ref start_temperature_conversion;
-///            \ref is_temperature_conversion_busy polls the BSY flag while
+///            can be triggered via
+///            \ref sentinel::ds3231::start_temperature_conversion;
+///            \ref sentinel::ds3231::is_temperature_conversion_busy polls the
+///            BSY flag while
 ///            the conversion is in progress. The output is reported as an
 ///            \c int16_t in hundredths of a degree Celsius so the API never
 ///            needs floating-point.
@@ -76,11 +80,6 @@ extern "C" {
 
 namespace sentinel {
 
-template <typename Transport>
-class ds3231;
-
-} // namespace sentinel
-
 ///
 /// \brief DS3231 real-time clock driver class
 ///
@@ -100,7 +99,7 @@ class ds3231;
 ///                   \c byte_transport<Transport, i2c_tag>.
 ///
 template <typename Transport>
-class sentinel::ds3231 {
+class ds3231 {
     static_assert(
         std::is_base_of_v<byte_transport<Transport, i2c_tag>, Transport>,
         "Transport must derive from "
@@ -381,11 +380,11 @@ public:
             }
 
             auto days = uint32_t{0};
-            for (auto y = uint16_t{1970}; y < dt.year; ++y) {
+            for (auto y = uint16_t{1970}; y < dt.year; y++) {
                 days += is_leap_year(y) ? 366 : 365;
             }
 
-            for (auto m = uint8_t{1}; m < dt.month; ++m) {
+            for (auto m = uint8_t{1}; m < dt.month; m++) {
                 days += days_in_month(dt.year, m);
             }
 
@@ -466,12 +465,19 @@ public:
         ///
         /// \brief Test whether \p year is a Gregorian leap year.
         ///
+        /// \param year Full year (e.g. 2026) to test.
+        /// \return \c true if \p year is a leap year.
+        ///
         static constexpr bool is_leap_year(uint16_t year) noexcept {
             return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
         }
 
         ///
         /// \brief Number of days in a given month, with leap-year handling.
+        ///
+        /// \param year  Full year (e.g. 2026); consulted for February only.
+        /// \param month Month, 1-12 (0 returned if out of range).
+        /// \return Number of days in \p month for \p year.
         ///
         static constexpr uint8_t days_in_month(uint16_t year,
                                                uint8_t month) noexcept {
@@ -488,6 +494,10 @@ public:
             return table[month - 1];
         }
 
+        /// \brief Equality: all fields except \c day_of_week match.
+        /// \param a First operand.
+        /// \param b Second operand.
+        /// \return \c true if every compared field is equal.
         friend bool operator==(const datetime &a, const datetime &b) noexcept {
             return a.year == b.year && a.month == b.month && a.date == b.date &&
                    a.hour == b.hour && a.minute == b.minute &&
@@ -496,6 +506,10 @@ public:
             // year/month/date and not all callers populate it correctly.
         }
 
+        /// \brief Inequality: negation of \ref operator==.
+        /// \param a First operand.
+        /// \param b Second operand.
+        /// \return \c true if any compared field differs.
         friend bool operator!=(const datetime &a, const datetime &b) noexcept {
             return !(a == b);
         }
@@ -505,7 +519,9 @@ public:
     /// \brief Alarm 1 configuration payload (seconds-precision alarm)
     ///
     struct alarm1_setting {
-        alarm1_match_mode match_mode = alarm1_match_mode::once_per_second;
+        alarm1_match_mode match_mode =
+            alarm1_match_mode::once_per_second; ///< Which fields participate
+                                                ///< in the match.
         uint8_t second = 0;      ///< 0–59 (ignored for \c once_per_second).
         uint8_t minute = 0;      ///< 0–59.
         uint8_t hour = 0;        ///< 0–23 (24-hour clock).
@@ -518,7 +534,9 @@ public:
     /// \brief Alarm 2 configuration payload (minute-precision alarm)
     ///
     struct alarm2_setting {
-        alarm2_match_mode match_mode = alarm2_match_mode::once_per_minute;
+        alarm2_match_mode match_mode =
+            alarm2_match_mode::once_per_minute; ///< Which fields participate
+                                                ///< in the match.
         uint8_t minute = 0;      ///< 0–59 (ignored for \c once_per_minute).
         uint8_t hour = 0;        ///< 0–23 (24-hour clock).
         uint8_t day_or_date = 1; ///< Day-of-week (1–7) if the match mode is
@@ -561,8 +579,10 @@ public:
     ds3231(const ds3231 &) = delete;
     ds3231 &operator=(const ds3231 &) = delete;
 
-    /// Movable.
+    /// \brief Move-construct from another instance (defaulted).
     ds3231(ds3231 &&) noexcept = default;
+    /// \brief Move-assign from another instance (defaulted).
+    /// \return Reference to this instance.
     ds3231 &operator=(ds3231 &&) noexcept = default;
 
     // =====================================================================
@@ -782,12 +802,17 @@ public:
     ///
     /// \brief Read the raw control register byte (\c 0x0E).
     ///
+    /// \return The raw control register value; \c std::nullopt on bus error.
+    ///
     std::optional<uint8_t> control() const noexcept {
         return read_register(register_address::control);
     }
 
     ///
     /// \brief Write the raw control register byte (\c 0x0E).
+    ///
+    /// \param value New control register value.
+    /// \return \c true on success; \c false on bus error.
     ///
     bool set_control(uint8_t value) noexcept {
         return write_register(register_address::control, value);
@@ -812,12 +837,18 @@ public:
     ///
     /// \brief Enable or disable the battery-backed square wave (BBSQW).
     ///
+    /// \param enabled \c true to keep the square wave running on VBAT.
+    /// \return \c true on success; \c false on bus error.
+    ///
     bool set_battery_backed_square_wave_enabled(bool enabled) noexcept {
         return modify_control_bit(control_register::BBSQW_BIT, enabled);
     }
 
     ///
     /// \brief Enable or disable the Alarm 1 interrupt (A1IE).
+    ///
+    /// \param enabled \c true to enable the Alarm 1 interrupt.
+    /// \return \c true on success; \c false on bus error.
     ///
     bool set_alarm1_interrupt_enabled(bool enabled) noexcept {
         return modify_control_bit(control_register::A1IE_BIT, enabled);
@@ -826,12 +857,18 @@ public:
     ///
     /// \brief Enable or disable the Alarm 2 interrupt (A2IE).
     ///
+    /// \param enabled \c true to enable the Alarm 2 interrupt.
+    /// \return \c true on success; \c false on bus error.
+    ///
     bool set_alarm2_interrupt_enabled(bool enabled) noexcept {
         return modify_control_bit(control_register::A2IE_BIT, enabled);
     }
 
     ///
     /// \brief Configure the function of the INT/SQW pin (INTCN).
+    ///
+    /// \param mode New INT/SQW pin function.
+    /// \return \c true on success; \c false on bus error.
     ///
     bool set_int_sqw_mode(int_sqw_mode mode) noexcept {
         return modify_control_bit(control_register::INTCN_BIT,
@@ -844,6 +881,9 @@ public:
     /// \details This affects the INT/SQW pin only when
     ///          \ref set_int_sqw_mode is set to
     ///          \ref int_sqw_mode::square_wave.
+    ///
+    /// \param f New square-wave output frequency.
+    /// \return \c true on success; \c false on bus error.
     ///
     bool set_square_wave_freq(square_wave_freq f) noexcept {
         auto ctrl = read_register(register_address::control);
@@ -866,6 +906,8 @@ public:
 
     ///
     /// \brief Read the raw status register byte (\c 0x0F).
+    ///
+    /// \return The raw status register value; \c std::nullopt on bus error.
     ///
     std::optional<uint8_t> status() const noexcept {
         return read_register(register_address::status);
@@ -895,12 +937,16 @@ public:
     ///
     /// \brief Clear the oscillator-stop flag (OSF = 0).
     ///
+    /// \return \c true on success; \c false on bus error.
+    ///
     bool clear_oscillator_stop_flag() noexcept {
         return modify_status_bit(status_register::OSF_BIT, false);
     }
 
     ///
     /// \brief Read the Alarm 1 triggered flag (A1F).
+    ///
+    /// \return \c true if A1F is set; \c std::nullopt on bus error.
     ///
     std::optional<bool> alarm1_triggered() const noexcept {
         auto s = read_register(register_address::status);
@@ -914,12 +960,16 @@ public:
     ///
     /// \brief Clear the Alarm 1 triggered flag (A1F = 0).
     ///
+    /// \return \c true on success; \c false on bus error.
+    ///
     bool clear_alarm1_flag() noexcept {
         return modify_status_bit(status_register::A1F_BIT, false);
     }
 
     ///
     /// \brief Read the Alarm 2 triggered flag (A2F).
+    ///
+    /// \return \c true if A2F is set; \c std::nullopt on bus error.
     ///
     std::optional<bool> alarm2_triggered() const noexcept {
         auto s = read_register(register_address::status);
@@ -933,6 +983,8 @@ public:
     ///
     /// \brief Clear the Alarm 2 triggered flag (A2F = 0).
     ///
+    /// \return \c true on success; \c false on bus error.
+    ///
     bool clear_alarm2_flag() noexcept {
         return modify_status_bit(status_register::A2F_BIT, false);
     }
@@ -940,12 +992,17 @@ public:
     ///
     /// \brief Enable or disable the 32 kHz square-wave output (EN32KHZ).
     ///
+    /// \param enabled \c true to enable the 32 kHz output.
+    /// \return \c true on success; \c false on bus error.
+    ///
     bool set_32khz_output_enabled(bool enabled) noexcept {
         return modify_status_bit(status_register::EN32KHZ_BIT, enabled);
     }
 
     ///
     /// \brief Read the 32 kHz output enable bit (EN32KHZ).
+    ///
+    /// \return \c true if EN32KHZ is set; \c std::nullopt on bus error.
     ///
     std::optional<bool> is_32khz_output_enabled() const noexcept {
         auto s = read_register(register_address::status);
@@ -1013,6 +1070,8 @@ public:
     ///
     /// \brief Read Alarm 1 configuration (registers \c 0x07 – \c 0x0A).
     ///
+    /// \return Decoded Alarm 1 configuration; \c std::nullopt on bus error.
+    ///
     std::optional<alarm1_setting> alarm1() const noexcept {
         auto buf = std::array<uint8_t, 4>{};
         if (!read_registers(register_address::alarm1_seconds, buf.data(),
@@ -1039,6 +1098,9 @@ public:
 
     ///
     /// \brief Configure Alarm 2 (registers \c 0x0B – \c 0x0D).
+    ///
+    /// \param alarm Alarm configuration.
+    /// \return \c true on success; \c false on invalid input or bus error.
     ///
     bool set_alarm2(const alarm2_setting &alarm) noexcept {
         if (alarm.minute > 59 || alarm.hour > 23) {
@@ -1075,6 +1137,8 @@ public:
 
     ///
     /// \brief Read Alarm 2 configuration (registers \c 0x0B – \c 0x0D).
+    ///
+    /// \return Decoded Alarm 2 configuration; \c std::nullopt on bus error.
     ///
     std::optional<alarm2_setting> alarm2() const noexcept {
         auto buf = std::array<uint8_t, 3>{};
@@ -1114,8 +1178,9 @@ public:
     ///
     std::optional<int8_t> aging_offset() const noexcept {
         auto v = read_register(register_address::aging_offset);
-        if (!v)
+        if (!v) {
             return std::nullopt;
+        }
         return static_cast<int8_t>(*v);
     }
 
@@ -1125,6 +1190,9 @@ public:
     /// \details The new value takes effect at the next temperature
     ///          conversion. To force the new offset to apply immediately,
     ///          follow this call with \ref start_temperature_conversion.
+    ///
+    /// \param offset New signed aging offset (-128 … +127).
+    /// \return \c true on success; \c false on bus error.
     ///
     bool set_aging_offset(int8_t offset) noexcept {
         return write_register(register_address::aging_offset,
@@ -1137,6 +1205,9 @@ public:
 
     ///
     /// \brief Read a single named register.
+    ///
+    /// \param reg Register to read.
+    /// \return The register byte on success; \c std::nullopt on bus error.
     ///
     std::optional<uint8_t> read_register(register_address reg) const noexcept {
         auto v = uint8_t{};
@@ -1153,6 +1224,10 @@ public:
     ///          \c 0x00 through \c 0x12 is freely writeable — so this
     ///          provides a complete escape hatch for callers that need
     ///          register-level access beyond the typed API.
+    ///
+    /// \param reg   Register to write.
+    /// \param value New register value.
+    /// \return \c true on success; \c false on bus error.
     ///
     bool write_register(register_address reg, uint8_t value) noexcept {
         m_last_error = err::ok;
@@ -1172,10 +1247,16 @@ private:
     // BCD helpers
     // =====================================================================
 
+    /// \brief Convert a BCD byte to its binary value.
+    /// \param bcd Binary-coded-decimal byte (each nibble 0-9).
+    /// \return The decoded binary value.
     static constexpr uint8_t bcd_to_binary(uint8_t bcd) noexcept {
         return static_cast<uint8_t>(((bcd >> 4) & 0x0F) * 10 + (bcd & 0x0F));
     }
 
+    /// \brief Convert a binary value to its BCD byte.
+    /// \param binary Binary value, 0-99.
+    /// \return The binary-coded-decimal encoding of \p binary.
     static constexpr uint8_t binary_to_bcd(uint8_t binary) noexcept {
         return static_cast<uint8_t>(((binary / 10) << 4) | (binary % 10));
     }
@@ -1188,6 +1269,9 @@ private:
     ///          other host) still produces a sensible result. After the
     ///          first \ref set_time call this driver leaves the part in
     ///          24-hour mode.
+    ///
+    /// \param reg Raw hours-register byte.
+    /// \return Decoded 24-hour value (0-23).
     ///
     static constexpr uint8_t decode_hours(uint8_t reg) noexcept {
         if (reg & 0x40) {
@@ -1208,14 +1292,18 @@ private:
     // Alarm match-mode flag packing
     // =====================================================================
 
+    /// \brief Decoded A_M4:A_M1 / DY-DT match-mode bits, register-neutral.
     struct match_flags {
-        bool m1;
-        bool m2;
-        bool m3;
-        bool m4;
-        bool day_not_date;
+        bool m1;           ///< A1M1/A2M2-equivalent seconds-position bit.
+        bool m2;           ///< Minutes-position match bit.
+        bool m3;           ///< Hours-position match bit.
+        bool m4;           ///< Day/date-position match bit.
+        bool day_not_date; ///< DY/DT: \c true selects day-of-week, else date.
     };
 
+    /// \brief Pack an \ref alarm1_match_mode into its raw match-bit flags.
+    /// \param m Alarm 1 match mode.
+    /// \return The corresponding \ref match_flags.
     static constexpr match_flags
     alarm1_match_flags(alarm1_match_mode m) noexcept {
         switch (m) {
@@ -1235,6 +1323,9 @@ private:
         return {true, true, true, true, false};
     }
 
+    /// \brief Pack an \ref alarm2_match_mode into its raw match-bit flags.
+    /// \param m Alarm 2 match mode.
+    /// \return The corresponding \ref match_flags (\c m1 always \c false).
     static constexpr match_flags
     alarm2_match_flags(alarm2_match_mode m) noexcept {
         // Alarm 2 has no seconds field; m1 is unused.
@@ -1253,33 +1344,55 @@ private:
         return {false, true, true, true, false};
     }
 
+    /// \brief Recover an \ref alarm1_match_mode from its raw match-bit flags.
+    /// \param m1           A1M1-equivalent seconds-position bit.
+    /// \param m2           Minutes-position match bit.
+    /// \param m3           Hours-position match bit.
+    /// \param m4           Day/date-position match bit.
+    /// \param day_not_date DY/DT: \c true selects day-of-week, else date.
+    /// \return The decoded \ref alarm1_match_mode.
     static constexpr alarm1_match_mode
     alarm1_mode_from_flags(bool m1, bool m2, bool m3, bool m4,
                            bool day_not_date) noexcept {
-        if (m1 && m2 && m3 && m4)
+        if (m1 && m2 && m3 && m4) {
             return alarm1_match_mode::once_per_second;
-        if (!m1 && m2 && m3 && m4)
+        }
+        if (!m1 && m2 && m3 && m4) {
             return alarm1_match_mode::seconds;
-        if (!m1 && !m2 && m3 && m4)
+        }
+        if (!m1 && !m2 && m3 && m4) {
             return alarm1_match_mode::minutes_seconds;
-        if (!m1 && !m2 && !m3 && m4)
+        }
+        if (!m1 && !m2 && !m3 && m4) {
             return alarm1_match_mode::hours_minutes_seconds;
-        if (day_not_date)
+        }
+        if (day_not_date) {
             return alarm1_match_mode::day_of_week_hours_minutes_seconds;
+        }
         return alarm1_match_mode::date_hours_minutes_seconds;
     }
 
+    /// \brief Recover an \ref alarm2_match_mode from its raw match-bit flags.
+    /// \param m2           Minutes-position match bit.
+    /// \param m3           Hours-position match bit.
+    /// \param m4           Day/date-position match bit.
+    /// \param day_not_date DY/DT: \c true selects day-of-week, else date.
+    /// \return The decoded \ref alarm2_match_mode.
     static constexpr alarm2_match_mode
     alarm2_mode_from_flags(bool m2, bool m3, bool m4,
                            bool day_not_date) noexcept {
-        if (m2 && m3 && m4)
+        if (m2 && m3 && m4) {
             return alarm2_match_mode::once_per_minute;
-        if (!m2 && m3 && m4)
+        }
+        if (!m2 && m3 && m4) {
             return alarm2_match_mode::minutes;
-        if (!m2 && !m3 && m4)
+        }
+        if (!m2 && !m3 && m4) {
             return alarm2_match_mode::hours_minutes;
-        if (day_not_date)
+        }
+        if (day_not_date) {
             return alarm2_match_mode::day_of_week_hours_minutes;
+        }
         return alarm2_match_mode::date_hours_minutes;
     }
 
@@ -1287,6 +1400,10 @@ private:
     // Read-modify-write helpers for single-bit operations
     // =====================================================================
 
+    /// \brief Read-modify-write a single bit of the control register.
+    /// \param bit_position Bit index within the control register (0-7).
+    /// \param set          \c true to set the bit, \c false to clear it.
+    /// \return \c true on success; \c false on bus error.
     bool modify_control_bit(uint8_t bit_position, bool set) noexcept {
         auto current = read_register(register_address::control);
         if (!current) {
@@ -1303,6 +1420,10 @@ private:
         return write_register(register_address::control, v);
     }
 
+    /// \brief Read-modify-write a single bit of the status register.
+    /// \param bit_position Bit index within the status register (0-7).
+    /// \param set          \c true to set the bit, \c false to clear it.
+    /// \return \c true on success; \c false on bus error.
     bool modify_status_bit(uint8_t bit_position, bool set) noexcept {
         auto current = read_register(register_address::status);
         if (!current) {
@@ -1323,10 +1444,19 @@ private:
     // Low-level transport primitives
     // =====================================================================
 
+    /// \brief Read a single register into an output reference.
+    /// \param reg Register to read.
+    /// \param out Receives the register byte on success.
+    /// \return \c true on success; \c false on bus error.
     bool read_register(register_address reg, uint8_t &out) const noexcept {
         return read_registers(reg, &out, 1);
     }
 
+    /// \brief Read \p count contiguous registers starting at \p reg.
+    /// \param reg   Starting register address.
+    /// \param out   Destination buffer; \p count bytes are written.
+    /// \param count Number of contiguous registers to read.
+    /// \return \c true on success; \c false on bus error.
     bool read_registers(register_address reg, uint8_t *out,
                         size_t count) const noexcept {
         m_last_error = err::ok;
@@ -1341,6 +1471,11 @@ private:
         return true;
     }
 
+    /// \brief Write \p count contiguous registers starting at \p reg.
+    /// \param reg   Starting register address.
+    /// \param data  Source buffer; \p count bytes are written.
+    /// \param count Number of contiguous registers to write.
+    /// \return \c true on success; \c false on invalid input or bus error.
     bool write_registers(register_address reg, const uint8_t *data,
                          size_t count) noexcept {
         // The DS3231 has no auto-increment write opcode; the standard
@@ -1358,7 +1493,7 @@ private:
 
         auto buf = std::array<uint8_t, MAX_CONTIGUOUS_BYTES>{};
         buf[0] = static_cast<uint8_t>(reg);
-        for (auto i = size_t{0}; i < count; ++i) {
+        for (auto i = size_t{0}; i < count; i++) {
             buf[i + 1] = data[i];
         }
 
@@ -1377,5 +1512,7 @@ private:
                                        ///< operation's error code; exposed
                                        ///< by \ref last_error().
 };
+
+} // namespace sentinel
 
 #endif /* SENTINEL_DS3231_HPP */

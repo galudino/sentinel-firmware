@@ -2,16 +2,17 @@
 /// \file    sentinel_cyhal_pwm_signal.hpp
 /// \brief   CYHAL (Cypress HAL) PWM signal implementation
 ///
-/// \details Implements the \ref sentinel::pwm_signal façade over a pre-initialized
+/// \details Implements the \ref sentinel::pwm_signal façade over a
+/// pre-initialized
 ///          CYHAL PWM object. Supports active-high/active-low outputs by
 ///          inverting the hardware duty cycle as needed. Includes convenience
 ///          helpers for perceptual brightness and timed fades.
 ///
-/// \example
+/// \par Example
 /// \code
-/// Construct from a pre-initialized CYHAL PWM object
+/// // Construct from a pre-initialized CYHAL PWM object
 /// sentinel::cyhal_pwm_signal backlight(&front_yellow_led_object,
-/// /*active_low=*/true);
+///                                       /*active_low=*/true);
 ///
 /// // Program 1 kHz, 50% logical duty (inverted in HW if active_low)
 /// backlight.configure(50, 1000);
@@ -26,17 +27,17 @@
 /// backlight.stop();
 /// \endcode
 ///
-/// \example
+/// \par Example
 /// \code
 /// sentinel::cyhal_pwm_signal backlight(&pwm_obj, /*active_low=*/true);
 ///
-/// Set perceptual brightness to 30% with gamma 2.0
+/// // Set perceptual brightness to 30% with gamma 2.0
 /// backlight.set_brightness_0_1(0.30f, 2.0f);
 ///
-/// Change frequency only (keep brightness)
+/// // Change frequency only (keep brightness)
 /// backlight.set_frequency(2000);
 ///
-/// Smoothly fade to 80% logical duty over 300 ms
+/// // Smoothly fade to 80% logical duty over 300 ms
 /// backlight.fade_to(80, 300, 5);
 /// \endcode
 ///
@@ -93,11 +94,13 @@ public:
 
     ///
     /// \brief Start PWM output
+    /// \return \c cy_rslt_t (\c CY_RSLT_SUCCESS on success).
     ///
     cy_rslt_t start() noexcept { return cyhal_pwm_start(m_pwm_object); }
 
     ///
     /// \brief Stop PWM output
+    /// \return \c cy_rslt_t (\c CY_RSLT_SUCCESS on success).
     ///
     cy_rslt_t stop() noexcept { return cyhal_pwm_stop(m_pwm_object); }
 

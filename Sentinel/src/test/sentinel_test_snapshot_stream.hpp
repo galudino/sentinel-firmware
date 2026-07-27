@@ -14,11 +14,16 @@
 ///          The task is created in the testbench's \c create_tasks(); this
 ///          driver attaches a counting sink and a controllable connection
 ///          predicate to that singleton and exercises:
-///            - \c idle_by_default      — created-but-not-started emits nothing;
-///            - \c start_stop           — start/stop toggle streaming, idempotent;
-///            - \c cadence              — sink fires at ~period_ms while streaming;
-///            - \c disconnect_autostop  — a simulated disconnect returns to idle;
-///            - \c populate_is_cache_backed — streamed snapshots are complete with
+///            - \c idle_by_default      — created-but-not-started emits
+///            nothing;
+///            - \c start_stop           — start/stop toggle streaming,
+///            idempotent;
+///            - \c cadence              — sink fires at ~period_ms while
+///            streaming;
+///            - \c disconnect_autostop  — a simulated disconnect returns to
+///            idle;
+///            - \c populate_is_cache_backed — streamed snapshots are complete
+///            with
 ///              no bus arbiter driving them (populate reads caches only).
 ///
 /// \author  galudino
@@ -40,8 +45,9 @@ namespace sentinel::test::snapshot_stream {
 ///          \ref sentinel::task::snapshot_stream_task singleton (idle ↔ stream
 ///          lifecycle, cadence, disconnect auto-stop). Run-to-completion (#48):
 ///          no longer self-schedules as a FreeRTOS task; the serial test
-///          orchestrator calls \ref run_all directly, after the singleton has
-///          been created. Returns the pass/fail \ref sentinel::test::tally.
+///          orchestrator calls \ref sentinel::test::snapshot_stream::run_all
+///          directly, after the singleton has been created. Returns the
+///          pass/fail \ref sentinel::test::tally.
 ///
 /// \return The suite's pass/fail tally.
 ///

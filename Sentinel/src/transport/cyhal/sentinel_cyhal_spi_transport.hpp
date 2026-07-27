@@ -12,7 +12,8 @@
 ///
 /// \author  galudino
 /// \date    2021-2026
-/// \version 1.1 - Added Bosch Sensortec API callback wrappers (bosch_read/write/delay)
+/// \version 1.2 - Vendor-agnostic byte-mover; sensor-vendor C-driver adapter
+///                moved into the bme280 driver (#65)
 ///
 
 #ifndef SENTINEL_CYHAL_SPI_TRANSPORT_HPP
@@ -33,14 +34,10 @@ extern "C" {
 #include "sentinel_byte_transport.hpp"
 #include "sentinel_utilities.hpp"
 
-#include <array>
 #include <algorithm>
+#include <array>
 
 namespace sentinel {
-
-class cyhal_spi_transport;
-
-}
 
 ///
 /// \brief CYHAL-based SPI master transport implementation
@@ -50,7 +47,7 @@ class cyhal_spi_transport;
 ///          frequencies, and optional software-controlled chip select for
 ///          devices requiring manual CS control.
 ///
-class sentinel::cyhal_spi_transport
+class cyhal_spi_transport
     : public byte_transport<cyhal_spi_transport, spi_tag> {
 public:
     using byte_transport<cyhal_spi_transport, spi_tag>::write;
@@ -60,13 +57,13 @@ public:
     using byte_transport<cyhal_spi_transport, spi_tag>::transfer_async;
 
     ///
-    /// \brief Construct SPI transport with CYHAL object and optional chip
-    /// select
+    /// \brief Construct SPI transport over an initialized CYHAL SPI object
+    ///
+    /// \details Chip-select control is not owned by this transport; pair it
+    ///          with a \ref sentinel::spi_flash_bus_controller (or manage
+    ///          CS at the call site) if software CS is required.
     ///
     /// \param spi_object Pointer to initialized CYHAL SPI object
-    /// \param chip_select GPIO pin for chip select (NC for no software CS)
-    /// \param chip_select_active_low true for active-low CS, false for
-    /// active-high
     ///
     explicit cyhal_spi_transport(cyhal_spi_t *spi_object) noexcept
         : m_spi_object(spi_object) {}
@@ -94,38 +91,6 @@ public:
     }
 
     ///
-    /// \brief Bosch Sensortec API write wrapper (SPI)
-    ///
-    /// \details Static wrapper function compatible with Bosch Sensortec sensor
-    ///          APIs (BME280, BMP388, BMA400, etc.) for SPI mode. For Bosch
-    ///          SPI sensors the most-significant bit of the register address
-    ///          selects direction (\c 0 for write, \c 1 for read), so this
-    ///          wrapper clears it before sending the address followed by the
-    ///          payload.
-    ///
-    /// \param reg_addr Starting register address to write
-    /// \param reg_data Pointer to data buffer to write
-    /// \param length Number of bytes to write
-    /// \param intf_ptr Interface pointer (must point to a
-    ///                 \ref cyhal_spi_transport instance)
-    /// \return Bosch API compatible result code (0 = success)
-    ///
-    /// \note Chip-select assert/de-assert is expected to be handled by the
-    ///       underlying CYHAL SPI driver or by external CS GPIO management.
-    ///
-    static int8_t bosch_write(uint8_t reg_addr, const uint8_t *reg_data,
-                              uint32_t length, void *intf_ptr) noexcept {
-        auto *self = static_cast<cyhal_spi_transport *>(intf_ptr);
-
-        // [reg_addr & 0x7F, data0, data1, ...] in one contiguous SPI transfer
-        auto buffer = std::array<uint8_t, 256>{};
-        buffer[0] = static_cast<uint8_t>(reg_addr & 0x7F);
-        std::copy(reg_data, reg_data + length, buffer.data() + 1);
-
-        return static_cast<int8_t>(self->write(buffer.data(), length + 1));
-    }
-
-    ///
     /// \brief Read bytes from SPI device
     ///
     /// \param rx Pointer to receive buffer
@@ -134,29 +99,6 @@ public:
     ///
     cy_rslt_t read(uint8_t *rx, size_t size) noexcept {
         return cyhal_spi_transfer(m_spi_object, nullptr, 0, rx, size, 0xFF);
-    }
-
-    ///
-    /// \brief Bosch Sensortec API read wrapper (SPI)
-    ///
-    /// \details Static wrapper function compatible with Bosch Sensortec sensor
-    ///          APIs (BME280, BMP388, BMA400, etc.) for SPI mode. Bosch SPI
-    ///          reads send the register address with its MSB set, then clock
-    ///          out \p length bytes of response.
-    ///
-    /// \param reg_addr Starting register address to read from
-    /// \param reg_data Pointer to buffer for read data
-    /// \param length Number of bytes to read
-    /// \param intf_ptr Interface pointer (must point to a
-    ///                 \ref cyhal_spi_transport instance)
-    /// \return Bosch API compatible result code (0 = success)
-    ///
-    static int8_t bosch_read(uint8_t reg_addr, uint8_t *reg_data,
-                             uint32_t length, void *intf_ptr) noexcept {
-        auto *self = static_cast<cyhal_spi_transport *>(intf_ptr);
-        auto cmd = static_cast<uint8_t>(reg_addr | 0x80);
-        return static_cast<int8_t>(
-            self->write_read(&cmd, sizeof(cmd), reg_data, length));
     }
 
     ///
@@ -227,26 +169,6 @@ public:
     }
 
     ///
-    /// \brief Bosch Sensortec API delay wrapper (SPI)
-    ///
-    /// \details Static wrapper function compatible with Bosch Sensortec sensor
-    ///          APIs (BME280, BMP388, BMA400, etc.). Bosch callbacks express
-    ///          their period in microseconds; this wrapper forwards to the
-    ///          CYHAL microsecond delay.
-    ///
-    /// \param period Delay duration in microseconds
-    /// \param intf_ptr Interface pointer (must point to a
-    ///                 \ref cyhal_spi_transport instance)
-    ///
-    /// \note This function signature matches Bosch Sensortec's required
-    ///       function pointer type for delay operations (\c void return).
-    ///
-    static void bosch_delay(uint32_t period, void *intf_ptr) noexcept {
-        auto *self = static_cast<cyhal_spi_transport *>(intf_ptr);
-        self->delay_us(period);
-    }
-
-    ///
     /// \brief True simultaneous full-duplex 3-byte SPI transfer (DRV8308)
     ///
     /// \details Performs a 3-byte full-duplex SPI transfer using raw SCB
@@ -299,5 +221,7 @@ public:
 private:
     cyhal_spi_t *m_spi_object; ///< Pointer to CYHAL SPI object
 };
+
+} // namespace sentinel
 
 #endif /* SENTINEL_CYHAL_SPI_TRANSPORT_HPP */
