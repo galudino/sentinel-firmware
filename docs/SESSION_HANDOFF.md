@@ -20,13 +20,25 @@ than letting them accumulate here.
 
 ---
 
-**Last updated:** 2026-07-27 (session: **#65 DONE** — Bosch C-driver adapter
-moved out of the transports into the bme280 driver; **#57 per-directory README
-fan-out** in progress; then promote `develop → main`). Earlier: **#53 FULLY DONE
-+ CLOSED** — Doxygen backfill (0 warnings) + end-of-Phase-I formatting/convention
-sweep; docs.yml CI added; #58–#64 filed. #56 + #49 on-bench signed off + closed;
-#6/#45/#55 GATT, #38, #51 merged. **NEXT: OTA DFU validation (#63) is the Phase I
-finale.**
+**Last updated:** 2026-07-27 (session: **#65 + #57 DONE, promoted `develop →
+main`**). #65 — Bosch C-driver adapter moved out of the transports into the bme280
+driver (In Review, bench AC pending). #57 — per-directory README fan-out across
+the whole `src/` tree, **COMPLETE + CLOSED**. Earlier: **#53 FULLY DONE + CLOSED**
+— Doxygen backfill (0 warnings) + end-of-Phase-I formatting/convention sweep;
+docs.yml CI added; #58–#64 filed. #56 + #49 on-bench signed off + closed;
+#6/#45/#55 GATT, #38, #51 merged. **NEXT: on-bench BME280 re-verify for #65 (AC
+#4); OTA DFU validation (#63) is the Phase I finale.**
+
+**#57 (this session — merged `develop`, tag `57-per-directory-readmes-history`;
+CLOSED):** every meaningful `src/` subdirectory now has a `README.md` fanning out
+from the `src/README.md` keystone — 22 pages (app, resource, drivers + 7 driver
+subdirs, transport + 2, task, storage, diagnostics, telemetry, bluetooth, logging,
+utilities, test, testbench). Uniform shape: purpose → key types/entry points →
+usage snippet → cross-links. All reachable from `src/README.md` (no orphans); 286
+relative links verified. Snippets checked against real APIs (e.g.
+`create_orchestrator`, `record_store` ctor, `jedec_id()`/`is_known_jedec`,
+`device_snapshot::populate(out)`, `current_firmware_version`). Vendored/generated
+dirs left undocumented by design.
 
 **#65 (this session — merged `develop`, tag `65-bosch-adapter-history`; issue
 closed):** the `byte_transport` CRTP base + all three CYHAL transports carried

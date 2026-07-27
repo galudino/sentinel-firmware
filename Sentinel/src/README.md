@@ -30,8 +30,11 @@ repo layout). For per-function API detail, generate the Doxygen reference
 | [`test/`](test/) | Run-to-completion testbench suites, one per subsystem (drive **real** components — decision #15). | `test::<subsystem>::run_all()` |
 | [`testbench/`](testbench/) | The bottom-up test orchestrator (twin of the boot orchestrator). | `test_orchestrator` |
 
-*Directories without a dedicated `README.md` yet are still browsable above; the
-per-module narrative pages land incrementally (issue #57).*
+*Every module above has its own `README.md` (purpose · key API · a usage snippet ·
+cross-links); the driver and transport rows fan out further into per-part /
+per-platform pages (issue #57). Vendored and generated directories
+(`drivers/**/bosch/`, `GeneratedSource/`, `driver_file_template/`) are
+intentionally undocumented here.*
 
 ---
 
