@@ -169,7 +169,7 @@ sequenceDiagram
     BO->>CTX: build shared device context (bme / rtc / flash + stores)
     BO->>CTX: initialize_stores() — scan flash regions (#49 fast scan)
     BO->>POST: run against real drivers, cache first failure
-    BO->>EL: start; runs boot sequence, then drains POST records
+    BO->>EL: start — runs boot sequence, then drains POST records
     BO->>SVC: start rtc / bme280 / snapshot-persistence / stream / battery
     BO-->>BO: vTaskDelete(self)
 ```
