@@ -7,21 +7,23 @@
 ///          no underlying vendor C library is wrapped.
 ///
 ///          Every opcode documented in the W25Q128JV datasheet (Rev. K /
-///          Aug 2024 or equivalent) has a named entry in \ref opcode,
-///          even ones whose member-function counterpart is not implemented
-///          in this skeleton (Dual / Quad I/O variants require multi-bit
-///          SPI configuration of the SCB that we are not enabling for
-///          phase 1). Bit positions for the three status registers are
-///          collected in \ref status_register_1, \ref status_register_2,
-///          and \ref status_register_3 nested types so callers never refer
-///          to magic numbers.
+///          Aug 2024 or equivalent) has a named entry in
+///          \ref sentinel::w25q128::opcode, even ones whose member-function
+///          counterpart is not implemented in this skeleton (Dual / Quad I/O
+///          variants require multi-bit SPI configuration of the SCB that we
+///          are not enabling for phase 1). Bit positions for the three status
+///          registers are collected in \ref sentinel::w25q128::status_register_1,
+///          \ref sentinel::w25q128::status_register_2, and
+///          \ref sentinel::w25q128::status_register_3 nested types so callers
+///          never refer to magic numbers.
 ///
 ///          Public API design (matches \ref sentinel::bme280 /
 ///          \ref sentinel::ds3231):
 ///          - Value-producing reads return \c std::optional<T>.
 ///          - Setters / actions return \c bool (\c true on success).
-///          - The most recent error is exposed via \ref last_error(),
-///            typed as \ref err.
+///          - The most recent error is exposed via
+///            \ref sentinel::w25q128::last_error(), typed as
+///            \ref sentinel::w25q128::err.
 ///
 ///          Memory layout:
 ///          - Total: 16 MiB (24-bit byte address space, 0x000000–0xFFFFFF)
@@ -107,6 +109,9 @@ public:
     // Error type
     // =====================================================================
 
+    ///
+    /// \brief Error codes for the most recent operation (see \ref last_error).
+    ///
     enum class err : int8_t {
         ok                = 0,
         transport_failure = -1, ///< Underlying SPI transport call failed.
@@ -129,12 +134,12 @@ public:
     /// Smallest erase granularity.
     static constexpr uint32_t SECTOR_SIZE_BYTES = 4u * 1024u;
 
-    static constexpr uint32_t BLOCK_32KB_SIZE_BYTES = 32u * 1024u;
-    static constexpr uint32_t BLOCK_64KB_SIZE_BYTES = 64u * 1024u;
+    static constexpr uint32_t BLOCK_32KB_SIZE_BYTES = 32u * 1024u; ///< 32 KiB block erase unit.
+    static constexpr uint32_t BLOCK_64KB_SIZE_BYTES = 64u * 1024u; ///< 64 KiB block erase unit.
 
     /// Each security register is 256 bytes; there are three of them.
     static constexpr uint32_t SECURITY_REGISTER_SIZE_BYTES = 256u;
-    static constexpr uint8_t  SECURITY_REGISTER_COUNT      = 3u;
+    static constexpr uint8_t  SECURITY_REGISTER_COUNT      = 3u; ///< Number of 256 B security registers.
 
     /// 64-bit factory-programmed unique ID.
     static constexpr size_t UNIQUE_ID_SIZE_BYTES = 8u;
@@ -168,6 +173,9 @@ public:
     // Opcode map (W25Q128JV datasheet)
     // =====================================================================
 
+    ///
+    /// \brief SPI command opcodes from the W25Q128JV datasheet.
+    ///
     enum class opcode : uint8_t {
         // ── Identification ────────────────────────────────────────────
         manufacturer_device_id          = 0x90,
@@ -237,32 +245,35 @@ public:
     // Status Register bit positions
     // =====================================================================
 
+    /// \brief Status Register 1 (SR1) bit positions.
     struct status_register_1 {
-        static constexpr uint8_t BUSY_BIT = 0;
-        static constexpr uint8_t WEL_BIT  = 1;
-        static constexpr uint8_t BP0_BIT  = 2;
-        static constexpr uint8_t BP1_BIT  = 3;
-        static constexpr uint8_t BP2_BIT  = 4;
-        static constexpr uint8_t TB_BIT   = 5;
-        static constexpr uint8_t SEC_BIT  = 6;
-        static constexpr uint8_t SRP0_BIT = 7;
+        static constexpr uint8_t BUSY_BIT = 0; ///< Erase/program/write in progress.
+        static constexpr uint8_t WEL_BIT  = 1; ///< Write Enable Latch.
+        static constexpr uint8_t BP0_BIT  = 2; ///< Block Protect bit 0.
+        static constexpr uint8_t BP1_BIT  = 3; ///< Block Protect bit 1.
+        static constexpr uint8_t BP2_BIT  = 4; ///< Block Protect bit 2.
+        static constexpr uint8_t TB_BIT   = 5; ///< Top/Bottom protect select.
+        static constexpr uint8_t SEC_BIT  = 6; ///< Sector/block protect select.
+        static constexpr uint8_t SRP0_BIT = 7; ///< Status Register Protect 0.
     };
 
+    /// \brief Status Register 2 (SR2) bit positions.
     struct status_register_2 {
-        static constexpr uint8_t SRP1_BIT = 0;
-        static constexpr uint8_t QE_BIT   = 1;
-        static constexpr uint8_t LB1_BIT  = 3;
-        static constexpr uint8_t LB2_BIT  = 4;
-        static constexpr uint8_t LB3_BIT  = 5;
-        static constexpr uint8_t CMP_BIT  = 6;
-        static constexpr uint8_t SUS_BIT  = 7;
+        static constexpr uint8_t SRP1_BIT = 0; ///< Status Register Protect 1.
+        static constexpr uint8_t QE_BIT   = 1; ///< Quad Enable.
+        static constexpr uint8_t LB1_BIT  = 3; ///< Security register lock 1.
+        static constexpr uint8_t LB2_BIT  = 4; ///< Security register lock 2.
+        static constexpr uint8_t LB3_BIT  = 5; ///< Security register lock 3.
+        static constexpr uint8_t CMP_BIT  = 6; ///< Complement protect.
+        static constexpr uint8_t SUS_BIT  = 7; ///< Erase/program suspend status.
     };
 
+    /// \brief Status Register 3 (SR3) bit positions.
     struct status_register_3 {
-        static constexpr uint8_t WPS_BIT      = 2;
-        static constexpr uint8_t DRV0_BIT     = 5;
-        static constexpr uint8_t DRV1_BIT     = 6;
-        static constexpr uint8_t HOLD_RST_BIT = 7;
+        static constexpr uint8_t WPS_BIT      = 2; ///< Write Protect Selection (individual block locks).
+        static constexpr uint8_t DRV0_BIT     = 5; ///< Output driver strength bit 0.
+        static constexpr uint8_t DRV1_BIT     = 6; ///< Output driver strength bit 1.
+        static constexpr uint8_t HOLD_RST_BIT = 7; ///< HOLD / RESET function select.
     };
 
     // =====================================================================
@@ -277,12 +288,20 @@ public:
         uint8_t memory_type;  ///< Expected: 0x40 (W25Q SPI family).
         uint8_t capacity;     ///< Expected: 0x18 (128 Mbit).
 
+        /// \brief Equality: all three ID bytes match.
+        /// \param a First operand.
+        /// \param b Second operand.
+        /// \return \c true if every field is equal.
         friend bool operator==(const jedec_id_data &a,
                                const jedec_id_data &b) noexcept {
             return a.manufacturer == b.manufacturer
                 && a.memory_type  == b.memory_type
                 && a.capacity     == b.capacity;
         }
+        /// \brief Inequality: negation of \ref operator==.
+        /// \param a First operand.
+        /// \param b Second operand.
+        /// \return \c true if any field differs.
         friend bool operator!=(const jedec_id_data &a,
                                const jedec_id_data &b) noexcept {
             return !(a == b);
@@ -367,9 +386,14 @@ public:
 
     w25q128(const w25q128 &)            = delete;
     w25q128 &operator=(const w25q128 &) = delete;
+    /// \brief Move-construct from another instance (defaulted).
     w25q128(w25q128 &&) noexcept        = default;
+    /// \brief Move-assign from another instance (defaulted).
+    /// \return Reference to this instance.
     w25q128 &operator=(w25q128 &&) noexcept = default;
 
+    /// \brief The error code recorded by the most recent failed operation.
+    /// \return The most recent \ref err (\c err::ok if none).
     err last_error() const noexcept { return m_last_error; }
 
     // =====================================================================
@@ -378,6 +402,8 @@ public:
 
     ///
     /// \brief Read the JEDEC ID (opcode 0x9F).
+    ///
+    /// \return The 3-byte JEDEC ID on success; \c std::nullopt on transport error.
     ///
     std::optional<jedec_id_data> jedec_id() const noexcept {
         auto tx = std::array<uint8_t, 1>{
@@ -397,6 +423,9 @@ public:
 
     ///
     /// \brief Read the manufacturer + device ID (opcode 0x90, addr 0).
+    ///
+    /// \return The manufacturer + device ID on success; \c std::nullopt on
+    ///         transport error.
     ///
     std::optional<mfr_dev_id_data> manufacturer_device_id() const noexcept {
         auto tx = std::array<uint8_t, 4>{
@@ -420,6 +449,9 @@ public:
     /// \details The unique ID is a serial-number-shaped 64-bit value
     ///          burned in at the factory. Useful as a per-device
     ///          identifier without needing to allocate one yourself.
+    ///
+    /// \return The 8-byte unique ID on success; \c std::nullopt on transport
+    ///         error.
     ///
     std::optional<std::array<uint8_t, UNIQUE_ID_SIZE_BYTES>>
     unique_id() const noexcept {
@@ -447,6 +479,9 @@ public:
     ///          put into deep power-down via \ref power_down. Returns
     ///          the 1-byte device ID (\c 0x17 for W25Q128JV).
     ///
+    /// \return The 1-byte device ID on success; \c std::nullopt on transport
+    ///         error.
+    ///
     std::optional<uint8_t> release_power_down_device_id() noexcept {
         auto tx = std::array<uint8_t, 4>{
             static_cast<uint8_t>(opcode::release_power_down),
@@ -463,12 +498,18 @@ public:
     // Status registers
     // =====================================================================
 
+    /// \brief Read Status Register 1 (opcode 0x05).
+    /// \return SR1 on success; \c std::nullopt on transport error.
     std::optional<uint8_t> read_status_register_1() const noexcept {
         return read_one_byte_register(opcode::read_status_register_1);
     }
+    /// \brief Read Status Register 2 (opcode 0x35).
+    /// \return SR2 on success; \c std::nullopt on transport error.
     std::optional<uint8_t> read_status_register_2() const noexcept {
         return read_one_byte_register(opcode::read_status_register_2);
     }
+    /// \brief Read Status Register 3 (opcode 0x15).
+    /// \return SR3 on success; \c std::nullopt on transport error.
     std::optional<uint8_t> read_status_register_3() const noexcept {
         return read_one_byte_register(opcode::read_status_register_3);
     }
@@ -482,16 +523,26 @@ public:
     ///                      power-cycle; when \c false (default), commit
     ///                      to the non-volatile OTP.
     ///
+    /// \return \c true on success; \c false on error (see \ref last_error()).
+    ///
     bool write_status_register_1(uint8_t value,
                                  bool volatile_only = false) noexcept {
         return write_status_register(opcode::write_status_register_1, value,
                                      volatile_only);
     }
+    /// \brief Write Status Register 2.
+    /// \param value         New SR2 value.
+    /// \param volatile_only Use the volatile-write opcode when \c true.
+    /// \return \c true on success; \c false on error (see \ref last_error()).
     bool write_status_register_2(uint8_t value,
                                  bool volatile_only = false) noexcept {
         return write_status_register(opcode::write_status_register_2, value,
                                      volatile_only);
     }
+    /// \brief Write Status Register 3.
+    /// \param value         New SR3 value.
+    /// \param volatile_only Use the volatile-write opcode when \c true.
+    /// \return \c true on success; \c false on error (see \ref last_error()).
     bool write_status_register_3(uint8_t value,
                                  bool volatile_only = false) noexcept {
         return write_status_register(opcode::write_status_register_3, value,
@@ -501,6 +552,9 @@ public:
     ///
     /// \brief Read the BUSY flag (SR1 bit 0).
     ///
+    /// \return \c true if busy, \c false if ready; \c std::nullopt on transport
+    ///         error.
+    ///
     std::optional<bool> is_busy() const noexcept {
         auto sr1 = read_status_register_1();
         if (!sr1) return std::nullopt;
@@ -509,6 +563,8 @@ public:
 
     ///
     /// \brief Read the WEL (Write Enable Latch) flag (SR1 bit 1).
+    ///
+    /// \return \c true if the latch is set; \c std::nullopt on transport error.
     ///
     std::optional<bool> is_write_enabled() const noexcept {
         auto sr1 = read_status_register_1();
@@ -523,6 +579,10 @@ public:
     ///          operations (chip erase ~25 s typical, 200 s max) need
     ///          generous timeouts; per-sector erase typically completes
     ///          in 30–400 ms.
+    ///
+    /// \param timeout_ms       Maximum time to poll before giving up.
+    /// \param poll_interval_ms Delay between SR1 polls.
+    /// \return \c true once BUSY clears; \c false on timeout or transport error.
     ///
     bool wait_until_ready(uint32_t timeout_ms = 30000,
                           uint32_t poll_interval_ms = 1) noexcept {
@@ -558,6 +618,11 @@ public:
     ///          poll — no extra bus traffic, no added latency in the normal case
     ///          (WEL and BUSY both clear at completion).
     ///
+    /// \param timeout_ms       Maximum time to poll before giving up.
+    /// \param poll_interval_ms Delay between SR1 polls.
+    /// \return \c true once BUSY \b and WEL clear; \c false on timeout or
+    ///         transport error.
+    ///
     bool wait_until_write_complete(uint32_t timeout_ms = 30000,
                                    uint32_t poll_interval_ms = 1) noexcept {
         auto guard = lock();
@@ -583,6 +648,9 @@ public:
     // Write control
     // =====================================================================
 
+    /// \brief Set the Write Enable Latch (opcode 0x06) and confirm it latched.
+    /// \return \c true if WEL is set afterwards; \c false on error (see
+    ///         \ref last_error()).
     bool write_enable() noexcept {
         auto guard = lock();
         if (!send_command(opcode::write_enable)) return false;
@@ -595,10 +663,14 @@ public:
         return true;
     }
 
+    /// \brief Enable a volatile status-register write (opcode 0x50).
+    /// \return \c true on success; \c false on transport error.
     bool write_enable_volatile_sr() noexcept {
         return send_command(opcode::write_enable_volatile_sr);
     }
 
+    /// \brief Clear the Write Enable Latch (opcode 0x04).
+    /// \return \c true on success; \c false on transport error.
     bool write_disable() noexcept {
         return send_command(opcode::write_disable);
     }
@@ -634,6 +706,10 @@ public:
     ///          is sent after the address. At higher SPI clocks, this
     ///          opcode is required (0x03 is rated to ~50 MHz; 0x0B works
     ///          up to the chip's full clock rating).
+    ///
+    /// \param address Starting byte address (0..16 MiB - 1).
+    /// \param rx      Caller's receive buffer; \c rx.size() bytes are read.
+    /// \return \c true on success; \c false on error (see \ref last_error()).
     ///
     bool fast_read(uint32_t address,
                    sentinel::span<uint8_t> rx) noexcept {
@@ -698,14 +774,23 @@ public:
     // Erase
     // =====================================================================
 
+    /// \brief Erase the 4 KiB sector containing \p address (opcode 0x20).
+    /// \param address Any byte address within the target sector.
+    /// \return \c true on success; \c false on error (see \ref last_error()).
     bool sector_erase_4kb(uint32_t address) noexcept {
         return erase_with_address(opcode::sector_erase_4kb, address,
                                   /*timeout_ms=*/2000);
     }
+    /// \brief Erase the 32 KiB block containing \p address (opcode 0x52).
+    /// \param address Any byte address within the target block.
+    /// \return \c true on success; \c false on error (see \ref last_error()).
     bool block_erase_32kb(uint32_t address) noexcept {
         return erase_with_address(opcode::block_erase_32kb, address,
                                   /*timeout_ms=*/4000);
     }
+    /// \brief Erase the 64 KiB block containing \p address (opcode 0xD8).
+    /// \param address Any byte address within the target block.
+    /// \return \c true on success; \c false on error (see \ref last_error()).
     bool block_erase_64kb(uint32_t address) noexcept {
         return erase_with_address(opcode::block_erase_64kb, address,
                                   /*timeout_ms=*/4000);
@@ -718,6 +803,8 @@ public:
     ///          timeout here is 250 s so a worst-case device on a slow
     ///          bus does not spuriously time out.
     ///
+    /// \return \c true on success; \c false on error (see \ref last_error()).
+    ///
     bool chip_erase() noexcept {
         auto guard = lock();
         if (!write_enable()) return false;
@@ -729,9 +816,13 @@ public:
     // Suspend / Resume
     // =====================================================================
 
+    /// \brief Suspend an in-progress erase/program (opcode 0x75).
+    /// \return \c true on success; \c false on transport error.
     bool erase_program_suspend() noexcept {
         return send_command(opcode::erase_program_suspend);
     }
+    /// \brief Resume a suspended erase/program (opcode 0x7A).
+    /// \return \c true on success; \c false on transport error.
     bool erase_program_resume() noexcept {
         return send_command(opcode::erase_program_resume);
     }
@@ -748,6 +839,8 @@ public:
     ///          via \ref release_power_down or
     ///          \ref release_power_down_device_id.
     ///
+    /// \return \c true on success; \c false on transport error.
+    ///
     bool power_down() noexcept {
         return send_command(opcode::power_down);
     }
@@ -762,6 +855,8 @@ public:
     ///          \c DEVICE_ID payload should use
     ///          \ref release_power_down_device_id instead.
     ///
+    /// \return \c true on success; \c false on transport error.
+    ///
     bool release_power_down() noexcept {
         return send_command(opcode::release_power_down);
     }
@@ -774,6 +869,8 @@ public:
     ///          0x66 + 0x99 sequence to reset. Either opcode alone is
     ///          ignored. After reset, callers should wait ~30 µs before
     ///          issuing the next command.
+    ///
+    /// \return \c true if both opcodes were sent; \c false on transport error.
     ///
     bool software_reset() noexcept {
         auto guard = lock();
@@ -793,6 +890,7 @@ public:
     /// \param index Security register index, 1..3 (matches datasheet
     ///              numbering; mapped internally to address bytes
     ///              0x0010xx / 0x0020xx / 0x0030xx).
+    /// \return \c true on success; \c false on error (see \ref last_error()).
     ///
     bool erase_security_register(uint8_t index) noexcept {
         auto guard = lock();
@@ -812,6 +910,11 @@ public:
 
     ///
     /// \brief Program one security register (opcode 0x42).
+    ///
+    /// \param index  Security register index, 1..3.
+    /// \param offset Byte offset within the 256 B register.
+    /// \param tx     Data to program (1..256 bytes, must fit from \p offset).
+    /// \return \c true on success; \c false on error (see \ref last_error()).
     ///
     bool program_security_register(uint8_t index, uint8_t offset,
                                     sentinel::span<const uint8_t> tx) noexcept {
@@ -851,6 +954,11 @@ public:
     ///
     /// \brief Read one security register (opcode 0x48).
     ///
+    /// \param index  Security register index, 1..3.
+    /// \param offset Byte offset within the 256 B register.
+    /// \param rx     Destination buffer; \c rx.size() bytes read from \p offset.
+    /// \return \c true on success; \c false on error (see \ref last_error()).
+    ///
     bool read_security_register(uint8_t index, uint8_t offset,
                                  sentinel::span<uint8_t> rx) noexcept {
         if (index < 1 || index > SECURITY_REGISTER_COUNT) {
@@ -880,6 +988,10 @@ public:
     ///          256 bytes; the typical caller starts at 0 and reads the
     ///          header to discover everything else.
     ///
+    /// \param address Starting byte offset within the 256 B SFDP space.
+    /// \param rx      Destination buffer; \c rx.size() bytes are read.
+    /// \return \c true on success; \c false on error (see \ref last_error()).
+    ///
     bool read_sfdp(uint32_t address,
                    sentinel::span<uint8_t> rx) noexcept {
         if (rx.empty()) return true;
@@ -897,6 +1009,9 @@ public:
 
     ///
     /// \brief Send a single-byte command with no address or payload.
+    ///
+    /// \param cmd Opcode to send.
+    /// \return \c true on success; \c false on transport error.
     ///
     bool send_command(opcode cmd) noexcept {
         auto tx = std::array<uint8_t, 1>{static_cast<uint8_t>(cmd)};
@@ -918,6 +1033,8 @@ private:
     ///
     class scoped_device_lock {
     public:
+        /// \brief Take \p mutex (recursively) for the guard's lifetime.
+        /// \param mutex Device mutex, or \c nullptr for a no-op guard.
         explicit scoped_device_lock(SemaphoreHandle_t mutex) noexcept
             : m_mutex(mutex) {
             if (m_mutex != nullptr) {
@@ -933,11 +1050,12 @@ private:
         scoped_device_lock &operator=(const scoped_device_lock &) = delete;
 
     private:
-        SemaphoreHandle_t m_mutex;
+        SemaphoreHandle_t m_mutex; ///< Held device mutex, or \c nullptr.
     };
 
     /// Acquire the device lock for the current scope (guaranteed copy elision
     /// lets callers write \c auto guard = lock();).
+    /// \return A RAII \ref scoped_device_lock for the current scope.
     scoped_device_lock lock() const noexcept {
         return scoped_device_lock(m_device_mutex);
     }
@@ -948,6 +1066,10 @@ private:
 
     ///
     /// \brief Send opcode + 3-byte address (no data phase).
+    ///
+    /// \param cmd     Opcode to send.
+    /// \param address 24-bit address transmitted MSB-first.
+    /// \return \c true on success; \c false on transport error.
     ///
     bool send_command_with_address(opcode cmd, uint32_t address) noexcept {
         auto tx = std::array<uint8_t, 4>{
@@ -962,6 +1084,9 @@ private:
     ///
     /// \brief Read a single byte from a register command (opcode + 1 rx).
     ///
+    /// \param cmd Register-read opcode.
+    /// \return The register byte on success; \c std::nullopt on transport error.
+    ///
     std::optional<uint8_t>
     read_one_byte_register(opcode cmd) const noexcept {
         auto tx = std::array<uint8_t, 1>{static_cast<uint8_t>(cmd)};
@@ -975,6 +1100,11 @@ private:
     ///
     /// \brief Common implementation behind the three write-status-reg
     ///        members.
+    ///
+    /// \param cmd           Write-status-register opcode (0x01 / 0x31 / 0x11).
+    /// \param value         New register value.
+    /// \param volatile_only Use the volatile write-enable when \c true.
+    /// \return \c true on success; \c false on error (see \ref last_error()).
     ///
     bool write_status_register(opcode cmd, uint8_t value,
                                bool volatile_only) noexcept {
@@ -998,6 +1128,11 @@ private:
     /// \brief Common erase-command implementation: write-enable, send
     ///        opcode + address, wait for completion.
     ///
+    /// \param cmd        Erase opcode (sector / 32k / 64k block).
+    /// \param address    Any byte address within the target erase unit.
+    /// \param timeout_ms Completion-poll budget for this erase size.
+    /// \return \c true on success; \c false on error (see \ref last_error()).
+    ///
     bool erase_with_address(opcode cmd, uint32_t address,
                             uint32_t timeout_ms) noexcept {
         auto guard = lock();
@@ -1020,6 +1155,12 @@ private:
     ///          enormous scratch buffer for large reads while still
     ///          being correct (every chunk is one CS-asserted window
     ///          from the flash's perspective).
+    ///
+    /// \param cmd         Read opcode (0x03 / 0x0B / security / SFDP).
+    /// \param dummy_bytes Dummy bytes clocked after the address (0 or 1).
+    /// \param address     Starting byte address.
+    /// \param rx          Destination buffer; \c rx.size() bytes are read.
+    /// \return \c true on success; \c false on error (see \ref last_error()).
     ///
     bool read_chunked(opcode cmd, uint8_t dummy_bytes, uint32_t address,
                       sentinel::span<uint8_t> rx) noexcept {
@@ -1075,6 +1216,12 @@ private:
     ///          \c true on transport success, \c false otherwise (after
     ///          updating \c m_last_error).
     ///
+    /// \param tx      Bytes to transmit (may be \c nullptr if \p tx_size is 0).
+    /// \param tx_size Number of bytes to transmit.
+    /// \param rx      Receive buffer (\c nullptr for a write-only transaction).
+    /// \param rx_size Number of bytes to receive (0 for write-only).
+    /// \return \c true on transport success; \c false otherwise.
+    ///
     bool transact(const uint8_t *tx, size_t tx_size,
                   uint8_t *rx, size_t rx_size) const noexcept {
         auto guard = lock();
@@ -1102,6 +1249,10 @@ private:
     ///          \c 0x001000 (reg 1), \c 0x002000 (reg 2),
     ///          \c 0x003000 (reg 3), with the low 8 bits being the
     ///          byte offset within the 256-byte register.
+    ///
+    /// \param index  Security register index, 1..3.
+    /// \param offset Byte offset within the register (low 8 bits of address).
+    /// \return The composed 24-bit security-register address.
     ///
     static constexpr uint32_t
     security_register_address(uint8_t index, uint8_t offset) noexcept {
