@@ -2,7 +2,8 @@
 /// \file    sentinel_test_device_snapshot.cpp
 /// \brief   device_snapshot test implementations (#36)
 ///
-/// \details Implements the tests declared in \c sentinel_test_device_snapshot.hpp.
+/// \details Implements the tests declared in \c
+/// sentinel_test_device_snapshot.hpp.
 ///          All tests are pure and off-bench: they build a snapshot in RAM,
 ///          serialize it through a raw byte buffer, and assert on the bytes.
 ///          They mirror the harness style of the POST / event-log suites
@@ -85,9 +86,9 @@ bool body_size_invariant(const char **why) {
 bool body_byte_layout(const char **why) {
     auto s = device_snapshot{};
     std::memset(&s, 0, sizeof(s));
-    s.unix_timestamp = 0x11223344u;   // offset 0, little-endian
-    s.snapshot_version = 0x55u;       // offset 4
-    s.temperature_001c = 0x0102;      // offset 16, little-endian
+    s.unix_timestamp = 0x11223344u;           // offset 0, little-endian
+    s.snapshot_version = 0x55u;               // offset 4
+    s.temperature_001c = 0x0102;              // offset 16, little-endian
     s.trailer_magic = SNAPSHOT_TRAILER_MAGIC; // offset 78 (0xA5C3)
 
     uint8_t buf[sizeof(device_snapshot)];
@@ -167,8 +168,8 @@ bool body_round_trip(const char **why) {
 ///         version.
 ///
 bool body_forward_compat_probe(const char **why) {
-    // A snapshot from a *newer* firmware (unknown version) must still expose its
-    // fixed-offset header fields to an older decoder.
+    // A snapshot from a *newer* firmware (unknown version) must still expose
+    // its fixed-offset header fields to an older decoder.
     auto s = device_snapshot{};
     std::memset(&s, 0, sizeof(s));
     s.unix_timestamp = 1700000000u;
@@ -229,7 +230,7 @@ bool body_trailer_magic(const char **why) {
 ///
 bool run_one(const char *name, bool (*body)(const char **)) noexcept {
     const char *why = "assertion";
-    const auto  ok  = body(&why);
+    const auto ok = body(&why);
     report(name, ok, why);
     return ok;
 }

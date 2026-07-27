@@ -56,7 +56,7 @@ BaseType_t i2c_bus::task_create(UBaseType_t priority, uint16_t stack_words,
     if (rc != pdPASS) {
         vQueueDelete(m_request_queue);
         m_request_queue = nullptr;
-        m_task_handle   = nullptr;
+        m_task_handle = nullptr;
         return rc;
     }
 
@@ -141,7 +141,7 @@ void i2c_bus::task_trampoline(void *arg) {
 
 i2c_response i2c_bus::process(const i2c_request &request) noexcept {
     auto response = i2c_response{};
-    response.success   = false;
+    response.success = false;
     response.cy_status = CY_RSLT_TYPE_ERROR;
 
     auto const has_tx = !request.tx.empty();
@@ -149,7 +149,7 @@ i2c_response i2c_bus::process(const i2c_request &request) noexcept {
 
     // No-op request: nothing to send, nothing to receive.
     if (!has_tx && !has_rx) {
-        response.success   = true;
+        response.success = true;
         response.cy_status = CY_RSLT_SUCCESS;
         return response;
     }
@@ -163,28 +163,28 @@ i2c_response i2c_bus::process(const i2c_request &request) noexcept {
             // is \c true; for the repeated-start pattern, pass \c false
             // on the write and let the read close the transaction.
             status = cyhal_i2c_master_write(
-                m_i2c_object, request.target_address,
-                request.tx.data(), request.tx.size(),
-                request.timeout_ms_per_phase, /*send_stop=*/false);
+                m_i2c_object, request.target_address, request.tx.data(),
+                request.tx.size(), request.timeout_ms_per_phase,
+                /*send_stop=*/false);
 
             if (status == CY_RSLT_SUCCESS) {
                 status = cyhal_i2c_master_read(
-                    m_i2c_object, request.target_address,
-                    request.rx.data(), request.rx.size(),
-                    request.timeout_ms_per_phase, /*send_stop=*/true);
+                    m_i2c_object, request.target_address, request.rx.data(),
+                    request.rx.size(), request.timeout_ms_per_phase,
+                    /*send_stop=*/true);
             }
         } else if (has_tx) {
             // Write-only.
             status = cyhal_i2c_master_write(
-                m_i2c_object, request.target_address,
-                request.tx.data(), request.tx.size(),
-                request.timeout_ms_per_phase, /*send_stop=*/true);
+                m_i2c_object, request.target_address, request.tx.data(),
+                request.tx.size(), request.timeout_ms_per_phase,
+                /*send_stop=*/true);
         } else /* has_rx */ {
             // Read-only.
-            status = cyhal_i2c_master_read(
-                m_i2c_object, request.target_address,
-                request.rx.data(), request.rx.size(),
-                request.timeout_ms_per_phase, /*send_stop=*/true);
+            status = cyhal_i2c_master_read(m_i2c_object, request.target_address,
+                                           request.rx.data(), request.rx.size(),
+                                           request.timeout_ms_per_phase,
+                                           /*send_stop=*/true);
         }
 
         response.cy_status = status;

@@ -12,7 +12,8 @@
 ///
 /// \author  galudino
 /// \date    2021-2026
-/// \version 1.1 - Added Bosch Sensortec API callback wrappers (bosch_read/write/delay)
+/// \version 1.1 - Added Bosch Sensortec API callback wrappers
+/// (bosch_read/write/delay)
 ///
 
 #ifndef SENTINEL_CYHAL_SPI_TRANSPORT_HPP
@@ -33,8 +34,8 @@ extern "C" {
 #include "sentinel_byte_transport.hpp"
 #include "sentinel_utilities.hpp"
 
-#include <array>
 #include <algorithm>
+#include <array>
 
 namespace sentinel {
 

@@ -35,10 +35,11 @@ constexpr uint32_t MIN_PERIOD_MS = 250;
 /// \brief How often the comparison line is logged, in sample cycles.
 ///
 /// \details Matches the bme280_service / rtc_service convention: the GATT
-///          publish + notify run every cycle regardless; this only throttles the
-///          serial/BLE log. The testbench logs every cycle so all three sensor
-///          services appear together on the monitor; the application logs once
-///          per ~minute (30 cycles at the 2 s default) to keep the streams quiet.
+///          publish + notify run every cycle regardless; this only throttles
+///          the serial/BLE log. The testbench logs every cycle so all three
+///          sensor services appear together on the monitor; the application
+///          logs once per ~minute (30 cycles at the 2 s default) to keep the
+///          streams quiet.
 ///
 #if defined(SENTINEL_TESTBENCH)
 constexpr uint32_t LOG_EVERY_N = 1;
@@ -91,9 +92,9 @@ void cpu_die_temp_service::task_trampoline(void *task_parameter) {
 void cpu_die_temp_service::run() {
     auto &die = sentinel::drivers::psoc6_die_temperature::instance();
 
-    // Idempotent: the app orchestrator (and the testbench die-temp suite) already
-    // initialize the sensor, but self-initializing here keeps the service correct
-    // regardless of who started it first.
+    // Idempotent: the app orchestrator (and the testbench die-temp suite)
+    // already initialize the sensor, but self-initializing here keeps the
+    // service correct regardless of who started it first.
     if (!die.initialize()) {
         loge("cpu_die_temp: die-temperature sensor init failed");
     }

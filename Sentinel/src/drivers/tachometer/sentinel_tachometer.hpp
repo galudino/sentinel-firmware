@@ -18,8 +18,8 @@
 /// \par Example
 /// \code
 /// // Using CRTP for zero-overhead edge handling
-/// class my_tach_handler : public sentinel::tach_callback_crtp<my_tach_handler> {
-/// public:
+/// class my_tach_handler : public sentinel::tach_callback_crtp<my_tach_handler>
+/// { public:
 ///     void handle_edge(uint32_t tick) {
 ///         // Process the edge event with timestamp
 ///         last_tick_ = tick;

@@ -8,7 +8,8 @@
 ///          \c sentinel::telemetry::device_snapshot; it
 ///          writes the 80-byte record to the Current Device Snapshot
 ///          characteristic and notifies a subscribed central. The Snapshot
-///          Notify Enable characteristic drives the task's \c start() / \c stop().
+///          Notify Enable characteristic drives the task's \c start() / \c
+///          stop().
 ///          \c inline + \c noexcept over the \c extern GATT-DB globals.
 ///
 /// \author  galudino
@@ -61,7 +62,8 @@ inline bool enable_flag() noexcept {
 ///
 /// \param snap Snapshot record produced by the snapshot stream task.
 ///
-inline void notify_sink(const sentinel::telemetry::device_snapshot &snap) noexcept {
+inline void
+notify_sink(const sentinel::telemetry::device_snapshot &snap) noexcept {
     ble_gatt_db_set_value(
         HDLC_SNAPSHOT_STREAM_CURRENT_DEVICE_SNAPSHOT_VALUE,
         reinterpret_cast<uint8_t *>(

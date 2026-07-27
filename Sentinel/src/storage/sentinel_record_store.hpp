@@ -136,18 +136,19 @@ public:
     // Types
     // =====================================================================
 
-    /// Backing \ref sentinel::w25q128 driver type for this store's \c Transport.
+    /// Backing \ref sentinel::w25q128 driver type for this store's \c
+    /// Transport.
     using flash_type = sentinel::w25q128<Transport>;
 
     ///
     /// \brief Error codes for the most recent operation (see \ref last_error).
     ///
     enum class err : int8_t {
-        ok              =  0,
-        flash_failure   = -1, ///< An underlying W25Q128 operation failed.
+        ok = 0,
+        flash_failure = -1,    ///< An underlying W25Q128 operation failed.
         invalid_argument = -2, ///< Bad region geometry or out-of-range index.
-        not_initialized = -3, ///< Operation issued before \ref initialize().
-        corrupt_record  = -4, ///< A slot expected valid had a bad status byte.
+        not_initialized = -3,  ///< Operation issued before \ref initialize().
+        corrupt_record = -4,   ///< A slot expected valid had a bad status byte.
     };
 
     // =====================================================================
@@ -163,9 +164,9 @@ public:
     /// Per-slot header: status(1) + reserved(3) + sequence(4).
     static constexpr uint32_t HEADER_SIZE = 8u;
 
-    static constexpr uint32_t OFFSET_STATUS   = 0u; ///< Status byte offset.
+    static constexpr uint32_t OFFSET_STATUS = 0u;   ///< Status byte offset.
     static constexpr uint32_t OFFSET_SEQUENCE = 4u; ///< Sequence field offset.
-    static constexpr uint32_t OFFSET_PAYLOAD  = 8u; ///< Payload field offset.
+    static constexpr uint32_t OFFSET_PAYLOAD = 8u;  ///< Payload field offset.
 
     /// Size of a single record slot on flash (power-of-two padded).
     static constexpr uint32_t SLOT_SIZE =
@@ -179,8 +180,8 @@ public:
 
     // Status byte states. Flash erases to 0xFF, and NOR programming can only
     // clear bits, so EMPTY (all ones) -> VALID is a legal transition.
-    static constexpr uint8_t STATUS_EMPTY   = 0xFFu; ///< Slot never written.
-    static constexpr uint8_t STATUS_VALID   = 0xA5u; ///< Slot holds a valid
+    static constexpr uint8_t STATUS_EMPTY = 0xFFu;   ///< Slot never written.
+    static constexpr uint8_t STATUS_VALID = 0xA5u;   ///< Slot holds a valid
                                                      ///< record.
     static constexpr uint8_t STATUS_INVALID = 0x5Au; ///< Reserved for future
                                                      ///< logical delete.
@@ -205,15 +206,14 @@ public:
     ///
     record_store(flash_type &flash, uint32_t region_offset_bytes,
                  uint32_t region_size_bytes) noexcept
-        : m_flash(flash),
-          m_region_offset(region_offset_bytes),
+        : m_flash(flash), m_region_offset(region_offset_bytes),
           m_sector_count(region_size_bytes / SECTOR_SIZE),
           m_capacity(m_sector_count * RECORDS_PER_SECTOR) {}
 
-    record_store(const record_store &)            = delete;
+    record_store(const record_store &) = delete;
     record_store &operator=(const record_store &) = delete;
     /// \brief Move-construct from another instance (defaulted).
-    record_store(record_store &&) noexcept        = default;
+    record_store(record_store &&) noexcept = default;
     /// \brief Move-assign from another instance (defaulted).
     /// \return Reference to this instance.
     record_store &operator=(record_store &&) noexcept = default;
@@ -298,10 +298,10 @@ public:
                 return false;
             }
             if (blank) {
-                m_tail        = 0u;
-                m_head        = 0u;
+                m_tail = 0u;
+                m_head = 0u;
                 m_initialized = true;
-                m_last_error  = err::ok;
+                m_last_error = err::ok;
                 return true;
             }
         }
@@ -320,10 +320,10 @@ public:
                 return false;
             }
         }
-        m_head        = 0u;
-        m_tail        = 0u;
+        m_head = 0u;
+        m_tail = 0u;
         m_initialized = true;
-        m_last_error  = err::ok;
+        m_last_error = err::ok;
         return true;
     }
 
@@ -504,8 +504,8 @@ private:
     ///
     bool initialize_full_scan() noexcept {
         auto have_any = false;
-        auto min_seq  = uint32_t{0};
-        auto max_seq  = uint32_t{0};
+        auto min_seq = uint32_t{0};
+        auto max_seq = uint32_t{0};
 
         for (auto slot = uint32_t{0}; slot < m_capacity; slot++) {
             auto header = std::array<uint8_t, HEADER_SIZE>{};
@@ -519,8 +519,8 @@ private:
 
             auto seq = load_sequence(header.data());
             if (!have_any) {
-                min_seq  = seq;
-                max_seq  = seq;
+                min_seq = seq;
+                max_seq = seq;
                 have_any = true;
             } else {
                 if (seq < min_seq) {
@@ -541,7 +541,7 @@ private:
         }
 
         m_initialized = true;
-        m_last_error  = err::ok;
+        m_last_error = err::ok;
         return true;
     }
 
@@ -554,8 +554,8 @@ private:
     ///          \c [head,capacity) are \c STATUS_EMPTY — a single monotonic
     ///          transition. Probes only the 1-byte status field per step, so
     ///          recovery is O(log capacity) reads. A region filled exactly to
-    ///          \c capacity but not yet wrapped has no empty slot, so the search
-    ///          yields \c head == \c capacity.
+    ///          \c capacity but not yet wrapped has no empty slot, so the
+    ///          search yields \c head == \c capacity.
     ///
     /// \return \c true on success; \c false on a transport failure.
     ///
@@ -575,10 +575,10 @@ private:
             }
         }
 
-        m_tail        = 0u;
-        m_head        = lo;
+        m_tail = 0u;
+        m_head = lo;
         m_initialized = true;
-        m_last_error  = err::ok;
+        m_last_error = err::ok;
         return true;
     }
 
@@ -636,9 +636,9 @@ private:
         }
 
         auto status = std::array<uint8_t, 1>{};
-        if (!m_flash.read_data(slot_address(slot),
-                               sentinel::make_span(status.data(),
-                                                   status.size()))) {
+        if (!m_flash.read_data(
+                slot_address(slot),
+                sentinel::make_span(status.data(), status.size()))) {
             m_last_error = err::flash_failure;
             return false;
         }
@@ -659,7 +659,7 @@ private:
         // also prevents unsigned underflow of (head - capacity).
         if (m_head >= m_capacity) {
             const auto recycled_oldest = m_head - m_capacity;
-            const auto recycled_end    = recycled_oldest + RECORDS_PER_SECTOR;
+            const auto recycled_end = recycled_oldest + RECORDS_PER_SECTOR;
             if (m_tail < recycled_end) {
                 m_tail = recycled_end;
             }
@@ -705,16 +705,16 @@ private:
     // State
     // =====================================================================
 
-    flash_type    &m_flash;                       ///< Non-owning backing flash.
-    uint32_t       m_region_offset;               ///< Region base byte offset.
-    uint32_t       m_region_size;                 ///< Region size in bytes.
-    uint32_t       m_sector_count;                ///< Sectors in the region.
-    uint32_t       m_capacity;                    ///< Slot count in the region.
+    flash_type &m_flash;      ///< Non-owning backing flash.
+    uint32_t m_region_offset; ///< Region base byte offset.
+    uint32_t m_region_size;   ///< Region size in bytes.
+    uint32_t m_sector_count;  ///< Sectors in the region.
+    uint32_t m_capacity;      ///< Slot count in the region.
 
-    uint32_t       m_head{0};                     ///< Next write index.
-    uint32_t       m_tail{0};                     ///< Oldest valid index.
-    bool           m_initialized{false};    ///< Set once \ref initialize() runs.
-    mutable err    m_last_error{err::ok};    ///< Cached most-recent error.
+    uint32_t m_head{0};                ///< Next write index.
+    uint32_t m_tail{0};                ///< Oldest valid index.
+    bool m_initialized{false};         ///< Set once \ref initialize() runs.
+    mutable err m_last_error{err::ok}; ///< Cached most-recent error.
 };
 
 #endif /* SENTINEL_RECORD_STORE_HPP */

@@ -9,10 +9,10 @@
 ///              ~100 ms while a capture session is active;
 ///            - the periodic snapshot persistence task (#38, lane 1) — written
 ///              to flash every ~5 min for historical retrieval.
-///          Both call \ref sentinel::telemetry::device_snapshot::populate, which
-///          aggregates from already-
-///          cached subsystem state (no fresh bus I/O on the populate path), so
-///          lane 2 can stream at 100 ms with zero I²C/SPI contention.
+///          Both call \ref sentinel::telemetry::device_snapshot::populate,
+///          which aggregates from already- cached subsystem state (no fresh bus
+///          I/O on the populate path), so lane 2 can stream at 100 ms with zero
+///          I²C/SPI contention.
 ///
 ///          \b Wire \b contract. The layout is `__attribute__((packed))` so the
 ///          on-wire (BLE) and on-flash representation is byte-exact regardless

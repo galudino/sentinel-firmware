@@ -2,23 +2,26 @@
 /// \file    sentinel_psoc6_die_temperature.hpp
 /// \brief   PSoC 6 on-die temperature via the SAR ADC DieTemp sensor
 ///
-/// \details Reads the CY8C6xxx (PSoC 63 / CYBLE-416045) internal die temperature
+/// \details Reads the CY8C6xxx (PSoC 63 / CYBLE-416045) internal die
+/// temperature
 ///          through the SAR ADC's DieTemp sensor channel and converts the raw
 ///          counts to °C using the per-part SFLASH calibration
 ///          (\c SFLASH->SAR_TEMP_MULTIPLIER / \c SAR_TEMP_OFFSET) with the
-///          canonical dual-slope algorithm (the DieTemp component / TRM Ch. 39).
+///          canonical dual-slope algorithm (the DieTemp component / TRM Ch.
+///          39).
 ///
 ///          Feeds \c device_snapshot::cpu_temperature_001c (#36/#6). A single
 ///          conversion (single-ended DieTemp channel, 1.2 V bandgap reference,
 ///          32× hardware averaging) takes on the order of tens of microseconds;
 ///          \ref sentinel::drivers::psoc6_die_temperature::refresh throttles to
 ///          ~1 Hz and serializes SAR access under a
-///          mutex, so the two snapshot producers (100 ms stream + 5 min persist)
-///          share the SAR safely without re-converting on every populate.
+///          mutex, so the two snapshot producers (100 ms stream + 5 min
+///          persist) share the SAR safely without re-converting on every
+///          populate.
 ///
-///          OO/class singleton (decision #16). Off-bench builds compile this but
-///          never touch the SAR — \c populate_snapshot only reads the cache,
-///          which is 0/invalid until
+///          OO/class singleton (decision #16). Off-bench builds compile this
+///          but never touch the SAR — \c populate_snapshot only reads the
+///          cache, which is 0/invalid until
 ///          \ref sentinel::drivers::psoc6_die_temperature::initialize runs on
 ///          real hardware.
 ///
@@ -65,11 +68,14 @@ public:
     ///
     /// \brief Bring up the AREF + SAR for die-temperature reads.
     ///
-    /// \details Enables the analog reference, assigns a SAR clock, and initializes
-    ///          the SAR with the DieTemp-sensor channel configuration. Idempotent.
-    ///          Call once post-scheduler (the boot orchestrator does).
+    /// \details Enables the analog reference, assigns a SAR clock, and
+    /// initializes
+    ///          the SAR with the DieTemp-sensor channel configuration.
+    ///          Idempotent. Call once post-scheduler (the boot orchestrator
+    ///          does).
     ///
-    /// \return \c true on success; \c false if the SAR/AREF could not be brought
+    /// \return \c true on success; \c false if the SAR/AREF could not be
+    /// brought
     ///         up (the driver then stays inert and \ref cached_centi_c reports
     ///         invalid).
     ///
@@ -79,8 +85,8 @@ public:
     /// \brief Take a fresh die-temperature reading into the cache (throttled).
     ///
     /// \details A no-op if not \ref initialize d or if called again within the
-    ///          ~1 s throttle window. Serializes SAR access under a mutex, so it
-    ///          is safe to call from either snapshot producer.
+    ///          ~1 s throttle window. Serializes SAR access under a mutex, so
+    ///          it is safe to call from either snapshot producer.
     ///
     void refresh() noexcept;
 
@@ -96,7 +102,8 @@ public:
 private:
     psoc6_die_temperature() = default;
 
-    /// \brief One synchronous SAR conversion → 0.01 °C (SAR access, no locking).
+    /// \brief One synchronous SAR conversion → 0.01 °C (SAR access, no
+    /// locking).
     /// \param[out] out_centi_c Receives the freshly converted temperature
     ///             (0.01 °C / LSB).
     /// \return \c true on a successful conversion; \c false otherwise (and
@@ -108,11 +115,11 @@ private:
     /// \return Temperature in 0.01 °C / LSB.
     static int16_t counts_to_centi_c(int16_t adc_counts) noexcept;
 
-    SemaphoreHandle_t m_mutex{nullptr};        ///< Serializes SAR access.
-    volatile int16_t  m_cached_centi_c{0};     ///< Last reading, 0.01 °C.
-    volatile bool     m_valid{false};          ///< A reading has been cached.
-    bool              m_initialized{false};    ///< SAR/AREF brought up.
-    uint32_t          m_last_refresh_tick{0};  ///< Throttle timestamp (ms).
+    SemaphoreHandle_t m_mutex{nullptr};   ///< Serializes SAR access.
+    volatile int16_t m_cached_centi_c{0}; ///< Last reading, 0.01 °C.
+    volatile bool m_valid{false};         ///< A reading has been cached.
+    bool m_initialized{false};            ///< SAR/AREF brought up.
+    uint32_t m_last_refresh_tick{0};      ///< Throttle timestamp (ms).
 };
 
 } // namespace sentinel::drivers

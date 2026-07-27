@@ -85,8 +85,8 @@ private:
     /// \return \c CY_RSLT_SUCCESS on success; a CYHAL error code otherwise.
     cy_rslt_t configure_timer() noexcept;
 
-    cyhal_timer_t m_timer{};       ///< HAL timer driving the update cadence.
-    TaskHandle_t  m_handle{nullptr}; ///< FreeRTOS task handle.
+    cyhal_timer_t m_timer{};        ///< HAL timer driving the update cadence.
+    TaskHandle_t m_handle{nullptr}; ///< FreeRTOS task handle.
 };
 
 } // namespace sentinel::task

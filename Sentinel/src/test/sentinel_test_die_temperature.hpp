@@ -4,8 +4,8 @@
 ///
 /// \details Run-to-completion suite (#48 shape) exercising
 ///          \ref sentinel::drivers::psoc6_die_temperature against the \b real
-///          SAR ADC on the CYBLE-416045 (decision #15 — the testbench tests real
-///          components on hardware). Validates bring-up, that a reading is
+///          SAR ADC on the CYBLE-416045 (decision #15 — the testbench tests
+///          real components on hardware). Validates bring-up, that a reading is
 ///          produced, that it lands in a plausible physical range, and that
 ///          successive readings are stable. Cross-sensor comparison (die vs
 ///          BME280 ambient vs DS3231) is exercised by the application's

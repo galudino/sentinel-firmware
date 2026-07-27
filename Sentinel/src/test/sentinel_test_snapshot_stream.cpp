@@ -49,11 +49,12 @@ using sentinel::task::snapshot_stream_task;
 using sentinel::telemetry::device_snapshot;
 using sentinel::telemetry::SNAPSHOT_TRAILER_MAGIC;
 
-// ---- File-static observers wired into the task as plain function pointers. ----
+// ---- File-static observers wired into the task as plain function pointers.
+// ----
 
-volatile uint32_t g_notify_count = 0;     ///< Total notify-sink invocations.
-volatile uint16_t g_last_magic   = 0;     ///< Trailer magic of the last snapshot.
-volatile bool     g_connected    = true;  ///< Simulated central-connected state.
+volatile uint32_t g_notify_count = 0; ///< Total notify-sink invocations.
+volatile uint16_t g_last_magic = 0;   ///< Trailer magic of the last snapshot.
+volatile bool g_connected = true;     ///< Simulated central-connected state.
 
 /// \brief Counting notify sink: records that a complete snapshot was produced.
 /// \param snap Snapshot delivered by the stream task; only \c trailer_magic
@@ -98,7 +99,7 @@ void delay_ms(uint32_t milliseconds) noexcept {
 
 sentinel::test::tally sentinel::test::snapshot_stream::run_all() noexcept {
     auto &task = snapshot_stream_task::instance();
-    auto  t    = sentinel::test::tally{};
+    auto t = sentinel::test::tally{};
 
     // Deterministic, BLE-independent connection state for the whole suite.
     g_connected = true;
@@ -114,8 +115,8 @@ sentinel::test::tally sentinel::test::snapshot_stream::run_all() noexcept {
         delay_ms(300);
         const auto fired = g_notify_count;
         t.record(report("idle_by_default", !streaming && fired == 0,
-                         streaming ? "streaming() true before start"
-                                   : "sink fired while idle"));
+                        streaming ? "streaming() true before start"
+                                  : "sink fired while idle"));
     }
 
     // ---- start_stop -------------------------------------------------------
@@ -129,7 +130,7 @@ sentinel::test::tally sentinel::test::snapshot_stream::run_all() noexcept {
     const auto fired_while_streaming = g_notify_count;
 
     task.stop();
-    task.stop(); // idempotent: second stop is a no-op
+    task.stop();   // idempotent: second stop is a no-op
     delay_ms(120); // let the in-flight cadence delay drain
     const auto streaming_after_stop = task.streaming();
     const auto count_at_stop = g_notify_count;
@@ -140,10 +141,11 @@ sentinel::test::tally sentinel::test::snapshot_stream::run_all() noexcept {
         const auto ok = streaming_after_start && fired_while_streaming > 0 &&
                         !streaming_after_stop &&
                         count_after_stop == count_at_stop;
-        const char *why = !streaming_after_start ? "streaming() false after start"
-                          : fired_while_streaming == 0 ? "no notifications while streaming"
-                          : streaming_after_stop ? "streaming() true after stop"
-                                                 : "notifications continued after stop";
+        const char *why =
+            !streaming_after_start       ? "streaming() false after start"
+            : fired_while_streaming == 0 ? "no notifications while streaming"
+            : streaming_after_stop       ? "streaming() true after stop"
+                                         : "notifications continued after stop";
         t.record(report("start_stop", ok, why));
     }
 
@@ -152,7 +154,7 @@ sentinel::test::tally sentinel::test::snapshot_stream::run_all() noexcept {
     // Allow a wide jitter band so the test is not flaky under load.
     task.set_period_ms(50);
     g_notify_count = 0;
-    g_last_magic   = 0;
+    g_last_magic = 0;
     task.start();
     delay_ms(525);
     const auto cadence_count = g_notify_count;
@@ -161,9 +163,9 @@ sentinel::test::tally sentinel::test::snapshot_stream::run_all() noexcept {
     {
         const auto ok = cadence_count >= 7 && cadence_count <= 14;
         t.record(report("cadence", ok,
-                         cadence_count < 7
-                             ? "too few notifications for the period"
-                             : "too many notifications for the period"));
+                        cadence_count < 7
+                            ? "too few notifications for the period"
+                            : "too many notifications for the period"));
     }
 
     // ---- populate_is_cache_backed ----------------------------------------
@@ -172,7 +174,7 @@ sentinel::test::tally sentinel::test::snapshot_stream::run_all() noexcept {
     {
         const auto ok = g_last_magic == SNAPSHOT_TRAILER_MAGIC;
         t.record(report("populate_is_cache_backed", ok,
-                         "streamed snapshot incomplete (trailer magic unset)"));
+                        "streamed snapshot incomplete (trailer magic unset)"));
     }
 
     // ---- disconnect_autostop ----------------------------------------------
@@ -191,11 +193,12 @@ sentinel::test::tally sentinel::test::snapshot_stream::run_all() noexcept {
     delay_ms(250);
     const auto count_after_drop = g_notify_count;
     {
-        const auto ok = !streaming_after_drop && count_after_drop == count_at_drop;
+        const auto ok =
+            !streaming_after_drop && count_after_drop == count_at_drop;
         t.record(report("disconnect_autostop", ok,
-                         streaming_after_drop
-                             ? "still streaming after disconnect"
-                             : "notifications continued after disconnect"));
+                        streaming_after_drop
+                            ? "still streaming after disconnect"
+                            : "notifications continued after disconnect"));
     }
 
     // ---- Restore: leave the singleton idle and un-instrumented. -----------

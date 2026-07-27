@@ -5,19 +5,20 @@
 /// \details Declares the BME280 sample service task. The task samples the
 ///          BME280 (#14) over the arbitrated I²C bus at a configurable cadence
 ///          (default 1 Hz), caches the most-recent compensated reading, and
-///          publishes it via \ref sentinel::task::bme280_service::latest for any
-///          consumer — the device
-///          snapshot \c populate() (#36), the live BLE BME280 characteristic
+///          publishes it via \ref sentinel::task::bme280_service::latest for
+///          any consumer — the device snapshot \c populate() (#36), the live
+///          BLE BME280 characteristic
 ///          (#6), and internal threshold logic.
 ///
 ///          This is the production replacement for the testbench's
 ///          \c continuous_read loop: instead of printing each sample to the
 ///          debug stream, it caches the value behind a mutex and, when a BLE
 ///          handler has subscribed, pushes each new sample to that handler's
-///          queue so the handler can issue a GATT notification. The task borrows
-///          the shared BME280 from \c sentinel::resource::context() (decision
-///          #13, #38) rather than constructing its own, so the factory-
-///          calibration read in the driver constructor happens exactly once.
+///          queue so the handler can issue a GATT notification. The task
+///          borrows the shared BME280 from \c sentinel::resource::context()
+///          (decision #13, #38) rather than constructing its own, so the
+///          factory- calibration read in the driver constructor happens exactly
+///          once.
 ///
 /// \author  galudino
 /// \date    2026-06-29
@@ -68,11 +69,14 @@ public:
     ///          prior good reading).
     ///
     struct sample {
-        uint32_t unix_timestamp{};       ///< Seconds since 1970 latched at sample time (0 if RTC has not yet ticked).
-        int16_t  temperature_centi_c{};  ///< Temperature in 0.01 °C (e.g. 2345 = 23.45 °C).
-        uint16_t humidity_centi_pct{};   ///< Relative humidity in 0.01 %RH.
-        uint32_t pressure_pa{};          ///< Barometric pressure in Pa.
-        bool     valid{false};           ///< \c true once at least one successful read has been cached.
+        uint32_t unix_timestamp{};     ///< Seconds since 1970 latched at sample
+                                       ///< time (0 if RTC has not yet ticked).
+        int16_t temperature_centi_c{}; ///< Temperature in 0.01 °C (e.g. 2345
+                                       ///< = 23.45 °C).
+        uint16_t humidity_centi_pct{}; ///< Relative humidity in 0.01 %RH.
+        uint32_t pressure_pa{};        ///< Barometric pressure in Pa.
+        bool valid{false}; ///< \c true once at least one successful read has
+                           ///< been cached.
     };
 
     ///
@@ -101,9 +105,9 @@ public:
     ///
     /// \details Safe to call from any *task* context (not from an ISR); the
     ///          copy is taken under a short mutex hold so readers never observe
-    ///          a torn multi-field update. Before the task has created its mutex
-    ///          (i.e. before \ref task_create), returns a default \ref sample
-    ///          with \c valid == false.
+    ///          a torn multi-field update. Before the task has created its
+    ///          mutex (i.e. before \ref task_create), returns a default \ref
+    ///          sample with \c valid == false.
     ///
     /// \return Copy of the most recently cached \ref sample.
     ///
@@ -166,11 +170,12 @@ private:
     ///
     void publish(const sample &s) noexcept;
 
-    sample            m_latest{};               ///< Cached most-recent sample.
-    SemaphoreHandle_t m_latest_mutex{nullptr};  ///< Guards m_latest's multi-field update.
-    QueueHandle_t     m_notify_queue{nullptr};  ///< Optional single subscriber.
-    volatile uint32_t m_period_ms{1000};        ///< Sampling cadence (ms).
-    TaskHandle_t      m_handle{nullptr};         ///< FreeRTOS task handle.
+    sample m_latest{}; ///< Cached most-recent sample.
+    SemaphoreHandle_t m_latest_mutex{
+        nullptr}; ///< Guards m_latest's multi-field update.
+    QueueHandle_t m_notify_queue{nullptr}; ///< Optional single subscriber.
+    volatile uint32_t m_period_ms{1000};   ///< Sampling cadence (ms).
+    TaskHandle_t m_handle{nullptr};        ///< FreeRTOS task handle.
 };
 
 } // namespace sentinel::task

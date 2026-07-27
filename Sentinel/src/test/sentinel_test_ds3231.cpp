@@ -669,7 +669,7 @@ bool fixture::alarm_round_trip() noexcept {
 
 sentinel::test::tally sentinel::test::ds3231::run_all() noexcept {
     auto fx = fixture{};
-    auto t  = sentinel::test::tally{};
+    auto t = sentinel::test::tally{};
 
     t.record(fx.presence_check());
     yield_for_debug_drain(200);
@@ -692,7 +692,8 @@ sentinel::test::tally sentinel::test::ds3231::run_all() noexcept {
     t.record(fx.alarm_round_trip());
     yield_for_debug_drain(200);
 
-    // Continuous time/temperature reads are owned by sentinel::task::rtc_service,
-    // which the orchestrator starts after this one-shot suite completes.
+    // Continuous time/temperature reads are owned by
+    // sentinel::task::rtc_service, which the orchestrator starts after this
+    // one-shot suite completes.
     return t;
 }

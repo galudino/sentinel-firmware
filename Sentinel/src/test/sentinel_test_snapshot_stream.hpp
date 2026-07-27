@@ -14,11 +14,16 @@
 ///          The task is created in the testbench's \c create_tasks(); this
 ///          driver attaches a counting sink and a controllable connection
 ///          predicate to that singleton and exercises:
-///            - \c idle_by_default      — created-but-not-started emits nothing;
-///            - \c start_stop           — start/stop toggle streaming, idempotent;
-///            - \c cadence              — sink fires at ~period_ms while streaming;
-///            - \c disconnect_autostop  — a simulated disconnect returns to idle;
-///            - \c populate_is_cache_backed — streamed snapshots are complete with
+///            - \c idle_by_default      — created-but-not-started emits
+///            nothing;
+///            - \c start_stop           — start/stop toggle streaming,
+///            idempotent;
+///            - \c cadence              — sink fires at ~period_ms while
+///            streaming;
+///            - \c disconnect_autostop  — a simulated disconnect returns to
+///            idle;
+///            - \c populate_is_cache_backed — streamed snapshots are complete
+///            with
 ///              no bus arbiter driving them (populate reads caches only).
 ///
 /// \author  galudino

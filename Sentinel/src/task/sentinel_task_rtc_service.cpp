@@ -159,8 +159,7 @@ void rtc_service::task_trampoline(void *task_parameter) {
 ///          \ref sentinel::task::rtc_service::sqw_event_isr for the
 ///          \c \\param documentation.
 ///
-void rtc_service::sqw_event_isr(void *callback_arg,
-                                cyhal_gpio_event_t event) {
+void rtc_service::sqw_event_isr(void *callback_arg, cyhal_gpio_event_t event) {
     sentinel::unused(event);
 
     auto *self = static_cast<rtc_service *>(callback_arg);
@@ -196,11 +195,11 @@ void rtc_service::configure_sqw_interrupt() noexcept {
 void rtc_service::run() {
     // Borrow the shared DS3231 from the application device context (decision
     // #13): one driver instance serves the RTC service, POST, and the device
-    // snapshot, rather than each task constructing its own. The context is built
-    // by the boot orchestrator (post-scheduler) before this task is started, so
-    // it is live by the time we reach here. Its transport still routes through
-    // sentinel::resource::cybsp_i2c_bus, so the per-second reads serialize
-    // cleanly with every other task on the shared I²C bus.
+    // snapshot, rather than each task constructing its own. The context is
+    // built by the boot orchestrator (post-scheduler) before this task is
+    // started, so it is live by the time we reach here. Its transport still
+    // routes through sentinel::resource::cybsp_i2c_bus, so the per-second reads
+    // serialize cleanly with every other task on the shared I²C bus.
     auto &rtc = sentinel::resource::context().rtc;
 
     logd("rtc_service: arming 1 Hz SQW (P6_3 falling-edge)");

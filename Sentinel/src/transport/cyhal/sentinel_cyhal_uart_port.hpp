@@ -2,7 +2,8 @@
 /// \file    sentinel_cyhal_uart_port.hpp
 /// \brief   CYHAL (Cypress HAL) UART transport implementation
 ///
-/// \details Implements the \ref sentinel::serial_port façade for PSoC 6 UART using
+/// \details Implements the \ref sentinel::serial_port façade for PSoC 6 UART
+/// using
 ///          CYHAL. Reception is interrupt-driven into a single-producer/single-
 ///          consumer ring buffer (ISR producer, foreground consumer).
 ///          Provides convenience helpers for non-blocking drains, “read exact”
@@ -386,11 +387,11 @@ private:
     // Note: m_rx is SPSC: ISR producer, foreground consumer.
     cyhal_uart_t *m_uart_object; ///< Non-owning CYHAL UART handle.
 
-    serial_config m_config{};        ///< Last-applied port configuration.
-    uint32_t m_actual_baud_rate{0};  ///< Baud rate actually achieved by HAL.
+    serial_config m_config{};       ///< Last-applied port configuration.
+    uint32_t m_actual_baud_rate{0}; ///< Baud rate actually achieved by HAL.
 
     sentinel::ring_buffer_<uint8_t, RXBufferCapacity> m_rx{}; ///< RX ring
-                                                               ///< (SPSC).
+                                                              ///< (SPSC).
     uint32_t m_rx_error_count{0}; ///< Count of RX error events since ctor.
 };
 

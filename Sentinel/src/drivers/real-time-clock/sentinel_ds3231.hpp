@@ -526,7 +526,7 @@ public:
     struct alarm1_setting {
         alarm1_match_mode match_mode =
             alarm1_match_mode::once_per_second; ///< Which fields participate
-                                                 ///< in the match.
+                                                ///< in the match.
         uint8_t second = 0;      ///< 0–59 (ignored for \c once_per_second).
         uint8_t minute = 0;      ///< 0–59.
         uint8_t hour = 0;        ///< 0–23 (24-hour clock).
@@ -541,7 +541,7 @@ public:
     struct alarm2_setting {
         alarm2_match_mode match_mode =
             alarm2_match_mode::once_per_minute; ///< Which fields participate
-                                                 ///< in the match.
+                                                ///< in the match.
         uint8_t minute = 0;      ///< 0–59 (ignored for \c once_per_minute).
         uint8_t hour = 0;        ///< 0–23 (24-hour clock).
         uint8_t day_or_date = 1; ///< Day-of-week (1–7) if the match mode is
@@ -1183,8 +1183,9 @@ public:
     ///
     std::optional<int8_t> aging_offset() const noexcept {
         auto v = read_register(register_address::aging_offset);
-        if (!v)
+        if (!v) {
             return std::nullopt;
+        }
         return static_cast<int8_t>(*v);
     }
 
@@ -1358,16 +1359,21 @@ private:
     static constexpr alarm1_match_mode
     alarm1_mode_from_flags(bool m1, bool m2, bool m3, bool m4,
                            bool day_not_date) noexcept {
-        if (m1 && m2 && m3 && m4)
+        if (m1 && m2 && m3 && m4) {
             return alarm1_match_mode::once_per_second;
-        if (!m1 && m2 && m3 && m4)
+        }
+        if (!m1 && m2 && m3 && m4) {
             return alarm1_match_mode::seconds;
-        if (!m1 && !m2 && m3 && m4)
+        }
+        if (!m1 && !m2 && m3 && m4) {
             return alarm1_match_mode::minutes_seconds;
-        if (!m1 && !m2 && !m3 && m4)
+        }
+        if (!m1 && !m2 && !m3 && m4) {
             return alarm1_match_mode::hours_minutes_seconds;
-        if (day_not_date)
+        }
+        if (day_not_date) {
             return alarm1_match_mode::day_of_week_hours_minutes_seconds;
+        }
         return alarm1_match_mode::date_hours_minutes_seconds;
     }
 
@@ -1380,14 +1386,18 @@ private:
     static constexpr alarm2_match_mode
     alarm2_mode_from_flags(bool m2, bool m3, bool m4,
                            bool day_not_date) noexcept {
-        if (m2 && m3 && m4)
+        if (m2 && m3 && m4) {
             return alarm2_match_mode::once_per_minute;
-        if (!m2 && m3 && m4)
+        }
+        if (!m2 && m3 && m4) {
             return alarm2_match_mode::minutes;
-        if (!m2 && !m3 && m4)
+        }
+        if (!m2 && !m3 && m4) {
             return alarm2_match_mode::hours_minutes;
-        if (day_not_date)
+        }
+        if (day_not_date) {
             return alarm2_match_mode::day_of_week_hours_minutes;
+        }
         return alarm2_match_mode::date_hours_minutes;
     }
 

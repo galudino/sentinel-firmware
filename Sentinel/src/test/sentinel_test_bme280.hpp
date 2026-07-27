@@ -48,8 +48,9 @@ namespace sentinel::test::bme280 {
 ///
 /// \details Executes each test in sequence — chip-ID read, soft reset,
 ///          settings round-trip, power-mode transitions — over a fixture-owned
-///          bus transport, and returns the pass/fail \ref sentinel::test::tally.
-///          Intended to be called by the testbench serial orchestrator (#48).
+///          bus transport, and returns the pass/fail \ref
+///          sentinel::test::tally. Intended to be called by the testbench
+///          serial orchestrator (#48).
 ///
 /// \return The suite's pass/fail tally.
 ///

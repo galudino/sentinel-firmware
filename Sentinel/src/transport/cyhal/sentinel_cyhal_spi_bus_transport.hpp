@@ -153,11 +153,11 @@ public:
     /// \return \c cy_rslt_t forwarded from the arbiter's response.
     ///
     cy_rslt_t write(const uint8_t *tx, size_t size) noexcept {
-        auto request           = sentinel::task::spi_request{};
-        request.ssel           = m_ssel;
-        request.tx             = sentinel::make_cspan(tx, size);
-        request.rx             = sentinel::span<uint8_t>{};
-        request.write_fill     = sentinel::task::spi_bus::DEFAULT_WRITE_FILL;
+        auto request = sentinel::task::spi_request{};
+        request.ssel = m_ssel;
+        request.tx = sentinel::make_cspan(tx, size);
+        request.rx = sentinel::span<uint8_t>{};
+        request.write_fill = sentinel::task::spi_bus::DEFAULT_WRITE_FILL;
         request.response_queue = m_response_queue;
         return exchange(request);
     }
@@ -169,11 +169,11 @@ public:
     /// \return \c cy_rslt_t forwarded from the arbiter's response.
     ///
     cy_rslt_t read(uint8_t *rx, size_t size) noexcept {
-        auto request           = sentinel::task::spi_request{};
-        request.ssel           = m_ssel;
-        request.tx             = sentinel::span<const uint8_t>{};
-        request.rx             = sentinel::make_span(rx, size);
-        request.write_fill     = sentinel::task::spi_bus::DEFAULT_WRITE_FILL;
+        auto request = sentinel::task::spi_request{};
+        request.ssel = m_ssel;
+        request.tx = sentinel::span<const uint8_t>{};
+        request.rx = sentinel::make_span(rx, size);
+        request.write_fill = sentinel::task::spi_bus::DEFAULT_WRITE_FILL;
         request.response_queue = m_response_queue;
         return exchange(request);
     }
@@ -188,11 +188,11 @@ public:
     ///
     cy_rslt_t write_read(const uint8_t *tx, size_t tx_size, uint8_t *rx,
                          size_t rx_size) noexcept {
-        auto request           = sentinel::task::spi_request{};
-        request.ssel           = m_ssel;
-        request.tx             = sentinel::make_cspan(tx, tx_size);
-        request.rx             = sentinel::make_span(rx, rx_size);
-        request.write_fill     = sentinel::task::spi_bus::DEFAULT_WRITE_FILL;
+        auto request = sentinel::task::spi_request{};
+        request.ssel = m_ssel;
+        request.tx = sentinel::make_cspan(tx, tx_size);
+        request.rx = sentinel::make_span(rx, rx_size);
+        request.write_fill = sentinel::task::spi_bus::DEFAULT_WRITE_FILL;
         request.response_queue = m_response_queue;
         return exchange(request);
     }
@@ -282,17 +282,17 @@ private:
         }
 
         auto response = sentinel::task::spi_response{};
-        if (xQueueReceive(m_response_queue, &response, portMAX_DELAY)
-            != pdPASS) {
+        if (xQueueReceive(m_response_queue, &response, portMAX_DELAY) !=
+            pdPASS) {
             return static_cast<cy_rslt_t>(CY_RSLT_TYPE_ERROR);
         }
 
         return response.cy_status;
     }
 
-    sentinel::task::spi_bus &m_bus;            ///< Bus arbiter (non-owning).
-    cyhal_gpio_t             m_ssel;           ///< SS pin for this device.
-    QueueHandle_t            m_response_queue; ///< Per-instance response.
+    sentinel::task::spi_bus &m_bus; ///< Bus arbiter (non-owning).
+    cyhal_gpio_t m_ssel;            ///< SS pin for this device.
+    QueueHandle_t m_response_queue; ///< Per-instance response.
 };
 
 #endif /* SENTINEL_CYHAL_SPI_BUS_TRANSPORT_HPP */

@@ -113,14 +113,16 @@ inline bool records_equal(const test_record &a, const test_record &b) noexcept {
 }
 
 ///
-/// \brief Test fixture: owns the bus-arbitrated SPI transport every test shares.
+/// \brief Test fixture: owns the bus-arbitrated SPI transport every test
+/// shares.
 ///
 /// \details Targets the same flash CS line (\c CYBSP_SPI_FLASH_CS / SS0) as the
 ///          W25Q128 driver suite. Constructed fresh by
 ///          \ref sentinel::test::record_store::run_all (like a
 ///          GoogleTest \c SetUp), so there is no file-static bus global. The
 ///          transport is inert until \c peripheral_initialize() has spawned the
-///          arbiter, which the orchestrator guarantees by running post-scheduler.
+///          arbiter, which the orchestrator guarantees by running
+///          post-scheduler.
 ///
 struct fixture {
     /// Bus-arbitrated SPI transport shared by every test in this fixture.
@@ -536,8 +538,7 @@ bool fixture::recycle_transient_recovery() noexcept {
     }
 
     if (recovered.count() != cap - per_sector ||
-        recovered.tail_index() != per_sector ||
-        recovered.head_index() != cap) {
+        recovered.tail_index() != per_sector || recovered.head_index() != cap) {
         loge("recycle_transient FAIL: recovery mismatch count=%u tail=%u "
              "head=%u (expected count=%u tail=%u head=%u)",
              static_cast<unsigned>(recovered.count()),
@@ -575,7 +576,7 @@ bool fixture::recycle_transient_recovery() noexcept {
 
 sentinel::test::tally sentinel::test::record_store::run_all() noexcept {
     auto fx = fixture{};
-    auto t  = sentinel::test::tally{};
+    auto t = sentinel::test::tally{};
 
     t.record(fx.presence_check());
     yield_for_debug_drain(200);

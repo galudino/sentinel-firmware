@@ -153,8 +153,9 @@ constexpr T sentinel::read_integral(const uint8_t *buffer, endianess order) {
 }
 
 template <typename T>
-constexpr T sentinel::read_integral(const std::array<uint8_t, sizeof(T)> &buffer,
-                               endianess order) {
+constexpr T
+sentinel::read_integral(const std::array<uint8_t, sizeof(T)> &buffer,
+                        endianess order) {
     return read_integral<T>(buffer.data(), order);
 }
 

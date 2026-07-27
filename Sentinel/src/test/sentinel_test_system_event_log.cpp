@@ -534,8 +534,8 @@ sentinel::test::tally sentinel::test::system_event_log::run_all() noexcept {
     t.record(run_one("erase_all", 16u, body_erase_all));
     yield_for_debug_drain(200);
 
-    t.record(run_one("crossing_size_threshold", 16u,
-                     body_crossing_size_threshold));
+    t.record(
+        run_one("crossing_size_threshold", 16u, body_crossing_size_threshold));
     yield_for_debug_drain(200);
 
     return t;

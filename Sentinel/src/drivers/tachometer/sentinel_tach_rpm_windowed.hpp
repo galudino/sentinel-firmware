@@ -113,14 +113,14 @@ public:
 
 private:
     // Supplied during object construction, by the caller
-    uint32_t m_ticks_per_sec;  ///< Timer frequency in ticks/second.
-    uint8_t m_pulses_per_rev;  ///< Tach pulses per mechanical revolution.
+    uint32_t m_ticks_per_sec; ///< Timer frequency in ticks/second.
+    uint8_t m_pulses_per_rev; ///< Tach pulses per mechanical revolution.
 
     uint32_t m_start_tick;  ///< Assigned in begin_window().
     uint32_t m_pulse_count; ///< Assigned when an edge event occurs; ISR
                             ///< function increments this.
-    uint32_t
-        m_rpm; ///< (pulse_count / pulses_per_rev) / (delta_ticks / ticks_per_sec)
+    uint32_t m_rpm;         ///< (pulse_count / pulses_per_rev) / (delta_ticks /
+                            ///< ticks_per_sec)
 };
 
 #endif /* SENTINEL_TACH_RPM_WINDOWED_HPP */
