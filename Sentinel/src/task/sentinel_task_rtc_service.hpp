@@ -15,10 +15,11 @@
 ///          interrupt also lets the MCU sleep between ticks instead of
 ///          polling the bus.
 ///
-///          The most recent timestamp is published via \ref last_unix_time
-///          for other tasks to consume (e.g. a future BLE Current Time
-///          characteristic). This task does not set the RTC; initial/
-///          authoritative time-setting belongs to the BLE sync path.
+///          The most recent timestamp is published via
+///          \ref sentinel::task::rtc_service::last_unix_time for other tasks to
+///          consume (e.g. a future BLE Current Time characteristic). This task
+///          does not set the RTC; initial/authoritative time-setting belongs to
+///          the BLE sync path.
 ///
 /// \author  galudino
 /// \date    2026-05-24
@@ -45,7 +46,7 @@ namespace sentinel::task {
 /// \brief Single-owner FreeRTOS task that latches the DS3231 time on each
 ///        1 Hz SQW-interrupt tick and publishes it for cross-task consumers.
 ///
-/// \details OO/class style, mirroring \ref sentinel::task::spi_bus: the task's
+/// \details OO/class style, mirroring \ref sentinel::task::spi_bus — the task's
 ///          state (latched time/temperature, the SQW callback registration,
 ///          the bus transport, the task handle) lives in private members rather
 ///          than \c .cpp file-static globals, and the loop runs as a private
@@ -60,6 +61,8 @@ class rtc_service {
 public:
     ///
     /// \brief The single RTC-service instance.
+    ///
+    /// \return Reference to the singleton \ref rtc_service instance.
     ///
     static rtc_service &instance() noexcept;
 
@@ -103,7 +106,13 @@ public:
 private:
     rtc_service() = default;
 
+    /// \brief Static FreeRTOS task entry point; forwards to \ref run.
+    /// \param task_parameter Unused (\c this is captured via \ref instance).
     static void task_trampoline(void *task_parameter);
+
+    /// \brief SQW falling-edge GPIO ISR; latches the time/temperature.
+    /// \param callback_arg Unused (\c this is recovered via \ref instance).
+    /// \param event        GPIO event that fired (unused; any edge latches).
     static void sqw_event_isr(void *callback_arg, cyhal_gpio_event_t event);
 
     ///
@@ -112,6 +121,8 @@ private:
     ///
     void run();
 
+    /// \brief Register the SQW falling-edge callback and enable the interrupt
+    ///        on \ref sentinel::resource::rtc_sqw_pin.
     void configure_sqw_interrupt() noexcept;
 
     cyhal_gpio_callback_data_t m_sqw_callback_data{}; ///< Persistent SQW reg.

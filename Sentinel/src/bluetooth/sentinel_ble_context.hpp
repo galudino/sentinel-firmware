@@ -69,6 +69,8 @@ public:
     ///
     uint16_t connection_id() const noexcept { return m_connection_id; }
 
+    /// \brief \c true while a central is connected.
+    /// \return \c true if \ref connection_id is nonzero.
     bool connected() const noexcept { return m_connection_id > 0; }
 
     ///
@@ -79,15 +81,20 @@ public:
     ///          probe; by POST time (after the multi-second flash-store scan) the
     ///          asynchronous \c BTM_ENABLED registration has already run.
     ///
+    /// \return \c true once the GATT database has registered successfully.
+    ///
     bool gatt_db_ok() const noexcept { return m_gatt_db_ok; }
 
     /// \brief Record the GATT-DB registration result (called at registration).
+    /// \param ok \c true if the GATT database registered successfully.
     void set_gatt_db_ok(bool ok) noexcept { m_gatt_db_ok = ok; }
 
     /// \brief Last cached peer RSSI in dBm (negative; 0 if not yet read). #6
+    /// \return The cached peer RSSI in dBm.
     int8_t peer_rssi() const noexcept { return m_peer_rssi; }
 
     /// \brief Last cached connection TX power in dBm (0 if not yet read). #6
+    /// \return The cached connection TX power in dBm.
     int8_t tx_power_dbm() const noexcept { return m_tx_power_dbm; }
 
     ///
@@ -103,9 +110,11 @@ public:
     void refresh_link_metrics() noexcept;
 
     /// \brief Cache a freshly read peer RSSI (from the read-RSSI callback).
+    /// \param rssi Freshly read peer RSSI in dBm.
     void set_peer_rssi(int8_t rssi) noexcept { m_peer_rssi = rssi; }
 
     /// \brief Cache a freshly read TX power (from the read-TX-power callback).
+    /// \param dbm Freshly read connection TX power in dBm.
     void set_tx_power_dbm(int8_t dbm) noexcept { m_tx_power_dbm = dbm; }
 
     ///
@@ -280,6 +289,12 @@ private:
         m_mtu = 23; // Default MTU before negotiation
     }
 
+    ///
+    /// \brief Initialize OTA-related member state to its default values.
+    ///
+    /// \details Sets the OTA connection type to BLE, enables automatic reboot
+    ///          after a successful OTA, and resets the OTA context/descriptor.
+    ///
     void ota_value_initialize() noexcept {
         // Will be assigned from cy_ota_agent_start() function call
         m_ota_context = nullptr;

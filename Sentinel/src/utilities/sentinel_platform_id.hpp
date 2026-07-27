@@ -19,8 +19,8 @@
 ///          DIS Manufacturer Name string.
 ///
 ///          Canonical platform tokens — one set across firmware \c platform:
-///          labels ↔ this \ref platform_id ↔ cloud manifest \c target:
-///          \c cyble-416045 · \c rpi5 · \c nrf5340.
+///          labels <-> this \ref sentinel::platform_id <-> cloud manifest
+///          \c target: \c cyble-416045 / \c rpi5 / \c nrf5340.
 ///
 /// \author  galudino
 /// \date    2026-07-08
@@ -42,31 +42,32 @@ namespace sentinel {
 ///          contract — see the file header.
 ///
 enum class platform_id : uint8_t {
-    unknown      = 0x00,
-    cyble_416045 = 0x01,
-    rpi5         = 0x02,
-    nrf5340      = 0x03,
+    unknown      = 0x00, ///< Unrecognized / not-yet-resolved platform.
+    cyble_416045 = 0x01, ///< Infineon CYBLE-416045-EVAL.
+    rpi5         = 0x02, ///< Raspberry Pi 5.
+    nrf5340      = 0x03, ///< Nordic Semiconductor nRF5340.
 };
 
 ///
-/// \brief Hardware vendor. A \e function of \ref platform_id (see
-///        \ref vendor_of), used only to populate the DIS Manufacturer Name.
+/// \brief Hardware vendor. A \e function of \ref sentinel::platform_id (see
+///        \ref sentinel::vendor_of), used only to populate the DIS
+///        Manufacturer Name.
 ///
 /// \details Append-only wire contract — see the file header.
 ///
 enum class vendor_id : uint8_t {
-    unknown              = 0x00,
-    infineon             = 0x01,
-    raspberry_pi_ltd     = 0x02,
-    nordic_semiconductor = 0x03,
+    unknown              = 0x00, ///< Unrecognized / not-yet-resolved vendor.
+    infineon             = 0x01, ///< Infineon Technologies.
+    raspberry_pi_ltd     = 0x02, ///< Raspberry Pi Ltd.
+    nordic_semiconductor = 0x03, ///< Nordic Semiconductor.
 };
 
 ///
 /// \brief The vendor that makes a given platform.
 ///
 /// \param p Platform to resolve.
-/// \return The owning \ref vendor_id, or \ref vendor_id::unknown for an
-///         unrecognized platform.
+/// \return The owning \ref sentinel::vendor_id, or
+///         \ref sentinel::vendor_id::unknown for an unrecognized platform.
 ///
 constexpr vendor_id vendor_of(platform_id p) noexcept {
     switch (p) {
@@ -87,6 +88,8 @@ constexpr vendor_id vendor_of(platform_id p) noexcept {
 /// \details Phase I ships on the Infineon CYBLE-416045-EVAL. When a second
 ///          target is added, select this from a build-time \c COMPONENT_/target
 ///          macro rather than hard-coding it at every call site.
+///
+/// \return The \ref sentinel::platform_id this image was built for.
 ///
 constexpr platform_id current_platform_id() noexcept {
 #if defined(COMPONENT_APP_CYBLE_416045_EVAL) ||                                \

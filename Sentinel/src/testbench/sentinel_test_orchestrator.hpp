@@ -29,7 +29,8 @@
 ///
 ///          OO/class style, mirroring the task layer (decision #16): the task
 ///          handle lives in a private member and the sequence runs as a private
-///          \ref run reached through a static trampoline.
+///          \ref sentinel::testbench::test_orchestrator::run reached through a
+///          static trampoline.
 ///
 /// \author  galudino
 /// \date    2026-06-30
@@ -54,8 +55,9 @@ namespace sentinel::testbench {
 ///
 /// \details Use the \ref instance singleton. Created (idle) by
 ///          \c sentinel::testbench::initialize() before the scheduler starts;
-///          its \ref run body executes once the scheduler is running, then the
-///          task self-deletes.
+///          its \ref sentinel::testbench::test_orchestrator::run body
+///          executes once the scheduler is running, then the task
+///          self-deletes.
 ///
 /// \note    This class is non-copyable and non-movable.
 ///
@@ -79,6 +81,8 @@ public:
 
     ///
     /// \brief The single orchestrator instance.
+    ///
+    /// \return Reference to the process-wide \ref test_orchestrator.
     ///
     static test_orchestrator &instance() noexcept;
 
@@ -108,6 +112,13 @@ public:
 private:
     test_orchestrator() = default;
 
+    ///
+    /// \brief FreeRTOS task entry point: recovers \c this and calls
+    ///        \ref sentinel::testbench::test_orchestrator::run.
+    ///
+    /// \param task_parameter The \ref test_orchestrator instance, passed as
+    ///                       the \c pvParameters argument to \c xTaskCreate.
+    ///
     static void task_trampoline(void *task_parameter);
 
     ///

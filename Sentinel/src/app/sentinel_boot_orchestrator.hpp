@@ -13,7 +13,8 @@
 ///          shared device context, the flash-region scans) needs the arbiters
 ///          pumping, which only happens once the scheduler runs.
 ///
-///          In order, \ref run:
+///          In order, \ref sentinel::app::boot_orchestrator::run does the
+///          following:
 ///            1. builds the shared device context (\c resource::context()) and
 ///               scans both flash record stores (\c initialize_stores());
 ///            2. runs POST against the real drivers, caches the first-failure
@@ -25,7 +26,8 @@
 ///               battery);
 ///            5. self-deletes.
 ///
-///          OO/class style (decision #16); use the \ref instance singleton.
+///          OO/class style (decision #16); use the
+///          \ref sentinel::app::boot_orchestrator::instance singleton.
 ///
 /// \author  galudino
 /// \date    2026-06-30
@@ -75,6 +77,8 @@ public:
     ///
     /// \brief The single orchestrator instance.
     ///
+    /// \return Reference to the process-wide \ref boot_orchestrator singleton.
+    ///
     static boot_orchestrator &instance() noexcept;
 
     boot_orchestrator(const boot_orchestrator &) = delete;
@@ -101,6 +105,13 @@ public:
 private:
     boot_orchestrator() = default;
 
+    ///
+    /// \brief FreeRTOS task entry point: casts \p task_parameter back to the
+    ///        singleton and dispatches to \ref run.
+    ///
+    /// \param task_parameter Always \c this (the singleton), passed through
+    ///                       \c xTaskCreate's parameter argument.
+    ///
     static void task_trampoline(void *task_parameter);
 
     ///

@@ -10,7 +10,7 @@
 ///
 ///          Backing buffers are taken from the FreeRTOS heap with
 ///          \c pvPortMalloc and freed after each test. The largest
-///          (\ref record_burst, 1000 records) needs ~44 KiB, which is sized to
+///          (\c record_burst, 1000 records) needs ~44 KiB, which is sized to
 ///          live in the heap rather than as a static .bss array that would eat
 ///          the non-heap SRAM headroom.
 ///
@@ -46,16 +46,21 @@ namespace {
 
 using namespace sentinel::diagnostics;
 
+/// RAM-backed record_store over a \c system_event_record.
 using store_t = sentinel::ram_record_store<system_event_record>;
+/// System event log templated over \ref store_t.
 using log_t = sentinel::diagnostics::system_event_log<store_t>;
 
 /// Injected, controllable clock so timestamps are deterministic in tests.
 uint32_t g_test_clock = 0u;
+/// \brief Deterministic clock callback injected into \ref log_t::initialize.
+/// \return The current value of \ref g_test_clock.
 uint32_t test_now() noexcept { return g_test_clock; }
 
 ///
 /// \brief Allocate a RAM backing buffer for \p records slots from the heap.
 ///
+/// \param records Number of slots the buffer must hold.
 /// \return Pointer to the buffer, or \c nullptr on allocation failure.
 ///
 uint8_t *alloc_buffer(uint32_t records) noexcept {
@@ -65,6 +70,10 @@ uint8_t *alloc_buffer(uint32_t records) noexcept {
 ///
 /// \brief Report a single test's PASS/FAIL to both the BLE stream and UART.
 ///
+/// \param name   Test name.
+/// \param ok     \c true if the test passed.
+/// \param detail Failure reason (ignored when \p ok is \c true).
+///
 void report(const char *name, bool ok, const char *detail) noexcept {
     if (ok) {
         logi("%s PASS", name);
@@ -73,6 +82,8 @@ void report(const char *name, bool ok, const char *detail) noexcept {
     }
 }
 
+/// \brief Yield long enough for the BLE debug ring buffer to drain.
+/// \param milliseconds Delay duration, in milliseconds.
 void yield_for_debug_drain(uint32_t milliseconds) noexcept {
     vTaskDelay(pdMS_TO_TICKS(milliseconds));
 }
@@ -82,6 +93,11 @@ void yield_for_debug_drain(uint32_t milliseconds) noexcept {
 // The public wrappers own buffer lifetime + reporting.
 // ---------------------------------------------------------------------------
 
+/// \brief \c initialize() on a fresh store succeeds and \c count() == 0.
+/// \param buf  Backing buffer for the RAM record store.
+/// \param size Size of \p buf, in bytes.
+/// \param why  Set to a short failure reason when returning \c false.
+/// \return \c true on success.
 bool body_presence_check(uint8_t *buf, uint32_t size, const char **why) {
     auto store = store_t(buf, size);
     if (!store.erase_all()) {
@@ -100,6 +116,12 @@ bool body_presence_check(uint8_t *buf, uint32_t size, const char **why) {
     return true;
 }
 
+/// \brief Boot sequence yields one readable \c boot_complete with a non-zero
+///        timestamp.
+/// \param buf  Backing buffer for the RAM record store.
+/// \param size Size of \p buf, in bytes.
+/// \param why  Set to a short failure reason when returning \c false.
+/// \return \c true on success.
 bool body_record_and_read(uint8_t *buf, uint32_t size, const char **why) {
     auto store = store_t(buf, size);
     auto &log = log_t::instance();
@@ -134,6 +156,12 @@ bool body_record_and_read(uint8_t *buf, uint32_t size, const char **why) {
     return true;
 }
 
+/// \brief A \c firmware_update_record survives memcpy through the untyped
+///        store and back.
+/// \param buf  Backing buffer for the RAM record store.
+/// \param size Size of \p buf, in bytes.
+/// \param why  Set to a short failure reason when returning \c false.
+/// \return \c true on success.
 bool body_typed_round_trip(uint8_t *buf, uint32_t size, const char **why) {
     auto store = store_t(buf, size);
     auto &log = log_t::instance();
@@ -171,6 +199,11 @@ bool body_typed_round_trip(uint8_t *buf, uint32_t size, const char **why) {
     return true;
 }
 
+/// \brief 1000 mixed events all persist.
+/// \param buf  Backing buffer for the RAM record store.
+/// \param size Size of \p buf, in bytes.
+/// \param why  Set to a short failure reason when returning \c false.
+/// \return \c true on success.
 bool body_record_burst(uint8_t *buf, uint32_t size, const char **why) {
     auto store = store_t(buf, size);
     auto &log = log_t::instance();
@@ -217,6 +250,12 @@ bool body_record_burst(uint8_t *buf, uint32_t size, const char **why) {
     return true;
 }
 
+/// \brief Records and ordering survive a simulated warm reboot; boot adds
+///        exactly one record.
+/// \param buf  Backing buffer for the RAM record store.
+/// \param size Size of \p buf, in bytes.
+/// \param why  Set to a short failure reason when returning \c false.
+/// \return \c true on success.
 bool body_survive_reset(uint8_t *buf, uint32_t size, const char **why) {
     auto store = store_t(buf, size);
     auto &log = log_t::instance();
@@ -291,6 +330,12 @@ bool body_survive_reset(uint8_t *buf, uint32_t size, const char **why) {
     return true;
 }
 
+/// \brief An unclean reboot synthesizes a \c shutdown_unexpected for the
+///        prior session.
+/// \param buf  Backing buffer for the RAM record store.
+/// \param size Size of \p buf, in bytes.
+/// \param why  Set to a short failure reason when returning \c false.
+/// \return \c true on success.
 bool body_unexpected_shutdown_synthesis(uint8_t *buf, uint32_t size,
                                         const char **why) {
     auto store = store_t(buf, size);
@@ -345,6 +390,11 @@ bool body_unexpected_shutdown_synthesis(uint8_t *buf, uint32_t size,
     return true;
 }
 
+/// \brief Erase resets count to 0 and new records still append.
+/// \param buf  Backing buffer for the RAM record store.
+/// \param size Size of \p buf, in bytes.
+/// \param why  Set to a short failure reason when returning \c false.
+/// \return \c true on success.
 bool body_erase_all(uint8_t *buf, uint32_t size, const char **why) {
     auto store = store_t(buf, size);
     auto &log = log_t::instance();
@@ -378,6 +428,11 @@ bool body_erase_all(uint8_t *buf, uint32_t size, const char **why) {
     return true;
 }
 
+/// \brief Wrap overwrites the oldest record, keeps the newest readable.
+/// \param buf  Backing buffer for the RAM record store.
+/// \param size Size of \p buf, in bytes.
+/// \param why  Set to a short failure reason when returning \c false.
+/// \return \c true on success.
 bool body_crossing_size_threshold(uint8_t *buf, uint32_t size,
                                   const char **why) {
     auto store = store_t(buf, size);
@@ -425,6 +480,13 @@ bool body_crossing_size_threshold(uint8_t *buf, uint32_t size,
 
 ///
 /// \brief Run one test: allocate the buffer, run \p body, free, report.
+///
+/// \param name    Test name, used for the PASS/FAIL log line.
+/// \param records Number of record slots to allocate for the backing buffer.
+/// \param body    Test body; returns \c true on success and sets \c *why on
+///                failure.
+/// \return \c true if \p body passed; \c false on failure or if the backing
+///         buffer could not be allocated.
 ///
 bool run_one(const char *name, uint32_t records,
              bool (*body)(uint8_t *, uint32_t, const char **)) noexcept {

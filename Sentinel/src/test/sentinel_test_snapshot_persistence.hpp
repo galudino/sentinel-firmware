@@ -12,8 +12,8 @@
 ///          observations exercised by the running production task (orchestrator).
 ///
 ///          Run-to-completion (#48): the serial test orchestrator calls
-///          \ref run_all directly; it returns the pass/fail
-///          \ref sentinel::test::tally.
+///          \ref sentinel::test::snapshot_persistence::run_all directly; it
+///          returns the pass/fail \ref sentinel::test::tally.
 ///
 /// \author  galudino
 /// \date    2026-06-30

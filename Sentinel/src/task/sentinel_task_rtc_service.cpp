@@ -63,8 +63,9 @@ constexpr uint8_t SQW_IRQ_PRIORITY = 3;
 ///
 /// \brief How often the latched time/temperature is logged, in seconds.
 ///
-/// \details The SQW interrupt and the \ref last_unix_time latch always run at
-///          1 Hz; this only throttles log output. The testbench logs every
+/// \details The SQW interrupt and the
+///          \ref sentinel::task::rtc_service::last_unix_time latch always run
+///          at 1 Hz; this only throttles log output. The testbench logs every
 ///          tick so the 1 Hz interrupt is visibly confirmed on the serial
 ///          monitor; the application logs once per minute to keep the serial
 ///          and BLE debug streams quiet. Must evenly divide 60.
@@ -77,6 +78,9 @@ constexpr uint8_t HEARTBEAT_LOG_PERIOD_SECONDS = 60;
 
 ///
 /// \brief ISO-day-of-week (1=Mon … 7=Sun) → short label, for log lines.
+///
+/// \param iso_dow ISO day-of-week, 1 (Monday) through 7 (Sunday).
+/// \return Three-letter day label, or \c "?" if \p iso_dow is out of range.
 ///
 inline const char *day_name(uint8_t iso_dow) noexcept {
     static constexpr const char *names[8] = {"?",   "Mon", "Tue", "Wed",
@@ -151,7 +155,9 @@ void rtc_service::task_trampoline(void *task_parameter) {
 /// \details Kept minimal: unblock the service task and request a context
 ///          switch if it is now the highest-priority ready task. All bus
 ///          work happens back in task context. The instance is recovered from
-///          the callback argument stored at registration time.
+///          the callback argument stored at registration time. See
+///          \ref sentinel::task::rtc_service::sqw_event_isr for the
+///          \c \\param documentation.
 ///
 void rtc_service::sqw_event_isr(void *callback_arg,
                                 cyhal_gpio_event_t event) {

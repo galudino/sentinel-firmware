@@ -67,7 +67,7 @@ void log(level l, const char *file, int line, const char *function,
          const char *fmt, ...) __attribute__((format(printf, 5, 6)));
 
 ///
-/// \brief      \c va_list form of \ref log.
+/// \brief      \c va_list form of \ref sentinel::logging::log.
 ///
 /// \param      l           Severity level.
 /// \param      file        Source filename.
@@ -110,15 +110,19 @@ void vlog(level l, const char *file, int line, const char *function,
 
 #else
 
+/// Compiled out: \c BLE_DEBUG_ENABLE is 0, so debug-level logging is a no-op.
 #define logd(...)                                                              \
     do {                                                                       \
     } while (0)
+/// Compiled out: \c BLE_DEBUG_ENABLE is 0, so info-level logging is a no-op.
 #define logi(...)                                                              \
     do {                                                                       \
     } while (0)
+/// Compiled out: \c BLE_DEBUG_ENABLE is 0, so warning-level logging is a no-op.
 #define logw(...)                                                              \
     do {                                                                       \
     } while (0)
+/// Compiled out: \c BLE_DEBUG_ENABLE is 0, so error-level logging is a no-op.
 #define loge(...)                                                              \
     do {                                                                       \
     } while (0)

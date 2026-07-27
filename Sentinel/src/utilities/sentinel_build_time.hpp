@@ -13,9 +13,9 @@
 ///          Intended use:
 ///          - As the bring-up time-sync path for a freshly-flashed board
 ///            that has no client app yet.
-///          - \ref sync_from_build_time wraps the capture-and-push
-///            sequence for any RTC driver whose interface matches the
-///            \ref sentinel::ds3231 shape
+///          - \ref sentinel::build_time::sync_from_build_time wraps the
+///            capture-and-push sequence for any RTC driver whose interface
+///            matches the \ref sentinel::ds3231 shape
 ///            (nested \c datetime with \c to_unix_time / \c from_unix_time
 ///            static helpers, \c set_time(const datetime&) returning
 ///            \c bool, and \c clear_oscillator_stop_flag()).
@@ -28,11 +28,13 @@
 ///          - The expansion happens once per translation unit; in a
 ///            multi-TU build different TUs see different build times
 ///            (typically within a few seconds of each other). Practically
-///            this is a non-issue because \ref sync_from_build_time is
-///            usually called from one TU.
+///            this is a non-issue because
+///            \ref sentinel::build_time::sync_from_build_time is usually
+///            called from one TU.
 ///          - The captured time runs as far behind real wall-clock time
 ///            as it takes to link, sign, flash, and boot the firmware.
-///            \c fudge_seconds in \ref sync_from_build_time exists to
+///            \c fudge_seconds in
+///            \ref sentinel::build_time::sync_from_build_time exists to
 ///            compensate; the default (10 s) is a reasonable estimate
 ///            for KitProg3-driven flash + cold boot on a CYBLE-416045-EVAL.
 ///
@@ -127,6 +129,8 @@ constexpr uint16_t build_year() noexcept {
 ///
 /// \brief Compile-time hour-of-day captured from \c __TIME__ (0–23).
 ///
+/// \return Hour as 0–23.
+///
 constexpr uint8_t build_hour() noexcept {
     auto const t = __TIME__;
     return static_cast<uint8_t>((t[0] - '0') * 10 + (t[1] - '0'));
@@ -135,6 +139,8 @@ constexpr uint8_t build_hour() noexcept {
 ///
 /// \brief Compile-time minute-of-hour captured from \c __TIME__ (0–59).
 ///
+/// \return Minute as 0–59.
+///
 constexpr uint8_t build_minute() noexcept {
     auto const t = __TIME__;
     return static_cast<uint8_t>((t[3] - '0') * 10 + (t[4] - '0'));
@@ -142,6 +148,8 @@ constexpr uint8_t build_minute() noexcept {
 
 ///
 /// \brief Compile-time second-of-minute captured from \c __TIME__ (0–59).
+///
+/// \return Second as 0–59.
 ///
 constexpr uint8_t build_second() noexcept {
     auto const t = __TIME__;
@@ -166,8 +174,10 @@ inline constexpr uint32_t DEFAULT_FUDGE_SECONDS = 10;
 ///
 /// \brief Set an RTC to the build moment (plus a small fudge).
 ///
-/// \details Builds a \c RtcDriver::datetime from \ref build_year through
-///          \ref build_second, runs it through the driver's
+/// \details Builds a \c RtcDriver::datetime from
+///          \ref sentinel::build_time::build_year through
+///          \ref sentinel::build_time::build_second, runs it through the
+///          driver's
 ///          \c to_unix_time/from_unix_time round-trip to recover the
 ///          correct day-of-week (and to apply \p fudge_seconds and
 ///          \p tz_offset_seconds in seconds-space rather than worrying
@@ -179,7 +189,8 @@ inline constexpr uint32_t DEFAULT_FUDGE_SECONDS = 10;
 /// \param  rtc                Driver instance bound to a working transport.
 /// \param  fudge_seconds      Seconds to add to the captured build time to
 ///                            account for flash + boot latency. Defaults
-///                            to \ref DEFAULT_FUDGE_SECONDS.
+///                            to \ref
+///                            sentinel::build_time::DEFAULT_FUDGE_SECONDS.
 /// \param  tz_offset_seconds  Seconds to subtract from the captured local
 ///                            build time to convert it to UTC. Pass \c 0
 ///                            (the default) to treat the build time as

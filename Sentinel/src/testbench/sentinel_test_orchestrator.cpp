@@ -67,8 +67,8 @@ constexpr int kMaxGroups = 8;
 
 /// One group's name + result, retained for the final per-group summary.
 struct group_result {
-    const char *name{nullptr};
-    sentinel::test::tally tally{};
+    const char *name{nullptr};       ///< Group name, printed in the summary.
+    sentinel::test::tally tally{};   ///< Group's accumulated pass/fail tally.
 };
 
 /// Print a horizontal rule to the UART diagnostic log.
@@ -77,6 +77,7 @@ void rule() noexcept {
 }
 
 /// Print a boxed banner to the UART diagnostic log.
+/// \param title Text printed between the two horizontal rules.
 void banner(const char *title) noexcept {
     rule();
     logi("  %s", title);
@@ -84,6 +85,8 @@ void banner(const char *title) noexcept {
 }
 
 /// \brief Start a service task, logging on failure (boot continues regardless).
+/// \param name Task name, used only in the failure log line.
+/// \param rc   Result of the \c xTaskCreate call to check.
 void start_task(const char *name, BaseType_t rc) noexcept {
     if (rc != pdPASS) {
         loge("test: %s task create failed", name);

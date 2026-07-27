@@ -9,7 +9,8 @@
 ///              ~100 ms while a capture session is active;
 ///            - the periodic snapshot persistence task (#38, lane 1) — written
 ///              to flash every ~5 min for historical retrieval.
-///          Both call \ref populate_snapshot, which aggregates from already-
+///          Both call \ref sentinel::telemetry::device_snapshot::populate, which
+///          aggregates from already-
 ///          cached subsystem state (no fresh bus I/O on the populate path), so
 ///          lane 2 can stream at 100 ms with zero I²C/SPI contention.
 ///
@@ -21,7 +22,8 @@
 ///          host float-encoding ambiguity. The struct is **exactly 80 bytes**;
 ///          the `static_assert`s below lock both the total size and every field
 ///          offset. Never reorder existing fields or repurpose a field without
-///          bumping \ref SNAPSHOT_VERSION; new fields consume `reserved_*`
+///          bumping \ref sentinel::telemetry::SNAPSHOT_VERSION; new fields
+///          consume `reserved_*`
 ///          bytes (additive, forward-compatible).
 ///
 /// \author  galudino
@@ -38,7 +40,8 @@
 namespace sentinel::telemetry {
 
 ///
-/// \brief Layout version for \ref device_snapshot. Bump on any field
+/// \brief Layout version for \ref sentinel::telemetry::device_snapshot. Bump on
+///        any field
 ///        reorder/repurpose; additive field growth into `reserved_*` does not
 ///        require a bump (old decoders ignore unknown trailing fields).
 ///

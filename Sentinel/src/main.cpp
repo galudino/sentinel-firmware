@@ -9,7 +9,7 @@
 ///          The symbol is defined per-target in that target's orchestrator TU
 ///          (\c src/app → boot orchestrator #38; \c src/testbench → test
 ///          orchestrator #48); the Makefile \c CY_IGNORE's the other dir, so the
-///          linker resolves exactly one definition with \b no \c #ifdef here.
+///          linker resolves exactly one definition with \b no \c \#ifdef here.
 ///          See \ref sentinel_orchestrator_entry.hpp.
 ///
 /// \author  galudino
@@ -43,6 +43,10 @@ extern "C" {
 ///
 /// Runs shared system bring-up, creates the one-shot boot orchestrator, and
 /// starts the FreeRTOS scheduler (never returns in normal operation).
+///
+/// \param argc Argument count (unused on the embedded target).
+/// \param argv Argument vector (unused on the embedded target).
+/// \return Never returns in normal operation; the scheduler runs forever.
 ///
 int main(int argc, const char *argv[]) {
     sentinel::unused(argc);

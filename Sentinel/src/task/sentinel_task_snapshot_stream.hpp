@@ -11,23 +11,27 @@
 ///          the always-on slow flash persistence (#38, lane 1).
 ///
 ///          Default state is \b idle: the task blocks with zero CPU until the
-///          \c SnapshotStream enable characteristic (#6) calls \ref start. It
-///          then loops \c populate_snapshot() → notify sink at \ref period_ms
-///          until \ref stop, the central disconnects, or notifications are
-///          unsubscribed — then it returns to idle.
+///          \c SnapshotStream enable characteristic (#6) calls
+///          \ref sentinel::task::snapshot_stream_task::start. It then loops
+///          \c populate_snapshot() → notify sink at
+///          \ref sentinel::task::snapshot_stream_task::period_ms until
+///          \ref sentinel::task::snapshot_stream_task::stop, the central
+///          disconnects, or notifications are unsubscribed — then it returns
+///          to idle.
 ///
 ///          \b Producer/GATT \b split (decision #14, option a). This task only
 ///          \e produces the snapshot and hands it to a notify sink; the actual
 ///          \c wiced_bt_gatt notification lives in #6's GATT handler, attached
-///          here via \ref set_notify_sink. Keeping the producer loop here leaves
-///          #6 as pure GATT wiring rather than a producer loop embedded in the
-///          GATT callbacks.
+///          here via \ref sentinel::task::snapshot_stream_task::set_notify_sink.
+///          Keeping the producer loop here leaves #6 as pure GATT wiring rather
+///          than a producer loop embedded in the GATT callbacks.
 ///
 ///          OO/class style, mirroring \ref sentinel::task::bme280_service and
 ///          the bus arbiters (handoff decision #16): the task's state (enable
 ///          flag, cadence, sinks, handle) lives in private members rather than
 ///          \c .cpp file-static globals, and the loop runs as a private
-///          \ref run reached via a static trampoline.
+///          \ref sentinel::task::snapshot_stream_task::run reached via a static
+///          trampoline.
 ///
 /// \author  galudino
 /// \date    2026-06-29
@@ -95,6 +99,8 @@ public:
     ///
     /// \brief The single snapshot-stream-task instance.
     ///
+    /// \return Reference to the singleton \ref snapshot_stream_task instance.
+    ///
     static snapshot_stream_task &instance() noexcept;
 
     /// Non-copyable, non-movable: the task entry point captures \c this.
@@ -137,6 +143,8 @@ public:
     ///
     /// \brief \c true while a capture session is active.
     ///
+    /// \return \c true between \ref start and \ref stop; \c false otherwise.
+    ///
     bool streaming() const noexcept;
 
     ///
@@ -149,6 +157,8 @@ public:
 
     ///
     /// \brief Current streaming cadence in milliseconds.
+    ///
+    /// \return Current \ref set_period_ms value, in milliseconds.
     ///
     uint32_t period_ms() const noexcept;
 
@@ -172,6 +182,8 @@ public:
 private:
     snapshot_stream_task() = default;
 
+    /// \brief Static FreeRTOS task entry point; forwards to \ref run.
+    /// \param task_parameter Unused (\c this is captured via \ref instance).
     static void task_trampoline(void *task_parameter);
 
     ///
@@ -181,6 +193,7 @@ private:
     void run();
 
     /// \brief Resolve the effective connection state (predicate or live BLE).
+    /// \return \c true if a central is currently connected.
     bool central_connected() const noexcept;
 
     volatile bool     m_streaming{false};  ///< Session active? (requested state)

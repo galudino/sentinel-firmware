@@ -18,7 +18,8 @@
 ///          Run-to-completion (#48): the suite runs synchronously and returns
 ///          a \ref sentinel::test::tally. It no longer self-schedules as a
 ///          FreeRTOS task and no longer owns a continuous ~1 Hz status poll —
-///          the serial test orchestrator calls \ref run_all directly.
+///          the serial test orchestrator calls
+///          \ref sentinel::test::w25q128::run_all directly.
 ///
 ///          Internally the suite uses a TU-local fixture that owns the
 ///          bus-arbitrated SPI transport (the canonical "fixture holds the

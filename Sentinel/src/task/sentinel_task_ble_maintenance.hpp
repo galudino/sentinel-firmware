@@ -11,9 +11,11 @@
 ///          callback returns promptly and the write response is not stalled.
 ///
 ///          OO/class style (decision #16): request bits + handle live in private
-///          members; the loop runs as a private \ref run reached via a static
-///          trampoline. Use the \ref instance singleton. App-only — started by
-///          the boot orchestrator, never the testbench.
+///          members; the loop runs as a private
+///          \ref sentinel::task::ble_maintenance_task::run reached via a static
+///          trampoline. Use the
+///          \ref sentinel::task::ble_maintenance_task::instance singleton.
+///          App-only — started by the boot orchestrator, never the testbench.
 ///
 /// \author  galudino
 /// \date    2026-07-08
@@ -44,6 +46,7 @@ namespace sentinel::task {
 class ble_maintenance_task {
 public:
     /// \brief The single maintenance-task instance.
+    /// \return Reference to the singleton \ref ble_maintenance_task instance.
     static ble_maintenance_task &instance() noexcept;
 
     ble_maintenance_task(const ble_maintenance_task &) = delete;
@@ -52,6 +55,9 @@ public:
     ble_maintenance_task &operator=(ble_maintenance_task &&) = delete;
 
     /// \brief Create and start the maintenance task (idle until a request).
+    /// \param priority    FreeRTOS task priority.
+    /// \param stack_words Task stack size, in words.
+    /// \return \c pdPASS on success, otherwise the \c xTaskCreate failure code.
     BaseType_t task_create(
         UBaseType_t priority = static_cast<UBaseType_t>(configMAX_PRIORITIES - 4),
         uint16_t stack_words = static_cast<uint16_t>(configMINIMAL_STACK_SIZE * 4)) noexcept;
@@ -68,11 +74,19 @@ public:
 private:
     ble_maintenance_task() = default;
 
+    /// \brief Static FreeRTOS task entry point; forwards to \ref run.
+    /// \param task_parameter Unused (\c this is captured via \ref instance).
     static void task_trampoline(void *task_parameter);
-    void        run();
-    void        notify(uint32_t bit) noexcept;
 
-    TaskHandle_t m_handle{nullptr};
+    /// \brief Maintenance loop: waits for a request bit, then services it.
+    void run();
+
+    /// \brief Set a request bit and notify the task.
+    /// \param bit One of the request bits handled by \ref run (e.g. the
+    ///            snapshot-clear, event-clear, or bootloader request bit).
+    void notify(uint32_t bit) noexcept;
+
+    TaskHandle_t m_handle{nullptr}; ///< FreeRTOS task handle.
 };
 
 } // namespace sentinel::task

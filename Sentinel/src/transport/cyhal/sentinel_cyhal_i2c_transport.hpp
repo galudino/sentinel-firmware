@@ -103,6 +103,20 @@ public:
                                       timeout, send_stop);
     }
 
+    ///
+    /// \brief Bosch Sensortec API write wrapper.
+    ///
+    /// \details Combines \p reg_addr and \p reg_data into a single
+    ///          contiguous transmit buffer (256-byte scratch buffer) and
+    ///          issues one atomic I2C write transaction.
+    ///
+    /// \param reg_addr Starting register address to write.
+    /// \param reg_data Pointer to data buffer to write.
+    /// \param length   Number of bytes to write.
+    /// \param intf_ptr Interface pointer; must point to a
+    ///                 \c cyhal_i2c_transport instance.
+    /// \return Bosch API compatible result code (0 = success).
+    ///
     static int8_t bosch_write(uint8_t reg_addr, const uint8_t *reg_data,
                               uint32_t length, void *intf_ptr) noexcept {
         auto *self = static_cast<cyhal_i2c_transport *>(intf_ptr);
@@ -137,6 +151,19 @@ public:
                                      timeout, send_stop);
     }
 
+    ///
+    /// \brief Bosch Sensortec API read wrapper.
+    ///
+    /// \details Issues a write of \p reg_addr followed by a repeated-start
+    ///          read of \p length bytes into \p reg_data.
+    ///
+    /// \param reg_addr Starting register address to read from.
+    /// \param reg_data Pointer to buffer for read data.
+    /// \param length   Number of bytes to read.
+    /// \param intf_ptr Interface pointer; must point to a
+    ///                 \c cyhal_i2c_transport instance.
+    /// \return Bosch API compatible result code (0 = success).
+    ///
     static int8_t bosch_read(uint8_t reg_addr, uint8_t *reg_data,
                              uint32_t length, void *intf_ptr) noexcept {
         auto *self = static_cast<cyhal_i2c_transport *>(intf_ptr);
@@ -215,6 +242,17 @@ public:
         return CY_RSLT_SUCCESS;
     }
 
+    ///
+    /// \brief Bosch Sensortec API delay wrapper.
+    ///
+    /// \details Bosch callbacks express their period in microseconds;
+    ///          CYHAL's system delay is millisecond-granular, so the
+    ///          period is rounded up (minimum 1 ms).
+    ///
+    /// \param period   Delay duration in microseconds.
+    /// \param intf_ptr Interface pointer; must point to a
+    ///                 \c cyhal_i2c_transport instance.
+    ///
     static void bosch_delay(uint32_t period, void *intf_ptr) noexcept {
         // Interface pointer is unused but required by Bosch API signature
         auto *self = static_cast<cyhal_i2c_transport *>(intf_ptr);

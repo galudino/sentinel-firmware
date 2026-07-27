@@ -61,8 +61,11 @@ extern "C" {
 
 using sentinel::ble_context;
 
+/// \brief Local alias for the PWM signal type driving the advertising LED.
 using Signal = sentinel::cyhal_pwm_signal;
 
+/// \brief PWM signal bound to LED3, used to indicate advertising/connection
+///        state (see \ref sentinel::ble_context::update_advertising_led).
 static auto led3_pwm_block = Signal(&sentinel::resource::led3);
 
 namespace sentinel {
@@ -287,6 +290,8 @@ namespace {
 constexpr uint32_t LINK_METRICS_MIN_INTERVAL_MS = 1000;
 
 /// \brief read-RSSI completion: cache the peer RSSI on the shared context.
+/// \param p_data Callback payload; expected to be a
+///               \c wiced_bt_dev_rssi_result_t*.
 void rssi_read_complete(void *p_data) {
     auto *result = static_cast<wiced_bt_dev_rssi_result_t *>(p_data);
     if (result != nullptr &&
@@ -296,6 +301,8 @@ void rssi_read_complete(void *p_data) {
 }
 
 /// \brief read-TX-power completion: cache the connection TX power.
+/// \param p_data Callback payload; expected to be a
+///               \c wiced_bt_tx_power_result_t*.
 void tx_power_read_complete(void *p_data) {
     auto *result = static_cast<wiced_bt_tx_power_result_t *>(p_data);
     if (result != nullptr &&

@@ -3,8 +3,9 @@
 /// \brief   Accessor layer for the \c Snapshot Stream GATT service (#6, lane 2)
 ///
 /// \details Bridges the live \ref sentinel::task::snapshot_stream_task (#46,
-///          lane 2) to GATT. \ref notify_sink is the \c notify_fn the task calls
-///          with each produced \ref sentinel::telemetry::device_snapshot; it
+///          lane 2) to GATT. \ref sentinel::gatt::snapshot_stream::notify_sink
+///          is the \c notify_fn the task calls with each produced
+///          \c sentinel::telemetry::device_snapshot; it
 ///          writes the 80-byte record to the Current Device Snapshot
 ///          characteristic and notifies a subscribed central. The Snapshot
 ///          Notify Enable characteristic drives the task's \c start() / \c stop().
@@ -38,12 +39,14 @@ namespace sentinel::gatt::snapshot_stream {
 
 /// \brief \c true while a central has subscribed to Current Device Snapshot
 ///        notifications.
+/// \return \c true if the CCCD notification bit is set.
 inline bool notifications_enabled() noexcept {
     return app_snapshot_stream_current_device_snapshot_client_char_config[0] &
            wiced_bt_gatt_client_char_config_e::GATT_CLIENT_CONFIG_NOTIFICATION;
 }
 
 /// \brief Current value of the Snapshot Notify Enable characteristic (0/1).
+/// \return \c true if the enable flag is set.
 inline bool enable_flag() noexcept {
     return app_snapshot_stream_snapshot_notify_enable[0] != 0;
 }
@@ -55,6 +58,8 @@ inline bool enable_flag() noexcept {
 /// \details Signature matches \c snapshot_stream_task::notify_fn. The 80-byte
 ///          \c device_snapshot is packed (wire contract, #36), so it is copied
 ///          verbatim into the characteristic value.
+///
+/// \param snap Snapshot record produced by the snapshot stream task.
 ///
 inline void notify_sink(const sentinel::telemetry::device_snapshot &snap) noexcept {
     ble_gatt_db_set_value(

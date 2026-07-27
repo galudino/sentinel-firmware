@@ -4,8 +4,10 @@
 ///
 /// \details Defines the on-storage record format for the System Event Log
 ///          (firmware #34): a closed \ref sentinel::diagnostics::system_event
-///          enum, a common 8-byte \ref system_event_record_header, the 36-byte
-///          untyped \ref system_event_record that the storage layer sees, and
+///          enum, a common 8-byte
+///          \ref sentinel::diagnostics::system_event_record_header, the 36-byte
+///          untyped \ref sentinel::diagnostics::system_event_record that the
+///          storage layer sees, and
 ///          one typed *view* struct per event family. Every typed view is
 ///          exactly 36 bytes (`static_assert(sizeof(...) == 36)`), so any of
 ///          them can be \c memcpy-ed to/from the untyped record and stored by
@@ -37,7 +39,8 @@
 ///
 ///          Adding a new event type is additive: old firmware reading a newer
 ///          record sees an unknown enum value and falls back to the untyped
-///          \ref system_event_record view. Adding a field to an existing typed
+///          \ref sentinel::diagnostics::system_event_record view. Adding a field
+///          to an existing typed
 ///          view (eating reserved bytes) is additive. *Re-purposing* an
 ///          existing field is breaking — treat the field layouts here as a wire
 ///          contract shared with the BLE GATT retrieval path (#6) and the iOS
@@ -139,15 +142,18 @@ enum class system_event : uint8_t {
 ///          \c uint8_t so the struct is 4-aligned and introduces no padding.
 ///
 struct firmware_version_compact {
-    uint8_t major;
-    uint8_t minor;
-    uint8_t patch;
+    uint8_t major; ///< Major version number.
+    uint8_t minor; ///< Minor version number.
+    uint8_t patch; ///< Patch version number.
     uint8_t build; ///< Low 8 bits of the full build number.
 };
 static_assert(sizeof(firmware_version_compact) == 4);
 
 ///
 /// \brief Pack a \ref sentinel::firmware_version into its compact record form.
+///
+/// \param v Full firmware version to pack.
+/// \return The packed 4-byte \ref sentinel::diagnostics::firmware_version_compact.
 ///
 inline firmware_version_compact
 to_compact(const sentinel::firmware_version &v) noexcept {
@@ -179,8 +185,9 @@ static_assert(sizeof(system_event_record_header) == 8);
 ///          the raw 28-byte body.
 ///
 struct system_event_record {
-    system_event_record_header header;
-    uint8_t                    data[28];
+    system_event_record_header header;    ///< Common 8-byte header.
+    uint8_t                    data[28]; ///< Untyped body; reinterpret via a
+                                          ///< typed view for \c header.event_type.
 };
 static_assert(sizeof(system_event_record) == 36);
 static_assert(std::is_trivially_copyable_v<system_event_record>);
@@ -194,11 +201,11 @@ static_assert(sizeof(system_event_record) % 4 == 0);
 /// \brief boot_complete / shutdown_clean / shutdown_unexpected.
 ///
 struct boot_lifecycle_record {
-    system_event_record_header header;
+    system_event_record_header header;           ///< Common 8-byte header.
     firmware_version_compact   firmware_version; ///< 4 bytes
     uint32_t                   boot_count;       ///< total boots since erase
     uint32_t                   uptime_at_event;  ///< seconds (0 for boot)
-    uint8_t                    reserved[16];
+    uint8_t                    reserved[16];     ///< Forward-compat padding.
 };
 static_assert(sizeof(boot_lifecycle_record) == 36);
 
@@ -206,11 +213,11 @@ static_assert(sizeof(boot_lifecycle_record) == 36);
 /// \brief firmware_update_attempted / _completed / _failed / firmware_reverted.
 ///
 struct firmware_update_record {
-    system_event_record_header header;
+    system_event_record_header header;         ///< Common 8-byte header.
     firmware_version_compact   from_version;   ///< 4 bytes
     firmware_version_compact   to_version;      ///< 4 bytes
     uint32_t                   mcuboot_result; ///< last image-check / etc.
-    uint8_t                    reserved[16];
+    uint8_t                    reserved[16];   ///< Forward-compat padding.
 };
 static_assert(sizeof(firmware_update_record) == 36);
 
@@ -218,13 +225,13 @@ static_assert(sizeof(firmware_update_record) == 36);
 /// \brief ble_peripheral_connected / ble_peripheral_disconnected.
 ///
 struct ble_connection_record {
-    system_event_record_header header;
-    uint8_t                    peer_address[6]; ///< BD_ADDR
-    uint8_t                    peer_addr_type;
+    system_event_record_header header;            ///< Common 8-byte header.
+    uint8_t                    peer_address[6];   ///< BD_ADDR
+    uint8_t                    peer_addr_type;     ///< Public/random address type.
     uint8_t  disconnect_reason;  ///< 0 for connected events
-    uint16_t conn_interval_125us;
-    uint16_t peer_mtu;
-    uint8_t  reserved[16];
+    uint16_t conn_interval_125us; ///< Connection interval, units of 1.25 ms.
+    uint16_t peer_mtu;            ///< Negotiated ATT MTU with the peer.
+    uint8_t  reserved[16];        ///< Forward-compat padding.
 };
 static_assert(sizeof(ble_connection_record) == 36);
 
@@ -232,11 +239,11 @@ static_assert(sizeof(ble_connection_record) == 36);
 /// \brief fault_raised / fault_cleared.
 ///
 struct fault_record {
-    system_event_record_header header;
-    uint8_t                    fault_id;
+    system_event_record_header header;       ///< Common 8-byte header.
+    uint8_t                    fault_id;     ///< Application-defined fault id.
     uint8_t                    severity;     ///< 0=info 1=warn 2=error 3=crit
-    uint8_t                    subsystem_id;
-    uint8_t                    reserved_inline;
+    uint8_t                    subsystem_id; ///< Subsystem that raised the fault.
+    uint8_t                    reserved_inline; ///< Forward-compat padding.
     uint32_t                   fault_context[6]; ///< free-form per-fault context
 };
 static_assert(sizeof(fault_record) == 36);
@@ -245,12 +252,12 @@ static_assert(sizeof(fault_record) == 36);
 /// \brief mode_changed.
 ///
 struct mode_change_record {
-    system_event_record_header header;
-    uint8_t                    from_mode;
-    uint8_t                    to_mode;
+    system_event_record_header header;    ///< Common 8-byte header.
+    uint8_t                    from_mode; ///< Mode transitioned from.
+    uint8_t                    to_mode;   ///< Mode transitioned to.
     uint8_t                    trigger; ///< ble | button | watchdog | post_fail
-    uint8_t                    reserved_inline;
-    uint8_t                    reserved[24];
+    uint8_t                    reserved_inline; ///< Forward-compat padding.
+    uint8_t                    reserved[24];    ///< Forward-compat padding.
 };
 static_assert(sizeof(mode_change_record) == 36);
 
@@ -258,12 +265,12 @@ static_assert(sizeof(mode_change_record) == 36);
 /// \brief post_passed / post_subsystem_failed (see #35).
 ///
 struct post_result_record {
-    system_event_record_header header;
+    system_event_record_header header;       ///< Common 8-byte header.
     uint8_t                    subsystem_id; ///< 0 for post_passed
     uint8_t                    result;       ///< per-subsystem result code
     uint8_t                    detail;       ///< per-subsystem detail byte
-    uint8_t                    reserved_inline;
-    uint8_t                    reserved[24];
+    uint8_t                    reserved_inline; ///< Forward-compat padding.
+    uint8_t                    reserved[24];    ///< Forward-compat padding.
 };
 static_assert(sizeof(post_result_record) == 36);
 
@@ -277,10 +284,10 @@ static_assert(sizeof(post_result_record) == 36);
 ///          heartbeat from a fault-handler capture.
 ///
 struct snapshot_event_record {
-    system_event_record_header header;
+    system_event_record_header header;         ///< Common 8-byte header.
     uint32_t                   snapshot_count; ///< Snapshot store count at event.
     uint8_t                    reason;         ///< 0=periodic heartbeat, 1=pre-fault.
-    uint8_t                    reserved[23];
+    uint8_t                    reserved[23];   ///< Forward-compat padding.
 };
 static_assert(sizeof(snapshot_event_record) == 36);
 
@@ -288,21 +295,25 @@ static_assert(sizeof(snapshot_event_record) == 36);
 /// \brief fan_rpm_threshold_changed (Phase II).
 ///
 struct fan_rpm_threshold_change_record {
-    system_event_record_header header;
-    uint16_t                   old_min_rpm;
-    uint16_t                   old_max_rpm;
-    uint16_t                   new_min_rpm;
-    uint16_t                   new_max_rpm;
-    uint8_t                    reserved[20];
+    system_event_record_header header;       ///< Common 8-byte header.
+    uint16_t                   old_min_rpm;  ///< Previous minimum RPM threshold.
+    uint16_t                   old_max_rpm;  ///< Previous maximum RPM threshold.
+    uint16_t                   new_min_rpm;  ///< New minimum RPM threshold.
+    uint16_t                   new_max_rpm;  ///< New maximum RPM threshold.
+    uint8_t                    reserved[20]; ///< Forward-compat padding.
 };
 static_assert(sizeof(fan_rpm_threshold_change_record) == 36);
 
 ///
 /// \brief Is \p e one of the boot-lifecycle events carried by
-///        \ref boot_lifecycle_record?
+///        \ref sentinel::diagnostics::boot_lifecycle_record?
 ///
 /// \details Used by the boot sequence to recover the running boot count from
 ///          the most recent lifecycle record.
+///
+/// \param e Event type to test.
+/// \return \c true if \p e is \c boot_complete, \c shutdown_clean, or
+///         \c shutdown_unexpected.
 ///
 inline bool is_boot_lifecycle(system_event e) noexcept {
     return e == system_event::boot_complete ||

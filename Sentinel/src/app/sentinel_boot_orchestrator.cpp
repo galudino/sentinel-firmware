@@ -63,6 +63,8 @@ namespace sentinel::app {
 namespace {
 
 /// \brief First failed subsystem id (0 = all passed) for the snapshot field.
+/// \param s POST summary to scan.
+/// \return The first failed \c post_subsystem id, or 0 if all passed.
 uint8_t first_failure_id(
     const sentinel::diagnostics::post::summary &s) noexcept {
     if (s.all_passed) {
@@ -77,6 +79,8 @@ uint8_t first_failure_id(
 }
 
 /// \brief Human-readable POST subsystem name for the serial / BLE feedback.
+/// \param s Subsystem to name.
+/// \return Static string naming \p s (\c "?" if unrecognized).
 const char *subsystem_name(sentinel::diagnostics::post_subsystem s) noexcept {
     using ps = sentinel::diagnostics::post_subsystem;
     switch (s) {
@@ -93,6 +97,8 @@ const char *subsystem_name(sentinel::diagnostics::post_subsystem s) noexcept {
 }
 
 /// \brief Human-readable POST result code (PASS or the failure reason).
+/// \param r Result code to name.
+/// \return Static string naming \p r (\c "?" if unrecognized).
 const char *result_name(sentinel::diagnostics::post_result r) noexcept {
     using pr = sentinel::diagnostics::post_result;
     switch (r) {
@@ -107,6 +113,8 @@ const char *result_name(sentinel::diagnostics::post_result r) noexcept {
 }
 
 /// \brief Start a service task, logging on failure (boot continues regardless).
+/// \param name Service task name, for the failure log line.
+/// \param rc   Result of the \c xTaskCreate call that started it.
 void start_task(const char *name, BaseType_t rc) noexcept {
     if (rc != pdPASS) {
         loge("boot: %s task create failed", name);

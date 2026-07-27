@@ -19,12 +19,15 @@
 ///          record is larger (80 B vs 36 B) and the cadence slower. The
 ///          \ref sentinel::diagnostics::system_event::snapshot_persisted
 ///          heartbeat is recorded to the event log once per
-///          \ref HEARTBEAT_EVERY_N captures so the log carries a "still alive"
-///          marker without flooding.
+///          \ref sentinel::task::snapshot_persistence_task::HEARTBEAT_EVERY_N
+///          captures so the log carries a "still alive" marker without
+///          flooding.
 ///
 ///          OO/class style (decision #16): cadence, store binding, and handle
-///          live in private members; the loop runs as a private \ref run reached
-///          via a static trampoline. Use the \ref instance singleton.
+///          live in private members; the loop runs as a private
+///          \ref sentinel::task::snapshot_persistence_task::run reached via a
+///          static trampoline. Use the
+///          \ref sentinel::task::snapshot_persistence_task::instance singleton.
 ///
 /// \author  galudino
 /// \date    2026-06-30
@@ -75,6 +78,8 @@ public:
     ///
     /// \brief The single snapshot-persistence-task instance.
     ///
+    /// \return Reference to the singleton \ref snapshot_persistence_task instance.
+    ///
     static snapshot_persistence_task &instance() noexcept;
 
     /// Non-copyable, non-movable: the task entry point captures \c this.
@@ -101,11 +106,13 @@ public:
 
     ///
     /// \brief Set the capture cadence at runtime.
+    /// \param period_seconds New cadence in seconds; floored to a 1 s minimum.
     /// \return \c true (always; the value is floored to a 1 s minimum).
     ///
     bool set_period_seconds(uint32_t period_seconds) noexcept;
 
     /// \brief Current capture cadence in seconds.
+    /// \return Current \ref set_period_seconds value, in seconds.
     uint32_t period_seconds() const noexcept;
 
     ///
@@ -120,16 +127,26 @@ public:
     bool capture_now() noexcept;
 
     /// \brief Valid snapshots currently stored.
+    /// \return Count of valid snapshots in the backing store.
     uint32_t count() const noexcept;
 
     /// \brief Read the snapshot at an absolute \p index (called from #6 GATT).
+    /// \param index Absolute record index to read.
+    /// \param out   Destination snapshot; written only on success.
+    /// \return \c true if \p index held a valid record; \c false otherwise.
     bool read(uint32_t index, telemetry::device_snapshot *out) const noexcept;
 
     /// \brief Read \p n consecutive snapshots from absolute \p start.
+    /// \param start Absolute starting record index.
+    /// \param n     Number of consecutive records to read.
+    /// \param out   Destination array of at least \p n snapshots.
+    /// \return \c true if every requested record was valid and read;
+    ///         \c false otherwise.
     bool read_range(uint32_t start, uint32_t n,
                     telemetry::device_snapshot *out) const noexcept;
 
     /// \brief Erase the entire snapshot history.
+    /// \return \c true on success; \c false on a flash error.
     bool erase_all() noexcept;
 
     ///
@@ -145,12 +162,16 @@ public:
 private:
     snapshot_persistence_task() = default;
 
+    /// \brief Static FreeRTOS task entry point; forwards to \ref run.
+    /// \param task_parameter Unused (\c this is captured via \ref instance).
     static void task_trampoline(void *task_parameter);
 
     /// \brief Capture loop: \c populate → \c append → delay, forever.
     void run();
 
     /// \brief Resolve the effective store (bound override, else context store).
+    /// \return Reference to the store bound via \ref bind_store, or the
+    ///         shared \c resource::context().snapshot_store if none is bound.
     resource::snapshot_store_t &store() const noexcept;
 
     resource::snapshot_store_t *m_store{nullptr};  ///< Bound override (tests).

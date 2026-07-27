@@ -20,7 +20,8 @@
 ///          Run-to-completion (#48): the suite runs synchronously and returns
 ///          a \ref sentinel::test::tally. It no longer self-schedules as a
 ///          FreeRTOS task and no longer owns a continuous ~1 Hz read loop —
-///          the serial test orchestrator calls \ref run_all directly, and the
+///          the serial test orchestrator calls
+///          \ref sentinel::test::ds3231::run_all directly, and the
 ///          continuous time/temperature read is owned by
 ///          \c sentinel::task::rtc_service once the one-shot suite finishes.
 ///

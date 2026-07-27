@@ -3,7 +3,7 @@
 /// \brief   populate_snapshot — aggregate live device state into a snapshot
 /// (#36)
 ///
-/// \details Implements \ref sentinel::telemetry::populate_snapshot. Per
+/// \details Implements \ref sentinel::telemetry::device_snapshot::populate. Per
 /// decision
 ///          #14, it aggregates from already-cached subsystem state and issues
 ///          no fresh bus transaction, so the live stream (#46) can call it

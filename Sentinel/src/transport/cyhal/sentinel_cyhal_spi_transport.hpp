@@ -60,13 +60,13 @@ public:
     using byte_transport<cyhal_spi_transport, spi_tag>::transfer_async;
 
     ///
-    /// \brief Construct SPI transport with CYHAL object and optional chip
-    /// select
+    /// \brief Construct SPI transport over an initialized CYHAL SPI object
+    ///
+    /// \details Chip-select control is not owned by this transport; pair it
+    ///          with a \ref sentinel::spi_flash_bus_controller (or manage
+    ///          CS at the call site) if software CS is required.
     ///
     /// \param spi_object Pointer to initialized CYHAL SPI object
-    /// \param chip_select GPIO pin for chip select (NC for no software CS)
-    /// \param chip_select_active_low true for active-low CS, false for
-    /// active-high
     ///
     explicit cyhal_spi_transport(cyhal_spi_t *spi_object) noexcept
         : m_spi_object(spi_object) {}

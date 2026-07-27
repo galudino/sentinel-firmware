@@ -10,8 +10,8 @@
 ///          \c sentinel::resource::cybsp_spi_bus.
 ///
 ///          All tests operate on a dedicated scratch region near the top of
-///          flash (\ref kRegionOffset), two sectors wide. This is clear of
-///          the \ref sentinel::test::w25q128 scratch sector (\c 0xFFF000)
+///          flash (\c kRegionOffset), two sectors wide. This is clear of
+///          the \c sentinel::test::w25q128 scratch sector (\c 0xFFF000)
 ///          and of any plausible application data, so the suites do not
 ///          interfere with one another.
 ///
@@ -19,8 +19,9 @@
 ///          \c fixture that owns the bus-arbitrated SPI transport, mirroring a
 ///          GoogleTest \c TEST_F fixture — the shared resource lives in the
 ///          fixture, not a file-static global. Each test returns \c true on
-///          pass / \c false on fail; \ref run_all constructs the fixture, folds
-///          every outcome into a \ref sentinel::test::tally, and returns it.
+///          pass / \c false on fail; \ref sentinel::test::record_store::run_all
+///          constructs the fixture, folds every outcome into a
+///          \ref sentinel::test::tally, and returns it.
 ///
 /// \author  galudino
 /// \date    2026-06-28
@@ -53,6 +54,7 @@ extern "C" {
 
 namespace {
 
+/// W25Q128 driver instantiated over the bus-arbitrated SPI transport.
 using flash_t = sentinel::w25q128<sentinel::cyhal_spi_bus_transport>;
 
 ///
@@ -62,20 +64,23 @@ using flash_t = sentinel::w25q128<sentinel::cyhal_spi_bus_transport>;
 ///          this yields a 32-byte slot, i.e. 128 records per 4 KiB sector.
 ///
 struct test_record {
-    uint32_t value;
-    uint8_t tag[20];
+    uint32_t value;  ///< Seed value the record was built from.
+    uint8_t tag[20]; ///< Bytes derived from \ref value for a memcmp check.
 };
 static_assert(sizeof(test_record) % 4 == 0, "test_record must be 4-aligned");
 
+/// Circular record_store over \c test_record, backed by \ref flash_t.
 using store_t =
     sentinel::record_store<test_record, sentinel::cyhal_spi_bus_transport>;
 
 /// Scratch region: two sectors near the top of flash, clear of 0xFFF000.
 constexpr uint32_t kRegionOffset = 0xF00000u;
-constexpr uint32_t kRegionSize = 2u * flash_t::SECTOR_SIZE_BYTES; // 8 KiB
+constexpr uint32_t kRegionSize = 2u * flash_t::SECTOR_SIZE_BYTES; ///< 8 KiB.
 
 ///
 /// \brief Yield long enough for the BLE debug ring buffer to drain.
+///
+/// \param milliseconds Delay duration, in milliseconds.
 ///
 inline void yield_for_debug_drain(uint32_t milliseconds) noexcept {
     vTaskDelay(pdMS_TO_TICKS(milliseconds));
@@ -83,6 +88,9 @@ inline void yield_for_debug_drain(uint32_t milliseconds) noexcept {
 
 ///
 /// \brief Build a deterministic record from a seed value.
+///
+/// \param seed Seed value; becomes \c value and derives every \c tag byte.
+/// \return The constructed \ref test_record.
 ///
 inline test_record make_record(uint32_t seed) noexcept {
     auto r = test_record{};
@@ -96,6 +104,10 @@ inline test_record make_record(uint32_t seed) noexcept {
 ///
 /// \brief Byte-for-byte record comparison.
 ///
+/// \param a First record.
+/// \param b Second record.
+/// \return \c true if \p a and \p b are identical.
+///
 inline bool records_equal(const test_record &a, const test_record &b) noexcept {
     return a.value == b.value && std::memcmp(a.tag, b.tag, sizeof(a.tag)) == 0;
 }
@@ -104,21 +116,38 @@ inline bool records_equal(const test_record &a, const test_record &b) noexcept {
 /// \brief Test fixture: owns the bus-arbitrated SPI transport every test shares.
 ///
 /// \details Targets the same flash CS line (\c CYBSP_SPI_FLASH_CS / SS0) as the
-///          W25Q128 driver suite. Constructed fresh by \ref run_all (like a
+///          W25Q128 driver suite. Constructed fresh by
+///          \ref sentinel::test::record_store::run_all (like a
 ///          GoogleTest \c SetUp), so there is no file-static bus global. The
 ///          transport is inert until \c peripheral_initialize() has spawned the
 ///          arbiter, which the orchestrator guarantees by running post-scheduler.
 ///
 struct fixture {
+    /// Bus-arbitrated SPI transport shared by every test in this fixture.
     sentinel::cyhal_spi_bus_transport flash_bus{
         sentinel::resource::cybsp_spi_bus, CYBSP_SPI_FLASH_CS};
 
+    /// \brief Fresh store reports empty.
+    /// \return \c true on success.
     bool presence_check() noexcept;
+    /// \brief Append one record, read it back.
+    /// \return \c true on success.
     bool append_round_trip() noexcept;
+    /// \brief Append 100 records, read them back in order.
+    /// \return \c true on success.
     bool many_append() noexcept;
+    /// \brief Fill to capacity + 1; the oldest record is overwritten.
+    /// \return \c true on success.
     bool wrap_around() noexcept;
+    /// \brief A partial (uncommitted) record is skipped by recovery scan.
+    /// \return \c true on success.
     bool power_loss_simulation() noexcept;
+    /// \brief A fresh store re-derives head/tail from on-flash state.
+    /// \return \c true on success.
     bool survive_reset() noexcept;
+    /// \brief A blank recycled sector 0 is not mistaken for a blank region;
+    ///        recovery falls back to the full scan.
+    /// \return \c true on success.
     bool recycle_transient_recovery() noexcept;
 };
 

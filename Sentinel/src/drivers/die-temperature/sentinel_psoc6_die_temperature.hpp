@@ -11,13 +11,16 @@
 ///          Feeds \c device_snapshot::cpu_temperature_001c (#36/#6). A single
 ///          conversion (single-ended DieTemp channel, 1.2 V bandgap reference,
 ///          32× hardware averaging) takes on the order of tens of microseconds;
-///          \ref refresh throttles to ~1 Hz and serializes SAR access under a
+///          \ref sentinel::drivers::psoc6_die_temperature::refresh throttles to
+///          ~1 Hz and serializes SAR access under a
 ///          mutex, so the two snapshot producers (100 ms stream + 5 min persist)
 ///          share the SAR safely without re-converting on every populate.
 ///
 ///          OO/class singleton (decision #16). Off-bench builds compile this but
 ///          never touch the SAR — \c populate_snapshot only reads the cache,
-///          which is 0/invalid until \ref initialize runs on real hardware.
+///          which is 0/invalid until
+///          \ref sentinel::drivers::psoc6_die_temperature::initialize runs on
+///          real hardware.
 ///
 ///          \note The mV→°C calibration and the chosen SAR clock divider need
 ///          \b on-bench validation — tracked in issue #55.
@@ -50,6 +53,8 @@ namespace sentinel::drivers {
 class psoc6_die_temperature {
 public:
     /// \brief The single die-temperature-driver instance.
+    /// \return Reference to the process-wide \ref psoc6_die_temperature
+    ///         singleton.
     static psoc6_die_temperature &instance() noexcept;
 
     psoc6_die_temperature(const psoc6_die_temperature &) = delete;
@@ -92,9 +97,15 @@ private:
     psoc6_die_temperature() = default;
 
     /// \brief One synchronous SAR conversion → 0.01 °C (SAR access, no locking).
+    /// \param[out] out_centi_c Receives the freshly converted temperature
+    ///             (0.01 °C / LSB).
+    /// \return \c true on a successful conversion; \c false otherwise (and
+    ///         \p out_centi_c is untouched).
     bool convert_once(int16_t &out_centi_c) noexcept;
 
     /// \brief SFLASH-calibrated dual-slope counts → 0.01 °C conversion.
+    /// \param adc_counts Raw SAR ADC counts from the DieTemp channel.
+    /// \return Temperature in 0.01 °C / LSB.
     static int16_t counts_to_centi_c(int16_t adc_counts) noexcept;
 
     SemaphoreHandle_t m_mutex{nullptr};        ///< Serializes SAR access.

@@ -33,12 +33,13 @@ namespace sentinel::logging {
 //==============================================================================
 
 /// Static staging buffer the line is formatted into (once) before fan-out.
-/// Protected by \ref g_log_mutex; kept off the caller's stack to spare tasks
+/// Protected by \c g_log_mutex; kept off the caller's stack to spare tasks
 /// with 200-300 word stacks.
 static char g_log_buffer[DEBUG_OUTPUT_STREAM_MAX_LEN];
 
-/// Serializes producers and guards \ref g_log_buffer. Created by \ref init.
-/// Held across the (blocking) serial write, mirroring the former cy_log mutex.
+/// Serializes producers and guards \c g_log_buffer. Created by
+/// \ref sentinel::logging::init. Held across the (blocking) serial write,
+/// mirroring the former cy_log mutex.
 static SemaphoreHandle_t g_log_mutex = nullptr;
 
 /// Monotonic per-line sequence index. Shared by both sinks so a gap on serial

@@ -18,13 +18,15 @@
 
 namespace sentinel::logging {
 
+/// \brief Broken-down UTC date/time components produced by
+///        \ref unix_seconds_to_datetime.
 struct datetime {
-    int year;
-    int month;
-    int day;
-    int hour;
-    int min;
-    int sec;
+    int year;  ///< Full year (e.g. 2026).
+    int month; ///< Month, 1-12.
+    int day;   ///< Day of month, 1-31.
+    int hour;  ///< Hour, 0-23.
+    int min;   ///< Minute, 0-59.
+    int sec;   ///< Second, 0-59.
 };
 
 //==============================================================================
@@ -128,6 +130,9 @@ int sentinel::logging::build_string(char *out, size_t size, uint16_t seq,
 ///
 /// \brief      Check if a year is a leap year.
 ///
+/// \param      year Full year (e.g. 2026) to test.
+/// \return     \c true if \p year is a leap year.
+///
 static bool sentinel::logging::is_leap_year(int year) {
     return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
 }
@@ -136,6 +141,7 @@ static bool sentinel::logging::is_leap_year(int year) {
 /// \brief      Convert Unix timestamp (seconds since 1970) to date/time
 /// components.
 ///
+/// \param      unix_seconds Seconds since the Unix epoch (1970-01-01 UTC).
 /// \return     datetime struct with year, month, day, hour, min, sec
 ///
 /// Lightweight alternative to gmtime_r() that doesn't require heavy libc

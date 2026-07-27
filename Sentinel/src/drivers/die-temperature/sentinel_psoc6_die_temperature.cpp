@@ -68,6 +68,7 @@ constexpr uint32_t CHAN0_CONFIG =
 /// \details Value-initialized (zeros every field, incl. FIFO / deep-sleep fields
 ///          unused here) then the DieTemp fields are set — this avoids C++20
 ///          designated initializers (the project is C++17 + \c -pedantic-errors).
+/// \return A fully populated \c cy_stc_sar_config_t for the DieTemp channel.
 cy_stc_sar_config_t make_die_temp_config() noexcept {
     cy_stc_sar_config_t c{};
     c.ctrl = CY_SAR_VREF_SEL_BGR | CY_SAR_BYPASS_CAP_ENABLE |
@@ -89,13 +90,13 @@ cy_stc_sar_config_t make_die_temp_config() noexcept {
 }
 
 // ---- Dual-slope conversion constants (DieTemp component / TRM Ch. 39). ------
-constexpr int32_t TEMP_OFFSET_MULT       = 0x400;    // Q… offset scale
-constexpr int32_t Q16_ONE                = 0x10000;  // 1.0 in Q16.16
-constexpr int32_t SCALE_ADJUSTMENT       = 8;
-constexpr int32_t SCALE_ADJUSTMENT_DIV   = 16;
-constexpr int32_t DUAL_SLOPE_CORRECTION  = 0xF0000;  // 15.0 in Q16.16
-constexpr int32_t HIGH_TEMPERATURE       = 0x640000; // 100.0 in Q16.16
-constexpr int32_t LOW_TEMPERATURE        = 0x280000; // 40.0 in Q16.16
+constexpr int32_t TEMP_OFFSET_MULT      = 0x400;    ///< Offset scale factor.
+constexpr int32_t Q16_ONE               = 0x10000;  ///< 1.0 in Q16.16.
+constexpr int32_t SCALE_ADJUSTMENT      = 8;        ///< Dual-slope scale numerator.
+constexpr int32_t SCALE_ADJUSTMENT_DIV  = 16;       ///< Dual-slope scale divisor.
+constexpr int32_t DUAL_SLOPE_CORRECTION = 0xF0000;  ///< 15.0 in Q16.16.
+constexpr int32_t HIGH_TEMPERATURE      = 0x640000; ///< 100.0 in Q16.16.
+constexpr int32_t LOW_TEMPERATURE       = 0x280000; ///< 40.0 in Q16.16.
 
 } // namespace
 

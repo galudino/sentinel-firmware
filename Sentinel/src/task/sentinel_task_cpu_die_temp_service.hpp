@@ -13,8 +13,10 @@
 ///
 ///          OO/class singleton, mirroring \ref sentinel::task::rtc_service and
 ///          \ref sentinel::task::bme280_service (decision #16): cadence + handle
-///          live in private members and the loop runs as a private \ref run
-///          reached via a static trampoline. Use the \ref instance singleton.
+///          live in private members and the loop runs as a private
+///          \ref sentinel::task::cpu_die_temp_service::run reached via a static
+///          trampoline. Use the
+///          \ref sentinel::task::cpu_die_temp_service::instance singleton.
 ///
 /// \author  galudino
 /// \date    2026-07-09
@@ -49,6 +51,7 @@ public:
     static constexpr uint32_t DEFAULT_PERIOD_MS = 2000;
 
     /// \brief The single CPU-die-temperature-service instance.
+    /// \return Reference to the singleton \ref cpu_die_temp_service instance.
     static cpu_die_temp_service &instance() noexcept;
 
     cpu_die_temp_service(const cpu_die_temp_service &) = delete;
@@ -70,14 +73,18 @@ public:
         uint32_t period_ms = DEFAULT_PERIOD_MS) noexcept;
 
     /// \brief Set the sampling cadence at runtime (floored to a small minimum).
+    /// \param period_ms New sampling cadence in milliseconds.
     void set_period_ms(uint32_t period_ms) noexcept;
 
     /// \brief Current sampling cadence in milliseconds.
+    /// \return Current \ref set_period_ms value, in milliseconds.
     uint32_t period_ms() const noexcept;
 
 private:
     cpu_die_temp_service() = default;
 
+    /// \brief Static FreeRTOS task entry point; forwards to \ref run.
+    /// \param task_parameter Unused (\c this is captured via \ref instance).
     static void task_trampoline(void *task_parameter);
 
     /// \brief Sample → publish (GATT) → comparison-log → delay, forever.
