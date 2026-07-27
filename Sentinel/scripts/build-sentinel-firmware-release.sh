@@ -46,7 +46,7 @@ function main() {
     local config="Release"
     local app_name_string="sentinel-firmware"
     local testbench_mode=0
-    local app_bin_string="./build/TARGET_CYBLE-416045-EVAL/$config/$app_name_string.bin"
+    local app_bin_string="./build/APP_CYBLE-416045-EVAL/$config/$app_name_string.bin"
     local timestamp_string="$(date +"%Y.%m.%d_%H.%M.%S")"
     local destination_bin_string="$app_name_string""_"$config"_"$timestamp_string".bin"
 
