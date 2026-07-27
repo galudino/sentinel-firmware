@@ -20,14 +20,39 @@ than letting them accumulate here.
 
 ---
 
-**Last updated:** 2026-07-27 (session: **#65 + #57 DONE, promoted `develop →
-main`**). #65 — Bosch C-driver adapter moved out of the transports into the bme280
-driver (In Review, bench AC pending). #57 — per-directory README fan-out across
-the whole `src/` tree, **COMPLETE + CLOSED**. Earlier: **#53 FULLY DONE + CLOSED**
-— Doxygen backfill (0 warnings) + end-of-Phase-I formatting/convention sweep;
-docs.yml CI added; #58–#64 filed. #56 + #49 on-bench signed off + closed;
-#6/#45/#55 GATT, #38, #51 merged. **NEXT: on-bench BME280 re-verify for #65 (AC
-#4); OTA DFU validation (#63) is the Phase I finale.**
+**Last updated:** 2026-07-27 (session: **#63 OTA DFU VALIDATED — Phase I
+finale DONE + CLOSED**; #65 + #57 also done + promoted). Earlier this session:
+#65 Bosch adapter → bme280, #57 per-dir READMEs, #53 Doxygen+sweep, #56/#49
+flash, #6/#45/#55 GATT, #38/#51. **Phase I MVP OTA path is working end-to-end.**
+
+**#63 — OTA DFU (BLE MCUBoot) VALIDATED + CLOSED.** Firmware OTA'd over BLE
+(AIROC `btsdk-peer-apps-ota` iOS host) → MCUBoot swap → new image booted
+(version + marker confirmed) → full POST pass. **Three bugs fixed en route:**
+1. **CCCD clobbered at PREPARE** (`5e66aa6`) — `ble_context::ota_value_initialize()`
+   zeroed `m_ota_config_descriptor` (set by the client's control-point CCCD
+   write) right before `cy_ota_ble_download_prepare()` read it → aborted at 0%.
+   Fix: init the CCCD once in `default_value_initialize()`, not per-PREPARE.
+2. **ota-update v2.0.0 `write_data_to_flash()` flash-row-boundary bug** — a BLE
+   (row-unaligned) chunk crossing a `CY_FLASH_SIZEOF_ROW` (4096) boundary
+   overflowed the one-row scratch buffer + dropped the spill-over bytes → the
+   OTA'd secondary-slot image was corrupted → MCUBoot rejected the swap (hash
+   mismatch). Root-caused with an **instrumented MCUBoot** (a temporary
+   `#63 HASH MISMATCH/SIG CHECK` printf in `bootutil` loader/image_validate —
+   since reverted). Fixed by clamping each write to the current row. See
+   [[project_ota_dfu_bugs]]. **mtb_shared is gitignored**, so the patch is
+   carried by `Sentinel/scripts/apply-mtb-shared-patches.sh` +
+   `Sentinel/patches/…row-boundary.patch`, and `build-sentinel-*.sh` re-apply it
+   before every build (`ae32f76`). **Migration to ota-update v4.x = #66 (Phase
+   II)** — v3.0.0 offloaded flash write to the app, so v4.x drops the bug + our
+   patch entirely.
+3. (minor) stale `srec_cat` (tools_3.5) + `TARGET_→APP_` build-artifact paths in
+   the combine/build scripts (`81e105f`).
+Diagnostic gotcha worth keeping: the BLE OTA "CRC Verification Succeeded" is
+computed over the received **RAM** buffer, NOT re-read from flash — so it does
+**not** catch a bad flash write; only MCUBoot's post-reboot hash does. The
+"battery-server worked but Sentinel didn't" was a red herring: identical library/
+config; the bug fires only when the runtime chunk stride straddles a 4096 row
+(Sentinel's was 244 B). **NEXT: on-bench BME280 re-verify for #65 (AC #4).**
 
 **#57 (this session — merged `develop`, tag `57-per-directory-readmes-history`;
 CLOSED):** every meaningful `src/` subdirectory now has a `README.md` fanning out
