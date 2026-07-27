@@ -112,8 +112,10 @@ then byte 11 = single-bit flip 0x67→0x77; record_store tail 15/2/128); (c) SPI
 HAL returns success (`last_err=0`) but data is wrong; (d) short transactions pass
 (JEDEC/SR1/power-down), long/multi-byte ones corrupt. **Now fails on both reset
 AND reflash** → not a power-up/ready sequencing gap → degraded physical contact.
-Re-seat VCC/GND + SCLK/MOSI/MISO/CS, add 100 nF at the module, retry for
-repeatable 47/47 across cold power-cycles.
+**RESOLVED same day → 47/47, zero code change:** moved the SPI **VCC/GND jumpers to
+different sockets on the same power rail** — the prior sockets were **worn** (loose
+grip). Root cause confirmed = breadboard socket contact, not the rail/leads/
+decoupling. (So #65 AC #4 stands signed off; the flash suite is green again.)
 
 **⚠️ BENCH RELIABILITY WATCH — marginal SPI (flash) connection.** The testbench
 first came up with **5 failures** (W25Q128 `erase_program_read` + 4 flash-backed
