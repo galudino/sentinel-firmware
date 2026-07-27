@@ -18,10 +18,6 @@
 
 namespace sentinel {
 
-class tach_rpm_windowed;
-
-}
-
 ///
 /// \brief Windowed RPM calculator
 ///
@@ -35,8 +31,7 @@ class tach_rpm_windowed;
 ///       rev / elapsed_sec → rev/s
 ///       rev/s * 60 → RPM
 ///
-class sentinel::tach_rpm_windowed
-    : public tach_callback_crtp<tach_rpm_windowed> {
+class tach_rpm_windowed : public tach_callback_crtp<tach_rpm_windowed> {
 public:
     ///
     /// \brief Construct the windowed RPM calculator.
@@ -122,5 +117,7 @@ private:
     uint32_t m_rpm;         ///< (pulse_count / pulses_per_rev) / (delta_ticks /
                             ///< ticks_per_sec)
 };
+
+} // namespace sentinel
 
 #endif /* SENTINEL_TACH_RPM_WINDOWED_HPP */

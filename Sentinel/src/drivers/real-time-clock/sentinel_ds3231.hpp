@@ -80,11 +80,6 @@ extern "C" {
 
 namespace sentinel {
 
-template <typename Transport>
-class ds3231;
-
-} // namespace sentinel
-
 ///
 /// \brief DS3231 real-time clock driver class
 ///
@@ -104,7 +99,7 @@ class ds3231;
 ///                   \c byte_transport<Transport, i2c_tag>.
 ///
 template <typename Transport>
-class sentinel::ds3231 {
+class ds3231 {
     static_assert(
         std::is_base_of_v<byte_transport<Transport, i2c_tag>, Transport>,
         "Transport must derive from "
@@ -385,11 +380,11 @@ public:
             }
 
             auto days = uint32_t{0};
-            for (auto y = uint16_t{1970}; y < dt.year; ++y) {
+            for (auto y = uint16_t{1970}; y < dt.year; y++) {
                 days += is_leap_year(y) ? 366 : 365;
             }
 
-            for (auto m = uint8_t{1}; m < dt.month; ++m) {
+            for (auto m = uint8_t{1}; m < dt.month; m++) {
                 days += days_in_month(dt.year, m);
             }
 
@@ -1498,7 +1493,7 @@ private:
 
         auto buf = std::array<uint8_t, MAX_CONTIGUOUS_BYTES>{};
         buf[0] = static_cast<uint8_t>(reg);
-        for (auto i = size_t{0}; i < count; ++i) {
+        for (auto i = size_t{0}; i < count; i++) {
             buf[i + 1] = data[i];
         }
 
@@ -1517,5 +1512,7 @@ private:
                                        ///< operation's error code; exposed
                                        ///< by \ref last_error().
 };
+
+} // namespace sentinel
 
 #endif /* SENTINEL_DS3231_HPP */

@@ -90,14 +90,10 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <optional>
 #include <type_traits>
 
 namespace sentinel {
-
-template <typename RecordType, typename Transport>
-class record_store;
-
-} // namespace sentinel
 
 ///
 /// \brief Flash-backed circular record store.
@@ -111,7 +107,7 @@ class record_store;
 ///                   \c sentinel::cyhal_spi_bus_transport).
 ///
 template <typename RecordType, typename Transport>
-class sentinel::record_store {
+class record_store {
     static_assert(std::is_trivially_copyable_v<RecordType>,
                   "RecordType must be trivially copyable to live on flash");
     static_assert(sizeof(RecordType) % 4 == 0,
@@ -363,7 +359,7 @@ public:
             return false;
         }
 
-        m_head++;
+        ++m_head;
         m_last_error = err::ok;
         return true;
     }
@@ -372,18 +368,18 @@ public:
     /// \brief Read the record stored at an absolute index.
     ///
     /// \param index Absolute record index; must be in <tt>[tail, head)</tt>.
-    /// \param out   Destination for the payload.
-    /// \return \c true on success; \c false if \p index is out of range, the
-    ///         slot is unexpectedly not valid, or a transport error occurs.
+    /// \return The record on success; \c std::nullopt if \p index is out of
+    ///         range, the slot is unexpectedly not valid, or a transport error
+    ///         occurs (see \ref last_error()).
     ///
-    bool read(uint32_t index, RecordType *out) const noexcept {
+    std::optional<RecordType> read(uint32_t index) const noexcept {
         if (!m_initialized) {
             m_last_error = err::not_initialized;
-            return false;
+            return std::nullopt;
         }
-        if (out == nullptr || index < m_tail || index >= m_head) {
+        if (index < m_tail || index >= m_head) {
             m_last_error = err::invalid_argument;
-            return false;
+            return std::nullopt;
         }
 
         const auto slot = index % m_capacity;
@@ -391,17 +387,18 @@ public:
         if (!m_flash.read_data(slot_address(slot),
                                sentinel::make_span(raw.data(), raw.size()))) {
             m_last_error = err::flash_failure;
-            return false;
+            return std::nullopt;
         }
 
         if (raw[OFFSET_STATUS] != STATUS_VALID) {
             m_last_error = err::corrupt_record;
-            return false;
+            return std::nullopt;
         }
 
-        std::memcpy(out, raw.data() + OFFSET_PAYLOAD, sizeof(RecordType));
+        auto record = RecordType{};
+        std::memcpy(&record, raw.data() + OFFSET_PAYLOAD, sizeof(RecordType));
         m_last_error = err::ok;
-        return true;
+        return record;
     }
 
     // =====================================================================
@@ -717,5 +714,7 @@ private:
     bool m_initialized{false};         ///< Set once \ref initialize() runs.
     mutable err m_last_error{err::ok}; ///< Cached most-recent error.
 };
+
+} // namespace sentinel
 
 #endif /* SENTINEL_RECORD_STORE_HPP */

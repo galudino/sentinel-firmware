@@ -186,11 +186,11 @@ public:
                 return;
             }
             results[count] = r;
-            count++;
+            ++count;
             if (r.result != post_result::pass) {
                 all_passed = false;
                 if (failure_count < 0xFFu) {
-                    failure_count++;
+                    ++failure_count;
                 }
             }
             if (count < kMaxResults) {

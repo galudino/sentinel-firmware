@@ -44,13 +44,6 @@
 
 namespace sentinel {
 
-class tachometer_input;
-
-template <typename Derived>
-class tach_callback_crtp;
-
-} // namespace sentinel
-
 ///
 /// \brief Abstract interface for tachometer edge event receivers
 ///
@@ -63,7 +56,7 @@ class tach_callback_crtp;
 ///          context and should keep processing minimal to avoid blocking
 ///          other interrupts.
 ///
-class sentinel::tachometer_input {
+class tachometer_input {
 public:
     ///
     /// \brief Virtual destructor for proper cleanup
@@ -103,7 +96,7 @@ public:
 /// \endcode
 ///
 template <typename Derived>
-class sentinel::tach_callback_crtp : public tachometer_input {
+class tach_callback_crtp : public tachometer_input {
 public:
     ///
     /// \brief Dispatch edge event to derived class
@@ -126,5 +119,7 @@ public:
         return static_cast<Derived *>(this)->pulses_in_last_window();
     }
 };
+
+} // namespace sentinel
 
 #endif /* SENTINEL_TACHOMETER_HPP */

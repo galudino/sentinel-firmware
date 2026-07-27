@@ -75,11 +75,6 @@ extern "C" {
 
 namespace sentinel {
 
-template <typename Transport>
-class w25q128;
-
-} // namespace sentinel
-
 ///
 /// \brief Winbond W25Q128JV driver class.
 ///
@@ -99,7 +94,7 @@ class w25q128;
 ///                   Configurator.
 ///
 template <typename Transport>
-class sentinel::w25q128 {
+class w25q128 {
     static_assert(
         std::is_base_of_v<byte_transport<Transport, spi_tag>, Transport>,
         "Transport must derive from "
@@ -1299,5 +1294,7 @@ private:
     SemaphoreHandle_t m_device_mutex;  ///< Optional device lock.
     mutable err m_last_error{err::ok}; ///< Cached most-recent.
 };
+
+} // namespace sentinel
 
 #endif /* SENTINEL_W25Q128_HPP */

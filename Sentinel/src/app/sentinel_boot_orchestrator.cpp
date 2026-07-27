@@ -218,7 +218,7 @@ void boot_orchestrator::run() {
                         m_ble_stack_ok, gatt_db_ok);
     const auto post_ms = static_cast<unsigned>(
         (xTaskGetTickCount() - post_start_ticks) * portTICK_PERIOD_MS);
-    for (auto i = uint8_t{0}; i < summary.count; ++i) {
+    for (auto i = uint8_t{0}; i < summary.count; i++) {
         const auto &r = summary.results[i];
         logi("post: %s %s", subsystem_name(r.subsystem), result_name(r.result));
     }

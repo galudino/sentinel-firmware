@@ -23,14 +23,10 @@ extern "C" {
 
 namespace sentinel {
 
-class cyhal_timer;
-
-}
-
 ///
 /// \brief CYHAL hardware-timer driver, bound to a \c cyhal_timer_t handle.
 ///
-class sentinel::cyhal_timer : public timer<cyhal_timer> {
+class cyhal_timer : public timer<cyhal_timer> {
 public:
     ///
     /// \brief Bind the driver to an already-initialized CYHAL timer object.
@@ -96,5 +92,7 @@ public:
 private:
     cyhal_timer_t *m_timer_object; ///< Non-owning CYHAL timer handle.
 };
+
+} // namespace sentinel
 
 #endif /* SENTINEL_CYHAL_TIMER_HPP */

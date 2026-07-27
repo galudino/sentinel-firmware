@@ -165,8 +165,8 @@ bool fixture::capture_and_readback() noexcept {
     }
 
     for (auto i = uint32_t{0}; i < kCount; i++) {
-        auto s = snapshot{};
-        if (!task.read(i, &s) || !snapshot_well_formed(s)) {
+        auto s = task.read(i);
+        if (!s || !snapshot_well_formed(*s)) {
             loge("capture_and_readback FAIL: read/verify index %u",
                  static_cast<unsigned>(i));
             return false;
@@ -286,17 +286,16 @@ bool fixture::wrap_around() noexcept {
 
     const auto tail = store.tail_index();
     const auto head = store.head_index();
-    auto oldest = snapshot{};
-    auto newest = snapshot{};
-    if (!task.read(tail, &oldest) || !snapshot_well_formed(oldest) ||
-        !task.read(head - 1u, &newest) || !snapshot_well_formed(newest)) {
+    auto oldest = task.read(tail);
+    auto newest = task.read(head - 1u);
+    if (!oldest || !snapshot_well_formed(*oldest) || !newest ||
+        !snapshot_well_formed(*newest)) {
         loge("wrap_around FAIL: tail/head read (tail=%u head=%u)",
              static_cast<unsigned>(tail), static_cast<unsigned>(head));
         return false;
     }
 
-    auto evicted = snapshot{};
-    if (tail > 0u && task.read(tail - 1u, &evicted)) {
+    if (tail > 0u && task.read(tail - 1u)) {
         loge("wrap_around FAIL: evicted record %u still readable",
              static_cast<unsigned>(tail - 1u));
         return false;

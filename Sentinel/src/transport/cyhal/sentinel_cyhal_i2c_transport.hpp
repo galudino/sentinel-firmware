@@ -33,10 +33,6 @@ extern "C" {
 
 namespace sentinel {
 
-class cyhal_i2c_transport;
-
-} // namespace sentinel
-
 ///
 /// \brief CYHAL-based I2C master transport implementation
 ///
@@ -45,7 +41,7 @@ class cyhal_i2c_transport;
 ///          write, read, and repeated-start sequences for accessing target
 ///          devices.
 ///
-class sentinel::cyhal_i2c_transport
+class cyhal_i2c_transport
     : public byte_transport<cyhal_i2c_transport, i2c_tag> {
 public:
     ///
@@ -274,5 +270,7 @@ private:
     cyhal_i2c_t *m_i2c_object; ///< Pointer to CYHAL I2C object
     uint16_t m_target_address; ///< Current I2C target device address
 };
+
+} // namespace sentinel
 
 #endif /* SENTINEL_CYHAL_I2C_TRANSPORT_HPP */

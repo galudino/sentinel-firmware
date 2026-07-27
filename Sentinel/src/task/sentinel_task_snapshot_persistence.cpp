@@ -74,9 +74,9 @@ uint32_t snapshot_persistence_task::count() const noexcept {
     return store().count();
 }
 
-bool snapshot_persistence_task::read(
-    uint32_t index, sentinel::telemetry::device_snapshot *out) const noexcept {
-    return store().read(index, out);
+std::optional<sentinel::telemetry::device_snapshot>
+snapshot_persistence_task::read(uint32_t index) const noexcept {
+    return store().read(index);
 }
 
 bool snapshot_persistence_task::read_range(
@@ -86,9 +86,11 @@ bool snapshot_persistence_task::read_range(
         return false;
     }
     for (auto i = uint32_t{0}; i < n; i++) {
-        if (!store().read(start + i, &out[i])) {
+        auto snap = store().read(start + i);
+        if (!snap) {
             return false;
         }
+        out[i] = *snap;
     }
     return true;
 }

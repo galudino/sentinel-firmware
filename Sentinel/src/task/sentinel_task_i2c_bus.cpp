@@ -154,7 +154,7 @@ i2c_response i2c_bus::process(const i2c_request &request) noexcept {
         return response;
     }
 
-    for (auto attempt = uint8_t{0}; attempt < INNER_RETRIES; ++attempt) {
+    for (auto attempt = uint8_t{0}; attempt < INNER_RETRIES; attempt++) {
         auto status = cy_rslt_t{CY_RSLT_TYPE_ERROR};
 
         if (has_tx && has_rx) {

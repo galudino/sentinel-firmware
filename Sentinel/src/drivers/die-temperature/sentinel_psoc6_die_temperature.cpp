@@ -181,7 +181,7 @@ bool psoc6_die_temperature::initialize() noexcept {
 bool psoc6_die_temperature::convert_once(int16_t &out_centi_c) noexcept {
     Cy_SAR_StartConvert(SAR, CY_SAR_START_CONVERT_SINGLE_SHOT);
 
-    for (uint32_t i = 0; i < CONVERT_POLL_LIMIT; ++i) {
+    for (uint32_t i = 0; i < CONVERT_POLL_LIMIT; i++) {
         if (Cy_SAR_IsEndConversion(SAR, CY_SAR_RETURN_STATUS) ==
             CY_SAR_SUCCESS) {
             out_centi_c = counts_to_centi_c(Cy_SAR_GetResult16(SAR, 0));

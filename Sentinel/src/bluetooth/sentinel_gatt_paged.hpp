@@ -43,6 +43,8 @@ extern "C" {
 #include "sentinel_system_event.hpp"
 
 #include <cstdint>
+#include <cstring>
+#include <optional>
 
 namespace sentinel::gatt::paged {
 
@@ -103,11 +105,12 @@ inline void fill_block(const Store &store, uint32_t cursor,
     }
 
     uint32_t bytes = 0;
-    for (uint32_t i = 0; i < n; ++i) {
-        auto *dst = reinterpret_cast<Rec *>(buf + bytes);
-        if (!store.read(store.tail_index() + cursor + i, dst)) {
+    for (uint32_t i = 0; i < n; i++) {
+        auto r = store.read(store.tail_index() + cursor + i);
+        if (!r) {
             break; // a torn/overwritten slot ends the block early.
         }
+        std::memcpy(buf + bytes, &*r, rec);
         bytes += rec;
     }
     ble_gatt_db_set_value(block_handle, buf, static_cast<uint16_t>(bytes));

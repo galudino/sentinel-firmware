@@ -18,7 +18,8 @@
 ///          - `bool initialize()`            — recover head/tail from backing
 ///          - `bool append(const RecordType&)`  — power-loss-safe two-phase
 ///          write
-///          - `bool read(uint32_t, RecordType*)`— indexed read in [tail, head)
+///          - `std::optional<RecordType> read(uint32_t)` — indexed read in
+///          [tail, head)
 ///          - `uint32_t count() / capacity() / head_index() / tail_index()`
 ///          - `bool erase_all()`             — reset backing to empty
 ///          - `bool append_uncommitted_for_test(const RecordType&)` — torn
@@ -57,6 +58,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <optional>
 #include <type_traits>
 
 namespace sentinel {
@@ -243,7 +245,7 @@ public:
         write_payload(slot, m_head, record);
         slot_ptr(slot)[OFFSET_STATUS] = STATUS_VALID; // commit
 
-        m_head++;
+        ++m_head;
         m_last_error = err::ok;
         return true;
     }
@@ -252,27 +254,28 @@ public:
     /// \brief Read the record at an absolute index in <tt>[tail, head)</tt>.
     ///
     /// \param index Absolute record index; must be in <tt>[tail, head)</tt>.
-    /// \param out   Destination for the payload.
-    /// \return \c true on success; \c false if not initialized, \p out is
-    ///         \c nullptr, \p index is out of range, or the slot is corrupt.
+    /// \return The record on success; \c std::nullopt if not initialized,
+    ///         \p index is out of range, or the slot is corrupt (see
+    ///         \ref last_error()).
     ///
-    bool read(uint32_t index, RecordType *out) const noexcept {
+    std::optional<RecordType> read(uint32_t index) const noexcept {
         if (!m_initialized) {
             m_last_error = err::not_initialized;
-            return false;
+            return std::nullopt;
         }
-        if (out == nullptr || index < m_tail || index >= m_head) {
+        if (index < m_tail || index >= m_head) {
             m_last_error = err::invalid_argument;
-            return false;
+            return std::nullopt;
         }
         const auto *s = slot_ptr(index % m_capacity);
         if (s[OFFSET_STATUS] != STATUS_VALID) {
             m_last_error = err::corrupt_record;
-            return false;
+            return std::nullopt;
         }
-        std::memcpy(out, s + OFFSET_PAYLOAD, sizeof(RecordType));
+        auto record = RecordType{};
+        std::memcpy(&record, s + OFFSET_PAYLOAD, sizeof(RecordType));
         m_last_error = err::ok;
-        return true;
+        return record;
     }
 
     ///

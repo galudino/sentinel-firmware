@@ -34,11 +34,6 @@ struct spi_flash_pins {
     sentinel::gpio_line cs{};    ///< Chip Select
 };
 
-template <typename SPITransport>
-class spi_flash_bus_controller;
-
-} // namespace sentinel
-
 ///
 /// \brief SPI flash CS/RESET bus helper: wraps an SPI transport with
 ///        automatic chip-select management.
@@ -46,7 +41,7 @@ class spi_flash_bus_controller;
 /// \tparam SPITransport Transport deriving from byte_transport<..., spi_tag>
 ///
 template <typename SPITransport>
-class sentinel::spi_flash_bus_controller {
+class spi_flash_bus_controller {
     static_assert(std::is_base_of<byte_transport<SPITransport, spi_tag>,
                                   SPITransport>::value,
                   "SPITransport must derive from "
@@ -237,5 +232,7 @@ private:
     SPITransport &m_spi;   ///< Non-owning SPI transport reference.
     spi_flash_pins m_pins; ///< CS/RESET line description.
 };
+
+} // namespace sentinel
 
 #endif /* SENTINEL_SPI_FLASH_BUS_HPP */

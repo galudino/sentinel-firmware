@@ -37,12 +37,7 @@ namespace sentinel {
 /// \tparam Capacity Buffer capacity (must be a power of two, minimum 2)
 ///
 template <typename T, size_t Capacity = 256>
-class ring_buffer_;
-
-} // namespace sentinel
-
-template <typename T, size_t Capacity>
-class sentinel::ring_buffer_ {
+class ring_buffer_ {
 public:
     using value_type = T;              ///< Element type stored in the buffer.
     using size_type = size_t;          ///< Type used for sizes and indices.
@@ -284,5 +279,7 @@ private:
 
     std::array<value_type, Capacity> m_store{}; ///< Element storage
 };
+
+} // namespace sentinel
 
 #endif // SENTINEL_RING_BUFFER_HPP

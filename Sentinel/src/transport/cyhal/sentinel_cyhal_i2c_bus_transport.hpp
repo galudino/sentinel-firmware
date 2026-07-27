@@ -64,10 +64,6 @@ extern "C" {
 
 namespace sentinel {
 
-class cyhal_i2c_bus_transport;
-
-} // namespace sentinel
-
 ///
 /// \brief Bus-arbitrated CYHAL I²C transport.
 ///
@@ -78,7 +74,7 @@ class cyhal_i2c_bus_transport;
 ///          be confused with another transport's responses sharing the
 ///          same bus.
 ///
-class sentinel::cyhal_i2c_bus_transport
+class cyhal_i2c_bus_transport
     : public byte_transport<cyhal_i2c_bus_transport, i2c_tag> {
 public:
     ///
@@ -437,5 +433,7 @@ private:
     uint16_t m_target_address;      ///< I²C target address.
     QueueHandle_t m_response_queue; ///< Per-instance response.
 };
+
+} // namespace sentinel
 
 #endif /* SENTINEL_CYHAL_I2C_BUS_TRANSPORT_HPP */

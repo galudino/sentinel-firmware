@@ -68,6 +68,7 @@ extern "C" {
 
 #include <cstdint>
 #include <cstring>
+#include <optional>
 
 namespace sentinel::diagnostics {
 
@@ -381,11 +382,13 @@ public:
 
     /// \brief Read the record at an absolute index.
     /// \param index Absolute record index.
-    /// \param out   Destination for the record.
-    /// \return \c true on success; \c false if not bound to a store or the
-    ///         store read failed.
-    bool read(uint32_t index, system_event_record *out) const noexcept {
-        return m_store != nullptr && m_store->read(index, out);
+    /// \return The record on success; \c std::nullopt if not bound to a store
+    ///         or the store read failed.
+    std::optional<system_event_record> read(uint32_t index) const noexcept {
+        if (m_store == nullptr) {
+            return std::nullopt;
+        }
+        return m_store->read(index);
     }
 
     ///
@@ -403,9 +406,11 @@ public:
             return false;
         }
         for (auto i = uint32_t{0}; i < n; i++) {
-            if (!m_store->read(start + i, &out[i])) {
+            auto rec = m_store->read(start + i);
+            if (!rec) {
                 return false;
             }
+            out[i] = *rec;
         }
         return true;
     }
@@ -448,21 +453,24 @@ public:
         const auto head = m_store->head_index();
         const auto tail = m_store->tail_index();
 
-        auto last = system_event_record{};
-        auto have_last = head > tail && m_store->read(head - 1u, &last);
+        auto last = std::optional<system_event_record>{};
+        if (head > tail) {
+            last = m_store->read(head - 1u);
+        }
+        const auto have_last = last.has_value();
 
         // Recover the running boot count from the most recent lifecycle record.
         auto prior_boot_count = uint32_t{0};
         auto found_lifecycle = false;
         for (auto i = head; i > tail;) {
             --i;
-            auto r = system_event_record{};
-            if (!m_store->read(i, &r)) {
+            auto r = m_store->read(i);
+            if (!r) {
                 continue;
             }
-            if (is_boot_lifecycle(r.header.event_type)) {
+            if (is_boot_lifecycle(r->header.event_type)) {
                 auto blr = boot_lifecycle_record{};
-                std::memcpy(&blr, &r, sizeof(blr));
+                std::memcpy(&blr, &*r, sizeof(blr));
                 prior_boot_count = blr.boot_count;
                 found_lifecycle = true;
                 break;
@@ -471,10 +479,10 @@ public:
 
         // Synthesize shutdown_unexpected if the last session did not end clean.
         if (have_last &&
-            last.header.event_type != system_event::shutdown_clean) {
+            last->header.event_type != system_event::shutdown_clean) {
             auto su = boot_lifecycle_record{};
             su.header.event_type = system_event::shutdown_unexpected;
-            su.header.unix_timestamp = last.header.unix_timestamp;
+            su.header.unix_timestamp = last->header.unix_timestamp;
             su.firmware_version = to_compact(current_firmware_version);
             su.boot_count = prior_boot_count;
             su.uptime_at_event = 0u;
@@ -510,7 +518,7 @@ public:
         auto rec = system_event_record{};
         while (xQueueReceive(m_queue, &rec, 0) == pdTRUE) {
             if (m_store->append(rec)) {
-                drained++;
+                ++drained;
             }
         }
         return drained;

@@ -172,7 +172,7 @@ sentinel::to_bytes(T value, endianess order) noexcept {
     switch (order) {
     case endianess::little:
         // Little-endian: LSB first
-        for (std::size_t i = 0; i < sizeof(T); ++i) {
+        for (std::size_t i = 0; i < sizeof(T); i++) {
             bytes[i] = static_cast<std::uint8_t>(u & 0xFFu);
             u >>= 8;
         }
@@ -181,7 +181,7 @@ sentinel::to_bytes(T value, endianess order) noexcept {
     case endianess::big:
     default:
         // Big-endian: MSB first
-        for (std::size_t i = 0; i < sizeof(T); ++i) {
+        for (std::size_t i = 0; i < sizeof(T); i++) {
             // Fill from the end for big-endian
             bytes[sizeof(T) - 1 - i] = static_cast<std::uint8_t>(u & 0xFFu);
             u >>= 8;

@@ -49,6 +49,7 @@ extern "C" {
 #include "sentinel_device_context.hpp"
 
 #include <cstdint>
+#include <optional>
 
 namespace sentinel::telemetry {
 struct device_snapshot;
@@ -139,9 +140,10 @@ public:
 
     /// \brief Read the snapshot at an absolute \p index (called from #6 GATT).
     /// \param index Absolute record index to read.
-    /// \param out   Destination snapshot; written only on success.
-    /// \return \c true if \p index held a valid record; \c false otherwise.
-    bool read(uint32_t index, telemetry::device_snapshot *out) const noexcept;
+    /// \return The snapshot if \p index held a valid record; \c std::nullopt
+    ///         otherwise.
+    std::optional<telemetry::device_snapshot>
+    read(uint32_t index) const noexcept;
 
     /// \brief Read \p n consecutive snapshots from absolute \p start.
     /// \param start Absolute starting record index.

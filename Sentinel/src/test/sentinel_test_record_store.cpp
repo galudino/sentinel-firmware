@@ -221,15 +221,15 @@ bool fixture::append_round_trip() noexcept {
         return false;
     }
 
-    auto out = test_record{};
-    if (!store.read(0, &out)) {
+    auto out = store.read(0);
+    if (!out) {
         loge("append_round_trip FAIL: read error %d",
              static_cast<int>(store.last_error()));
         return false;
     }
-    if (!records_equal(in, out)) {
+    if (!records_equal(in, *out)) {
         loge("append_round_trip FAIL: readback mismatch (value=%u)",
-             static_cast<unsigned>(out.value));
+             static_cast<unsigned>(out->value));
         return false;
     }
 
@@ -270,15 +270,15 @@ bool fixture::many_append() noexcept {
     }
 
     for (auto i = uint32_t{0}; i < kCount; i++) {
-        auto out = test_record{};
-        if (!store.read(i, &out)) {
+        auto out = store.read(i);
+        if (!out) {
             loge("many_append FAIL: read %u error %d", static_cast<unsigned>(i),
                  static_cast<int>(store.last_error()));
             return false;
         }
-        if (!records_equal(make_record(1000u + i), out)) {
+        if (!records_equal(make_record(1000u + i), *out)) {
             loge("many_append FAIL: record %u mismatch (value=%u)",
-                 static_cast<unsigned>(i), static_cast<unsigned>(out.value));
+                 static_cast<unsigned>(i), static_cast<unsigned>(out->value));
             return false;
         }
     }
@@ -341,12 +341,12 @@ bool fixture::wrap_around() noexcept {
 
     // Newest record must still be readable; the oldest (index 0) must now be
     // out of range.
-    auto out = test_record{};
-    if (!store.read(cap, &out) || !records_equal(make_record(cap), out)) {
+    auto out = store.read(cap);
+    if (!out || !records_equal(make_record(cap), *out)) {
         loge("wrap_around FAIL: newest record not readable after wrap");
         return false;
     }
-    if (store.read(0, &out)) {
+    if (store.read(0)) {
         loge("wrap_around FAIL: overwritten record 0 still readable");
         return false;
     }
@@ -420,8 +420,7 @@ bool fixture::power_loss_simulation() noexcept {
         return false;
     }
 
-    auto out = test_record{};
-    if (recovered.read(kCommitted, &out)) {
+    if (recovered.read(kCommitted)) {
         loge("power_loss FAIL: partial record readable at index %u",
              static_cast<unsigned>(kCommitted));
         return false;
@@ -476,12 +475,10 @@ bool fixture::survive_reset() noexcept {
         return false;
     }
 
-    auto last = test_record{};
-    auto first = test_record{};
-    if (!rebooted.read(kCount - 1u, &last) ||
-        !records_equal(make_record(kBase + kCount - 1u), last) ||
-        !rebooted.read(0, &first) ||
-        !records_equal(make_record(kBase), first)) {
+    auto last = rebooted.read(kCount - 1u);
+    auto first = rebooted.read(0);
+    if (!last || !records_equal(make_record(kBase + kCount - 1u), *last) ||
+        !first || !records_equal(make_record(kBase), *first)) {
         loge("survive_reset FAIL: post-boot read/verify failed");
         return false;
     }
@@ -551,15 +548,14 @@ bool fixture::recycle_transient_recovery() noexcept {
 
     // The oldest surviving record (tail) and the newest must round-trip; the
     // erased records must now be out of range.
-    auto out = test_record{};
-    if (!recovered.read(per_sector, &out) ||
-        !records_equal(make_record(per_sector), out) ||
-        !recovered.read(cap - 1u, &out) ||
-        !records_equal(make_record(cap - 1u), out)) {
+    auto oldest = recovered.read(per_sector);
+    auto newest = recovered.read(cap - 1u);
+    if (!oldest || !records_equal(make_record(per_sector), *oldest) ||
+        !newest || !records_equal(make_record(cap - 1u), *newest)) {
         loge("recycle_transient FAIL: surviving records not readable");
         return false;
     }
-    if (recovered.read(0, &out) || recovered.read(per_sector - 1u, &out)) {
+    if (recovered.read(0) || recovered.read(per_sector - 1u)) {
         loge("recycle_transient FAIL: erased record still readable");
         return false;
     }

@@ -65,10 +65,6 @@ extern "C" {
 
 namespace sentinel {
 
-class cyhal_spi_bus_transport;
-
-} // namespace sentinel
-
 ///
 /// \brief Bus-arbitrated CYHAL SPI transport.
 ///
@@ -77,7 +73,7 @@ class cyhal_spi_bus_transport;
 ///          Each instance owns a dedicated FreeRTOS response queue plus
 ///          the slave-select pin identifier for its target device.
 ///
-class sentinel::cyhal_spi_bus_transport
+class cyhal_spi_bus_transport
     : public byte_transport<cyhal_spi_bus_transport, spi_tag> {
 public:
     ///
@@ -294,5 +290,7 @@ private:
     cyhal_gpio_t m_ssel;            ///< SS pin for this device.
     QueueHandle_t m_response_queue; ///< Per-instance response.
 };
+
+} // namespace sentinel
 
 #endif /* SENTINEL_CYHAL_SPI_BUS_TRANSPORT_HPP */
