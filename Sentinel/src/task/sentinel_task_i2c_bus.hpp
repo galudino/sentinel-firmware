@@ -258,10 +258,10 @@ public:
     /// \return \c pdPASS on success, otherwise the \c xTaskCreate or
     ///         \c xQueueCreate failure code.
     ///
-    BaseType_t task_create(
-        UBaseType_t priority = DEFAULT_PRIORITY,
-        uint16_t stack_words = DEFAULT_STACK_WORDS,
-        UBaseType_t queue_length = DEFAULT_QUEUE_LENGTH) noexcept;
+    BaseType_t
+    task_create(UBaseType_t priority = DEFAULT_PRIORITY,
+                uint16_t stack_words = DEFAULT_STACK_WORDS,
+                UBaseType_t queue_length = DEFAULT_QUEUE_LENGTH) noexcept;
 
     ///
     /// \brief \c true once the task has reached its main loop and is
@@ -326,7 +326,8 @@ private:
     /// \brief FreeRTOS task entry-point trampoline; recovers \c this and
     ///        calls \ref run.
     ///
-    /// \param arg The \c i2c_bus instance, passed as \c this at \ref task_create.
+    /// \param arg The \c i2c_bus instance, passed as \c this at \ref
+    /// task_create.
     ///
     static void task_trampoline(void *arg);
 
@@ -350,12 +351,12 @@ private:
     ///
     i2c_response process(const i2c_request &request) noexcept;
 
-    cyhal_i2c_t      *m_i2c_object;     ///< CYHAL I²C handle (non-owning).
-    const char       *m_task_name;      ///< FreeRTOS task name string.
-    QueueHandle_t     m_request_queue;  ///< Inbound request queue.
-    volatile bool     m_up_and_running; ///< \c true after task reaches
-                                        ///< main loop.
-    TaskHandle_t      m_task_handle;    ///< FreeRTOS task handle.
+    cyhal_i2c_t *m_i2c_object;      ///< CYHAL I²C handle (non-owning).
+    const char *m_task_name;        ///< FreeRTOS task name string.
+    QueueHandle_t m_request_queue;  ///< Inbound request queue.
+    volatile bool m_up_and_running; ///< \c true after task reaches
+                                    ///< main loop.
+    TaskHandle_t m_task_handle;     ///< FreeRTOS task handle.
 };
 
 } // namespace sentinel::task

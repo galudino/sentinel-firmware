@@ -64,10 +64,6 @@ extern "C" {
 
 namespace sentinel {
 
-class tachometer_psoc6;
-
-}
-
 ///
 /// \brief PSoC6 tachometer source using GPIO interrupt and TCPWM counter
 ///
@@ -87,7 +83,7 @@ class tachometer_psoc6;
 ///          - Timestamp capture and callback dispatch are minimal operations
 ///          - The tachometer_input::on_edge() implementation must be ISR-safe
 ///
-class sentinel::tachometer_psoc6 {
+class tachometer_psoc6 {
 public:
     ///
     /// \brief Construct PSoC6 tachometer source
@@ -174,5 +170,7 @@ private:
     ///
     cyhal_timer_t *m_counter;
 };
+
+} // namespace sentinel
 
 #endif /* SENTINEL_TACHOMETER_PSOC6_HPP */

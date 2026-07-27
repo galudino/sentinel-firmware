@@ -68,6 +68,7 @@ extern "C" {
 
 #include <cstdint>
 #include <cstring>
+#include <optional>
 
 namespace sentinel::diagnostics {
 
@@ -84,7 +85,7 @@ namespace sentinel::diagnostics {
 ///
 inline constexpr uint32_t kEventLogRegionOffsetBytes = 0x100000u; // 1 MiB
 /// Size of the event-log region in bytes (see \details above).
-inline constexpr uint32_t kEventLogRegionSizeBytes   = 0x080000u; // 512 KiB
+inline constexpr uint32_t kEventLogRegionSizeBytes = 0x080000u; // 512 KiB
 
 ///
 /// \brief Depth of the non-blocking staging queue (records).
@@ -112,7 +113,7 @@ public:
         return s_instance;
     }
 
-    system_event_log(const system_event_log &)            = delete;
+    system_event_log(const system_event_log &) = delete;
     system_event_log &operator=(const system_event_log &) = delete;
 
     ///
@@ -131,11 +132,11 @@ public:
     ///
     bool initialize(Store &store, now_unix_fn now) noexcept {
         m_store = &store;
-        m_now   = now;
+        m_now = now;
 
         if (m_queue == nullptr) {
-            m_queue = xQueueCreate(kStagingQueueDepth,
-                                   sizeof(system_event_record));
+            m_queue =
+                xQueueCreate(kStagingQueueDepth, sizeof(system_event_record));
             if (m_queue == nullptr) {
                 m_initialized = false;
                 return false;
@@ -167,7 +168,7 @@ public:
         if (!m_initialized) {
             return false;
         }
-        auto staged                  = rec;
+        auto staged = rec;
         staged.header.unix_timestamp = current_time();
         return xQueueSend(m_queue, &staged, 0) == pdTRUE;
     }
@@ -181,11 +182,11 @@ public:
     ///
     bool record_boot_complete(const sentinel::firmware_version &v,
                               uint32_t boot_count) noexcept {
-        auto r              = boot_lifecycle_record{};
+        auto r = boot_lifecycle_record{};
         r.header.event_type = system_event::boot_complete;
-        r.firmware_version  = to_compact(v);
-        r.boot_count        = boot_count;
-        r.uptime_at_event   = 0u;
+        r.firmware_version = to_compact(v);
+        r.boot_count = boot_count;
+        r.uptime_at_event = 0u;
         return record(as_record(r));
     }
 
@@ -200,11 +201,11 @@ public:
     bool record_shutdown_clean(const sentinel::firmware_version &v,
                                uint32_t boot_count,
                                uint32_t uptime_seconds) noexcept {
-        auto r              = boot_lifecycle_record{};
+        auto r = boot_lifecycle_record{};
         r.header.event_type = system_event::shutdown_clean;
-        r.firmware_version  = to_compact(v);
-        r.boot_count        = boot_count;
-        r.uptime_at_event   = uptime_seconds;
+        r.firmware_version = to_compact(v);
+        r.boot_count = boot_count;
+        r.uptime_at_event = uptime_seconds;
         return record(as_record(r));
     }
 
@@ -222,11 +223,11 @@ public:
                                 const sentinel::firmware_version &from,
                                 const sentinel::firmware_version &to,
                                 uint32_t mcuboot_result) noexcept {
-        auto r              = firmware_update_record{};
+        auto r = firmware_update_record{};
         r.header.event_type = step;
-        r.from_version      = to_compact(from);
-        r.to_version        = to_compact(to);
-        r.mcuboot_result    = mcuboot_result;
+        r.from_version = to_compact(from);
+        r.to_version = to_compact(to);
+        r.mcuboot_result = mcuboot_result;
         return record(as_record(r));
     }
 
@@ -242,13 +243,13 @@ public:
     bool record_ble_connected(const uint8_t peer_addr[6], uint8_t addr_type,
                               uint16_t conn_interval_125us,
                               uint16_t peer_mtu) noexcept {
-        auto r              = ble_connection_record{};
+        auto r = ble_connection_record{};
         r.header.event_type = system_event::ble_peripheral_connected;
         std::memcpy(r.peer_address, peer_addr, sizeof(r.peer_address));
-        r.peer_addr_type      = addr_type;
-        r.disconnect_reason   = 0u;
+        r.peer_addr_type = addr_type;
+        r.disconnect_reason = 0u;
         r.conn_interval_125us = conn_interval_125us;
-        r.peer_mtu            = peer_mtu;
+        r.peer_mtu = peer_mtu;
         return record(as_record(r));
     }
 
@@ -262,10 +263,10 @@ public:
     ///
     bool record_ble_disconnected(const uint8_t peer_addr[6], uint8_t addr_type,
                                  uint8_t disconnect_reason) noexcept {
-        auto r              = ble_connection_record{};
+        auto r = ble_connection_record{};
         r.header.event_type = system_event::ble_peripheral_disconnected;
         std::memcpy(r.peer_address, peer_addr, sizeof(r.peer_address));
-        r.peer_addr_type    = addr_type;
+        r.peer_addr_type = addr_type;
         r.disconnect_reason = disconnect_reason;
         return record(as_record(r));
     }
@@ -282,11 +283,11 @@ public:
     ///
     bool record_fault(uint8_t id, uint8_t severity, uint8_t subsystem,
                       const uint32_t context[6]) noexcept {
-        auto r              = fault_record{};
+        auto r = fault_record{};
         r.header.event_type = system_event::fault_raised;
-        r.fault_id          = id;
-        r.severity          = severity;
-        r.subsystem_id      = subsystem;
+        r.fault_id = id;
+        r.severity = severity;
+        r.subsystem_id = subsystem;
         if (context != nullptr) {
             std::memcpy(r.fault_context, context, sizeof(r.fault_context));
         }
@@ -301,12 +302,13 @@ public:
     /// \param trigger ble | button | watchdog | post_fail.
     /// \return \c true if enqueued; \c false otherwise (see \ref record()).
     ///
-    bool record_mode_change(uint8_t from, uint8_t to, uint8_t trigger) noexcept {
-        auto r              = mode_change_record{};
+    bool record_mode_change(uint8_t from, uint8_t to,
+                            uint8_t trigger) noexcept {
+        auto r = mode_change_record{};
         r.header.event_type = system_event::mode_changed;
-        r.from_mode         = from;
-        r.to_mode           = to;
-        r.trigger           = trigger;
+        r.from_mode = from;
+        r.to_mode = to;
+        r.trigger = trigger;
         return record(as_record(r));
     }
 
@@ -316,7 +318,7 @@ public:
     /// \return \c true if enqueued; \c false otherwise (see \ref record()).
     ///
     bool record_post_passed() noexcept {
-        auto r              = post_result_record{};
+        auto r = post_result_record{};
         r.header.event_type = system_event::post_passed;
         return record(as_record(r));
     }
@@ -331,11 +333,11 @@ public:
     ///
     bool record_post_subsystem_fail(uint8_t subsystem, uint8_t result,
                                     uint8_t detail) noexcept {
-        auto r              = post_result_record{};
+        auto r = post_result_record{};
         r.header.event_type = system_event::post_subsystem_failed;
-        r.subsystem_id      = subsystem;
-        r.result            = result;
-        r.detail            = detail;
+        r.subsystem_id = subsystem;
+        r.result = result;
+        r.detail = detail;
         return record(as_record(r));
     }
 
@@ -346,10 +348,10 @@ public:
     /// \return \c true if enqueued; \c false otherwise (see \ref record()).
     ///
     bool record_snapshot_persisted(uint32_t snapshot_count) noexcept {
-        auto r              = snapshot_event_record{};
+        auto r = snapshot_event_record{};
         r.header.event_type = system_event::snapshot_persisted;
-        r.snapshot_count    = snapshot_count;
-        r.reason            = 0u; // periodic heartbeat
+        r.snapshot_count = snapshot_count;
+        r.reason = 0u; // periodic heartbeat
         return record(as_record(r));
     }
 
@@ -361,10 +363,10 @@ public:
     /// \return \c true if enqueued; \c false otherwise (see \ref record()).
     ///
     bool record_pre_fault_snapshot(uint32_t snapshot_count) noexcept {
-        auto r              = snapshot_event_record{};
+        auto r = snapshot_event_record{};
         r.header.event_type = system_event::pre_fault_snapshot_captured;
-        r.snapshot_count    = snapshot_count;
-        r.reason            = 1u; // pre-fault capture
+        r.snapshot_count = snapshot_count;
+        r.reason = 1u; // pre-fault capture
         return record(as_record(r));
     }
 
@@ -380,11 +382,13 @@ public:
 
     /// \brief Read the record at an absolute index.
     /// \param index Absolute record index.
-    /// \param out   Destination for the record.
-    /// \return \c true on success; \c false if not bound to a store or the
-    ///         store read failed.
-    bool read(uint32_t index, system_event_record *out) const noexcept {
-        return m_store != nullptr && m_store->read(index, out);
+    /// \return The record on success; \c std::nullopt if not bound to a store
+    ///         or the store read failed.
+    std::optional<system_event_record> read(uint32_t index) const noexcept {
+        if (m_store == nullptr) {
+            return std::nullopt;
+        }
+        return m_store->read(index);
     }
 
     ///
@@ -402,9 +406,11 @@ public:
             return false;
         }
         for (auto i = uint32_t{0}; i < n; i++) {
-            if (!m_store->read(start + i, &out[i])) {
+            auto rec = m_store->read(start + i);
+            if (!rec) {
                 return false;
             }
+            out[i] = *rec;
         }
         return true;
     }
@@ -430,11 +436,11 @@ public:
     /// \details If the most recent record is not a clean shutdown, synthesize a
     ///          \c shutdown_unexpected stamped with that record's timestamp
     ///          (the device's last known-alive instant). Then append a
-    ///          \c boot_complete whose \c boot_count is one past the most recent
-    ///          lifecycle record's count (or 1 on a fresh log). Both records are
-    ///          appended directly to the store (bypassing the queue) so the
-    ///          custom shutdown timestamp is preserved and the two records are
-    ///          ordered ahead of any queued runtime events.
+    ///          \c boot_complete whose \c boot_count is one past the most
+    ///          recent lifecycle record's count (or 1 on a fresh log). Both
+    ///          records are appended directly to the store (bypassing the
+    ///          queue) so the custom shutdown timestamp is preserved and the
+    ///          two records are ordered ahead of any queued runtime events.
     ///
     /// \return \c true on success; \c false if not initialized, not bound to
     ///         a store, or an underlying store append failed.
@@ -447,48 +453,51 @@ public:
         const auto head = m_store->head_index();
         const auto tail = m_store->tail_index();
 
-        auto last        = system_event_record{};
-        auto have_last   = head > tail && m_store->read(head - 1u, &last);
+        auto last = std::optional<system_event_record>{};
+        if (head > tail) {
+            last = m_store->read(head - 1u);
+        }
+        const auto have_last = last.has_value();
 
         // Recover the running boot count from the most recent lifecycle record.
         auto prior_boot_count = uint32_t{0};
-        auto found_lifecycle  = false;
+        auto found_lifecycle = false;
         for (auto i = head; i > tail;) {
             --i;
-            auto r = system_event_record{};
-            if (!m_store->read(i, &r)) {
+            auto r = m_store->read(i);
+            if (!r) {
                 continue;
             }
-            if (is_boot_lifecycle(r.header.event_type)) {
+            if (is_boot_lifecycle(r->header.event_type)) {
                 auto blr = boot_lifecycle_record{};
-                std::memcpy(&blr, &r, sizeof(blr));
+                std::memcpy(&blr, &*r, sizeof(blr));
                 prior_boot_count = blr.boot_count;
-                found_lifecycle  = true;
+                found_lifecycle = true;
                 break;
             }
         }
 
         // Synthesize shutdown_unexpected if the last session did not end clean.
         if (have_last &&
-            last.header.event_type != system_event::shutdown_clean) {
-            auto su                  = boot_lifecycle_record{};
-            su.header.event_type     = system_event::shutdown_unexpected;
-            su.header.unix_timestamp = last.header.unix_timestamp;
-            su.firmware_version      = to_compact(current_firmware_version);
-            su.boot_count            = prior_boot_count;
-            su.uptime_at_event       = 0u;
+            last->header.event_type != system_event::shutdown_clean) {
+            auto su = boot_lifecycle_record{};
+            su.header.event_type = system_event::shutdown_unexpected;
+            su.header.unix_timestamp = last->header.unix_timestamp;
+            su.firmware_version = to_compact(current_firmware_version);
+            su.boot_count = prior_boot_count;
+            su.uptime_at_event = 0u;
             if (!m_store->append(as_record(su))) {
                 return false;
             }
         }
 
         // Append boot_complete for this session.
-        auto bc                  = boot_lifecycle_record{};
-        bc.header.event_type     = system_event::boot_complete;
+        auto bc = boot_lifecycle_record{};
+        bc.header.event_type = system_event::boot_complete;
         bc.header.unix_timestamp = current_time();
-        bc.firmware_version      = to_compact(current_firmware_version);
-        bc.boot_count           = found_lifecycle ? prior_boot_count + 1u : 1u;
-        bc.uptime_at_event       = 0u;
+        bc.firmware_version = to_compact(current_firmware_version);
+        bc.boot_count = found_lifecycle ? prior_boot_count + 1u : 1u;
+        bc.uptime_at_event = 0u;
         return m_store->append(as_record(bc));
     }
 
@@ -506,10 +515,10 @@ public:
             return 0u;
         }
         auto drained = uint32_t{0};
-        auto rec     = system_event_record{};
+        auto rec = system_event_record{};
         while (xQueueReceive(m_queue, &rec, 0) == pdTRUE) {
             if (m_store->append(rec)) {
-                drained++;
+                ++drained;
             }
         }
         return drained;
@@ -537,9 +546,9 @@ public:
         constexpr auto stack_words = configMINIMAL_STACK_SIZE * 4;
         constexpr auto priority =
             static_cast<UBaseType_t>(configMAX_PRIORITIES - 3);
-        return xTaskCreate(
-            [](void *) -> void { instance().run(); }, "System Event Log Task",
-            stack_words, nullptr, priority, nullptr);
+        return xTaskCreate([](void *) -> void { instance().run(); },
+                           "System Event Log Task", stack_words, nullptr,
+                           priority, nullptr);
     }
 
 private:
@@ -563,10 +572,10 @@ private:
         return out;
     }
 
-    Store        *m_store{nullptr};       ///< Non-owning backing store.
-    now_unix_fn   m_now{nullptr};          ///< Clock callback, or \c nullptr.
-    QueueHandle_t m_queue{nullptr};        ///< Non-blocking staging queue.
-    bool          m_initialized{false};    ///< Set once \ref initialize() runs.
+    Store *m_store{nullptr};        ///< Non-owning backing store.
+    now_unix_fn m_now{nullptr};     ///< Clock callback, or \c nullptr.
+    QueueHandle_t m_queue{nullptr}; ///< Non-blocking staging queue.
+    bool m_initialized{false};      ///< Set once \ref initialize() runs.
 };
 
 } // namespace sentinel::diagnostics

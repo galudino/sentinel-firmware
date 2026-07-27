@@ -211,8 +211,8 @@ public:
     /// Non-copyable, non-movable: the task entry-point captures \c this.
     spi_bus(const spi_bus &) = delete;
     spi_bus &operator=(const spi_bus &) = delete;
-    spi_bus(spi_bus &&)                 = delete;
-    spi_bus &operator=(spi_bus &&)      = delete;
+    spi_bus(spi_bus &&) = delete;
+    spi_bus &operator=(spi_bus &&) = delete;
 
     // =====================================================================
     // Lifecycle
@@ -230,10 +230,10 @@ public:
     /// \return \c pdPASS on success, otherwise the \c xTaskCreate or
     ///         \c xQueueCreate failure code.
     ///
-    BaseType_t task_create(
-        UBaseType_t priority      = DEFAULT_PRIORITY,
-        uint16_t    stack_words   = DEFAULT_STACK_WORDS,
-        UBaseType_t queue_length  = DEFAULT_QUEUE_LENGTH) noexcept;
+    BaseType_t
+    task_create(UBaseType_t priority = DEFAULT_PRIORITY,
+                uint16_t stack_words = DEFAULT_STACK_WORDS,
+                UBaseType_t queue_length = DEFAULT_QUEUE_LENGTH) noexcept;
 
     ///
     /// \brief \c true once the task has reached its main loop and is
@@ -260,7 +260,7 @@ public:
     ///
     bool transact(const spi_request &request,
                   TickType_t request_submit_timeout = portMAX_DELAY,
-                  TickType_t response_wait_timeout  = portMAX_DELAY) noexcept;
+                  TickType_t response_wait_timeout = portMAX_DELAY) noexcept;
 
     ///
     /// \brief Submit a request without waiting for the response.
@@ -275,7 +275,8 @@ public:
 private:
     /// \brief FreeRTOS task entry-point trampoline; recovers \c this and
     ///        calls \ref run.
-    /// \param arg The \c spi_bus instance, passed as \c this at \ref task_create.
+    /// \param arg The \c spi_bus instance, passed as \c this at \ref
+    /// task_create.
     static void task_trampoline(void *arg);
 
     /// \brief Main loop. Receives requests from the queue, processes them,
@@ -290,11 +291,11 @@ private:
     ///
     spi_response process(const spi_request &request) noexcept;
 
-    cyhal_spi_t      *m_spi_object;     ///< CYHAL SPI handle (non-owning).
-    const char       *m_task_name;      ///< FreeRTOS task name string.
-    QueueHandle_t     m_request_queue;  ///< Inbound request queue.
-    volatile bool     m_up_and_running; ///< \c true after task reaches main loop.
-    TaskHandle_t      m_task_handle;    ///< FreeRTOS task handle.
+    cyhal_spi_t *m_spi_object;      ///< CYHAL SPI handle (non-owning).
+    const char *m_task_name;        ///< FreeRTOS task name string.
+    QueueHandle_t m_request_queue;  ///< Inbound request queue.
+    volatile bool m_up_and_running; ///< \c true after task reaches main loop.
+    TaskHandle_t m_task_handle;     ///< FreeRTOS task handle.
 };
 
 } // namespace sentinel::task

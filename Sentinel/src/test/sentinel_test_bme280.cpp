@@ -88,12 +88,13 @@ inline void yield_for_debug_drain(uint32_t milliseconds) noexcept {
 ///          \ref sentinel::test::bme280::run_all (like a
 ///          GoogleTest \c SetUp), so there is no file-static bus global. The
 ///          transport is inert until \c peripheral_initialize() has spawned the
-///          arbiter, which the orchestrator guarantees by running post-scheduler.
+///          arbiter, which the orchestrator guarantees by running
+///          post-scheduler.
 ///
 struct fixture {
     /// Bus-arbitrated I2C transport, shared by every test below.
-    sentinel::cyhal_i2c_bus_transport bme280_bus{sentinel::resource::cybsp_i2c_bus,
-                                                 BME280_I2C_ADDR_PRIM};
+    sentinel::cyhal_i2c_bus_transport bme280_bus{
+        sentinel::resource::cybsp_i2c_bus, BME280_I2C_ADDR_PRIM};
 
     /// \brief Read the chip ID and confirm it matches \c BME280_CHIP_ID.
     /// \return \c true on match; \c false on transport error or mismatch.
@@ -311,7 +312,7 @@ bool fixture::sensor_mode_transitions() noexcept {
 
 sentinel::test::tally sentinel::test::bme280::run_all() noexcept {
     auto fx = fixture{};
-    auto t  = sentinel::test::tally{};
+    auto t = sentinel::test::tally{};
 
     t.record(fx.chip_id_read());
     yield_for_debug_drain(200);

@@ -56,10 +56,10 @@ extern "C" {
 #include "sentinel_gatt_snapshot_stream.hpp"
 #include "sentinel_gatt_system.hpp"
 #include "sentinel_led_pwm.hpp"
-#include "sentinel_task_ble_maintenance.hpp"
-#include "sentinel_task_snapshot_stream.hpp"
 #include "sentinel_task_battery_service.hpp"
+#include "sentinel_task_ble_maintenance.hpp"
 #include "sentinel_task_debug_stream.hpp"
+#include "sentinel_task_snapshot_stream.hpp"
 #include "sentinel_utilities.hpp"
 
 #include <algorithm>
@@ -289,8 +289,9 @@ wiced_bt_gatt_status_t sentinel::ble_gatt_request_read_handler(
 
     *error_handle = read_request->handle;
 
-    // Refresh paged Snapshot History / System Event Log values from their record
-    // stores just before responding (#6). A no-op for every other handle.
+    // Refresh paged Snapshot History / System Event Log values from their
+    // record stores just before responding (#6). A no-op for every other
+    // handle.
     sentinel::gatt::paged::before_read(read_request->handle);
 
     if ((attribute = ble_gatt_db_find_by_handle(read_request->handle)) ==
@@ -447,8 +448,9 @@ sentinel::ble_gatt_command_write_handler(wiced_bt_gatt_event_data_t *event_data,
     case HDLC_SYSTEM_SERIAL_NUMBER_VALUE: {
         // Store the new serial, then mirror it into the DIS Serial Number
         // display string (#45) so both stay in sync.
-        auto status = ble_gatt_db_set_value(
-            write_request->handle, write_request->p_val, write_request->val_len);
+        auto status =
+            ble_gatt_db_set_value(write_request->handle, write_request->p_val,
+                                  write_request->val_len);
         if (status == wiced_bt_gatt_status_e::WICED_BT_GATT_SUCCESS) {
             sentinel::gatt::dis::set_serial_number(
                 sentinel::gatt::system::serial_number());
@@ -457,21 +459,24 @@ sentinel::ble_gatt_command_write_handler(wiced_bt_gatt_event_data_t *event_data,
     }
 
     case HDLC_SYSTEM_REQUEST_BOOTLOADER_MODE_VALUE: {
-        // Enter the bootloader for OTA DFU (#6): store the write, then request a
-        // deferred reset from the maintenance task (never reset in the BT
+        // Enter the bootloader for OTA DFU (#6): store the write, then request
+        // a deferred reset from the maintenance task (never reset in the BT
         // callback — the write response must flush first).
-        auto status = ble_gatt_db_set_value(
-            write_request->handle, write_request->p_val, write_request->val_len);
+        auto status =
+            ble_gatt_db_set_value(write_request->handle, write_request->p_val,
+                                  write_request->val_len);
         if (status == wiced_bt_gatt_status_e::WICED_BT_GATT_SUCCESS) {
-            sentinel::task::ble_maintenance_task::instance().request_bootloader();
+            sentinel::task::ble_maintenance_task::instance()
+                .request_bootloader();
         }
         return status;
     }
 
     case HDLC_SNAPSHOT_HISTORY_CLEAR_STORE_VALUE: {
         // Erase the snapshot history store (async — erase_all is multi-second).
-        auto status = ble_gatt_db_set_value(
-            write_request->handle, write_request->p_val, write_request->val_len);
+        auto status =
+            ble_gatt_db_set_value(write_request->handle, write_request->p_val,
+                                  write_request->val_len);
         if (status == wiced_bt_gatt_status_e::WICED_BT_GATT_SUCCESS) {
             sentinel::task::ble_maintenance_task::instance()
                 .request_clear_snapshots();
@@ -481,8 +486,9 @@ sentinel::ble_gatt_command_write_handler(wiced_bt_gatt_event_data_t *event_data,
 
     case HDLC_SYSTEM_EVENT_LOG_CLEAR_STORE_VALUE: {
         // Erase the event log store (async — erase_all is multi-second).
-        auto status = ble_gatt_db_set_value(
-            write_request->handle, write_request->p_val, write_request->val_len);
+        auto status =
+            ble_gatt_db_set_value(write_request->handle, write_request->p_val,
+                                  write_request->val_len);
         if (status == wiced_bt_gatt_status_e::WICED_BT_GATT_SUCCESS) {
             sentinel::task::ble_maintenance_task::instance()
                 .request_clear_events();
@@ -493,8 +499,9 @@ sentinel::ble_gatt_command_write_handler(wiced_bt_gatt_event_data_t *event_data,
     case HDLC_SNAPSHOT_STREAM_SNAPSHOT_NOTIFY_ENABLE_VALUE: {
         // Drive the live snapshot stream task (#46, lane 2) from the enable
         // characteristic (#6): 1 => start streaming, 0 => return to idle.
-        auto status = ble_gatt_db_set_value(
-            write_request->handle, write_request->p_val, write_request->val_len);
+        auto status =
+            ble_gatt_db_set_value(write_request->handle, write_request->p_val,
+                                  write_request->val_len);
         if (status == wiced_bt_gatt_status_e::WICED_BT_GATT_SUCCESS) {
             if (sentinel::gatt::snapshot_stream::enable_flag()) {
                 sentinel::task::snapshot_stream_task::instance().start();
@@ -511,8 +518,9 @@ sentinel::ble_gatt_command_write_handler(wiced_bt_gatt_event_data_t *event_data,
         // rtc_service stays read-only (RTC time design, decision recorded in
         // project memory). Writes are rare + user-initiated, so doing the bus
         // transaction here (serialized by the I²C arbiter) is acceptable.
-        auto status = ble_gatt_db_set_value(
-            write_request->handle, write_request->p_val, write_request->val_len);
+        auto status =
+            ble_gatt_db_set_value(write_request->handle, write_request->p_val,
+                                  write_request->val_len);
         if (status == wiced_bt_gatt_status_e::WICED_BT_GATT_SUCCESS &&
             sentinel::resource::context_ready()) {
             sentinel::resource::context().rtc.set_unix_time(

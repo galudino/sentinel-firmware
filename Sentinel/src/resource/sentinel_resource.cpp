@@ -7,9 +7,9 @@
 ///          boot bring-up sequence has a single source of truth shared by both
 ///          the main-firmware and testbench builds. Kept in a \c .cpp
 ///          (not the header) because it depends on the BLE stack, OTA, and
-///          retarget-IO headers, which must not leak into every translation unit
-///          that includes \c sentinel_resource.hpp (transitively, that is nearly
-///          everything, via \c sentinel_device_context.hpp).
+///          retarget-IO headers, which must not leak into every translation
+///          unit that includes \c sentinel_resource.hpp (transitively, that is
+///          nearly everything, via \c sentinel_device_context.hpp).
 ///
 /// \author  galudino
 /// \date    2026-06-30
@@ -45,10 +45,10 @@ extern "C" {
 #include "sentinel_resource.hpp"
 #include "sentinel_task_debug_stream.hpp"
 
-// APP_NAME_STRING arrives as a bare token (the Makefile's quotes are stripped by
-// the shell), e.g. `sentinel-firmware` — not a string literal. Stringize it so
-// it can be interpolated with %s. The two-level indirection expands the macro
-// first, then converts the resulting token sequence to a string literal.
+// APP_NAME_STRING arrives as a bare token (the Makefile's quotes are stripped
+// by the shell), e.g. `sentinel-firmware` — not a string literal. Stringize it
+// so it can be interpolated with %s. The two-level indirection expands the
+// macro first, then converts the resulting token sequence to a string literal.
 
 /// \brief Helper level: stringize \p x after macro expansion.
 #define SENTINEL_STRINGIZE2(x) #x
@@ -129,8 +129,8 @@ bool system_initialize() noexcept {
     const auto ble_stack_ok = wiced_result == wiced_result_t::WICED_BT_SUCCESS;
     if (!ble_stack_ok) {
         // Do NOT brick the boot: POST records the BLE-stack failure and the
-        // device runs degraded (decision #12). All non-BLE subsystems still come
-        // up through the orchestrator.
+        // device runs degraded (decision #12). All non-BLE subsystems still
+        // come up through the orchestrator.
         loge("*** Bluetooth stack initialization failed! ***");
     }
 

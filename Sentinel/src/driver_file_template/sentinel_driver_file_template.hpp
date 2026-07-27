@@ -29,10 +29,6 @@ extern "C" {
 
 namespace sentinel {
 
-class driver;
-
-} // namespace sentinel
-
 ///
 /// \brief Hardware driver template class
 ///
@@ -47,7 +43,7 @@ class driver;
 /// 3. Add private member variables for device state and handles
 /// 4. Add protected helper methods for internal operations
 ///
-class sentinel::driver {
+class driver {
 public:
     // TODO: Add public interface methods (initialization, configuration,
     // operations)
@@ -58,5 +54,7 @@ private:
 protected:
     // TODO: Add protected helper methods (internal operations, utilities)
 };
+
+} // namespace sentinel
 
 #endif /* SENTINEL_DRIVER_FILE_TEMPLATE_HPP */

@@ -3,9 +3,9 @@
 /// \brief   Power-On Self-Test (POST) test implementations
 ///
 /// \details Implements the tests declared in \c sentinel_test_post.hpp. POST's
-///          per-subsystem probes are duck-typed on the drivers they test, so the
-///          suite drives them with tiny fake driver doubles defined in this TU.
-///          Each fake exposes exactly the surface a probe touches
+///          per-subsystem probes are duck-typed on the drivers they test, so
+///          the suite drives them with tiny fake driver doubles defined in this
+///          TU. Each fake exposes exactly the surface a probe touches
 ///          (\c read_chip_id, \c oscillator_stop_flag + \c
 ///          clear_oscillator_stop_flag, \c jedec_id + \c is_known_jedec,
 ///          \c initialize + head/tail/capacity), so the very same probe code
@@ -13,12 +13,12 @@
 ///          against deterministic inputs.
 ///
 ///          The recording path is validated against a \c fake_log that
-///          captures every \c record_post_passed / \c record_post_subsystem_fail
-///          call. That is the precise boundary POST owns (#35): the event log's
-///          own packing + persistence is already validated by #34, so this suite
-///          only needs to prove POST forwards the right subsystem / result /
-///          detail bytes — and, for the degraded record-store case, that it
-///          forwards nothing.
+///          captures every \c record_post_passed / \c
+///          record_post_subsystem_fail call. That is the precise boundary POST
+///          owns (#35): the event log's own packing + persistence is already
+///          validated by #34, so this suite only needs to prove POST forwards
+///          the right subsystem / result / detail bytes — and, for the degraded
+///          record-store case, that it forwards nothing.
 ///
 /// \author  galudino
 /// \date    2026-06-28
@@ -67,8 +67,8 @@ struct fake_bme280 {
 ///        the POST ds3231 probe touches.
 ///
 struct fake_ds3231 {
-    std::optional<bool> osf;         ///< OSF value to report.
-    bool                cleared{false}; ///< Set \c true once cleared.
+    std::optional<bool> osf; ///< OSF value to report.
+    bool cleared{false};     ///< Set \c true once cleared.
     /// \brief Report the fake oscillator-stop flag.
     /// \return \ref osf.
     std::optional<bool> oscillator_stop_flag() const noexcept { return osf; }
@@ -96,7 +96,7 @@ struct fake_flash {
     std::optional<jedec> id; ///< ID to report; \c nullopt = no ACK.
     /// \brief Report the fake JEDEC ID.
     /// \return \ref id, or \c std::nullopt to simulate a non-responding part.
-    std::optional<jedec>      jedec_id() const noexcept { return id; }
+    std::optional<jedec> jedec_id() const noexcept { return id; }
     /// \brief Test whether \p j matches a known-good Winbond/GigaDevice triple.
     /// \param j JEDEC ID triple to test.
     /// \return \c true if \p j is recognized; \c false otherwise.
@@ -112,17 +112,20 @@ struct fake_flash {
 ///        the POST record_store probe touches.
 ///
 struct fake_store {
-    bool     init_ok{true};   ///< Value \ref initialize returns.
-    uint32_t head{0};         ///< Value reported by \ref head_index.
-    uint32_t tail{0};         ///< Value reported by \ref tail_index.
-    uint32_t cap{100};        ///< Value reported by \ref capacity.
-    bool     inited{false};   ///< Set to \ref init_ok after \ref initialize.
+    bool init_ok{true}; ///< Value \ref initialize returns.
+    uint32_t head{0};   ///< Value reported by \ref head_index.
+    uint32_t tail{0};   ///< Value reported by \ref tail_index.
+    uint32_t cap{100};  ///< Value reported by \ref capacity.
+    bool inited{false}; ///< Set to \ref init_ok after \ref initialize.
     /// \brief Simulate initialization, succeeding/failing per \ref init_ok.
     /// \return \ref init_ok.
-    bool     initialize() noexcept { inited = init_ok; return init_ok; }
+    bool initialize() noexcept {
+        inited = init_ok;
+        return init_ok;
+    }
     /// \brief Report whether \ref initialize has run successfully.
     /// \return \ref inited.
-    bool     initialized() const noexcept { return inited; }
+    bool initialized() const noexcept { return inited; }
     /// \brief Report the fake head index.
     /// \return \ref head.
     uint32_t head_index() const noexcept { return head; }
@@ -143,13 +146,13 @@ struct fake_log {
     ///        record_post_subsystem_fail call.
     ///
     struct call {
-        bool    passed;    ///< \c true for a \c record_post_passed call.
+        bool passed;       ///< \c true for a \c record_post_passed call.
         uint8_t subsystem; ///< Subsystem byte (failure calls only).
         uint8_t result;    ///< Result byte (failure calls only).
         uint8_t detail;    ///< Detail byte (failure calls only).
     };
     std::array<call, 16> calls{}; ///< Calls captured so far, in order.
-    uint8_t              n{0};    ///< Number of valid entries in \ref calls.
+    uint8_t n{0};                 ///< Number of valid entries in \ref calls.
 
     /// \brief Capture a passed-POST recording call.
     /// \return Always \c true.
@@ -176,8 +179,8 @@ struct fake_log {
 /// \return A \c post::summary with \c all_passed set and every subsystem
 ///         reporting \c post_result::pass.
 sentinel::diagnostics::post::summary all_healthy_summary() noexcept {
-    auto bme   = fake_bme280{kBme280ChipId};
-    auto rtc   = fake_ds3231{false};
+    auto bme = fake_bme280{kBme280ChipId};
+    auto rtc = fake_ds3231{false};
     auto flash = fake_flash{fake_flash::jedec{0xEFu, 0x40u, 0x18u}};
     auto store = fake_store{};
     return sentinel::diagnostics::post::run(bme, rtc, flash, store,
@@ -189,9 +192,8 @@ sentinel::diagnostics::post::summary all_healthy_summary() noexcept {
 /// \param s   Summary to search.
 /// \param sub Subsystem to look for.
 /// \return Pointer to the matching result, or \c nullptr if absent.
-const post_subsystem_result *
-find(const sentinel::diagnostics::post::summary &s,
-     post_subsystem sub) noexcept {
+const post_subsystem_result *find(const sentinel::diagnostics::post::summary &s,
+                                  post_subsystem sub) noexcept {
     for (auto i = uint8_t{0}; i < s.count; i++) {
         if (s.results[i].subsystem == sub) {
             return &s.results[i];
@@ -249,8 +251,8 @@ bool body_all_pass_path(const char **why) {
 /// \param why Set to a short failure reason when returning \c false.
 /// \return \c true on success.
 bool body_bme280_disconnect(const char **why) {
-    auto bme   = fake_bme280{std::nullopt}; // no ACK
-    auto rtc   = fake_ds3231{false};
+    auto bme = fake_bme280{std::nullopt}; // no ACK
+    auto rtc = fake_ds3231{false};
     auto flash = fake_flash{fake_flash::jedec{0xEFu, 0x40u, 0x18u}};
     auto store = fake_store{};
     const auto s =
@@ -273,8 +275,8 @@ bool body_bme280_disconnect(const char **why) {
 /// \param why Set to a short failure reason when returning \c false.
 /// \return \c true on success.
 bool body_w25q128_unknown_jedec(const char **why) {
-    auto bme   = fake_bme280{kBme280ChipId};
-    auto rtc   = fake_ds3231{false};
+    auto bme = fake_bme280{kBme280ChipId};
+    auto rtc = fake_ds3231{false};
     auto flash = fake_flash{fake_flash::jedec{0x99u, 0x40u, 0x18u}}; // unknown
     auto store = fake_store{};
     const auto s =
@@ -293,8 +295,8 @@ bool body_w25q128_unknown_jedec(const char **why) {
 /// \param why Set to a short failure reason when returning \c false.
 /// \return \c true on success.
 bool body_oscillator_stop(const char **why) {
-    auto bme   = fake_bme280{kBme280ChipId};
-    auto rtc   = fake_ds3231{true}; // OSF set
+    auto bme = fake_bme280{kBme280ChipId};
+    auto rtc = fake_ds3231{true}; // OSF set
     auto flash = fake_flash{fake_flash::jedec{0xC8u, 0x40u, 0x18u}};
     auto store = fake_store{};
     const auto s =
@@ -319,8 +321,8 @@ bool body_oscillator_stop(const char **why) {
 bool body_degraded_operation(const char **why) {
     // Force a single failure (BLE stack init) and confirm POST still enumerates
     // every subsystem — it reports the failure without short-circuiting boot.
-    auto bme   = fake_bme280{kBme280ChipId};
-    auto rtc   = fake_ds3231{false};
+    auto bme = fake_bme280{kBme280ChipId};
+    auto rtc = fake_ds3231{false};
     auto flash = fake_flash{fake_flash::jedec{0xEFu, 0x40u, 0x18u}};
     auto store = fake_store{};
     const auto s = sentinel::diagnostics::post::run(bme, rtc, flash, store,
@@ -370,8 +372,10 @@ bool body_records_failures(const char **why) {
         return false;
     }
     if (log.calls[0].passed ||
-        log.calls[0].subsystem != static_cast<uint8_t>(post_subsystem::ds3231) ||
-        log.calls[0].result != static_cast<uint8_t>(post_result::fail_self_test)) {
+        log.calls[0].subsystem !=
+            static_cast<uint8_t>(post_subsystem::ds3231) ||
+        log.calls[0].result !=
+            static_cast<uint8_t>(post_result::fail_self_test)) {
         *why = "first failure record wrong";
         return false;
     }
@@ -415,7 +419,7 @@ bool body_record_store_fallback(const char **why) {
 /// \return \c true if \p body passed.
 bool run_one(const char *name, bool (*body)(const char **)) noexcept {
     const char *why = "assertion";
-    const auto  ok  = body(&why);
+    const auto ok = body(&why);
     report(name, ok, why);
     return ok;
 }

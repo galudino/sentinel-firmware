@@ -2,7 +2,8 @@
 /// \file    sentinel_cyhal_pwm_signal.hpp
 /// \brief   CYHAL (Cypress HAL) PWM signal implementation
 ///
-/// \details Implements the \ref sentinel::pwm_signal façade over a pre-initialized
+/// \details Implements the \ref sentinel::pwm_signal façade over a
+/// pre-initialized
 ///          CYHAL PWM object. Supports active-high/active-low outputs by
 ///          inverting the hardware duty cycle as needed. Includes convenience
 ///          helpers for perceptual brightness and timed fades.

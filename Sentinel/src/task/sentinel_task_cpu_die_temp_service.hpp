@@ -12,8 +12,8 @@
 ///          (an acceptance criterion of #55).
 ///
 ///          OO/class singleton, mirroring \ref sentinel::task::rtc_service and
-///          \ref sentinel::task::bme280_service (decision #16): cadence + handle
-///          live in private members and the loop runs as a private
+///          \ref sentinel::task::bme280_service (decision #16): cadence +
+///          handle live in private members and the loop runs as a private
 ///          \ref sentinel::task::cpu_die_temp_service::run reached via a static
 ///          trampoline. Use the
 ///          \ref sentinel::task::cpu_die_temp_service::instance singleton.
@@ -40,14 +40,16 @@ namespace sentinel::task {
 
 ///
 /// \brief Single-owner FreeRTOS task that samples the PSoC 6 die temperature,
-///        publishes it to the \c System \c CPU \c Temperature characteristic, and
-///        logs it against the BME280 / DS3231 readings for comparison (#6/#55).
+///        publishes it to the \c System \c CPU \c Temperature characteristic,
+///        and logs it against the BME280 / DS3231 readings for comparison
+///        (#6/#55).
 ///
 /// \note This class is non-copyable and non-movable.
 ///
 class cpu_die_temp_service {
 public:
-    /// \brief Default sampling cadence (~2 s) — the die temperature drifts slowly.
+    /// \brief Default sampling cadence (~2 s) — the die temperature drifts
+    /// slowly.
     static constexpr uint32_t DEFAULT_PERIOD_MS = 2000;
 
     /// \brief The single CPU-die-temperature-service instance.
@@ -62,14 +64,17 @@ public:
     ///
     /// \brief Create and start the CPU die-temperature service task.
     ///
-    /// \param priority    FreeRTOS priority (default low — not latency-critical).
+    /// \param priority    FreeRTOS priority (default low — not
+    /// latency-critical).
     /// \param stack_words Stack depth in words.
     /// \param period_ms   Initial sampling cadence in milliseconds.
     /// \return \c pdPASS on success, otherwise the \c xTaskCreate failure code.
     ///
     BaseType_t task_create(
-        UBaseType_t priority = static_cast<UBaseType_t>(configMAX_PRIORITIES - 4),
-        uint16_t stack_words = static_cast<uint16_t>(configMINIMAL_STACK_SIZE * 4),
+        UBaseType_t priority = static_cast<UBaseType_t>(configMAX_PRIORITIES -
+                                                        4),
+        uint16_t stack_words = static_cast<uint16_t>(configMINIMAL_STACK_SIZE *
+                                                     4),
         uint32_t period_ms = DEFAULT_PERIOD_MS) noexcept;
 
     /// \brief Set the sampling cadence at runtime (floored to a small minimum).
@@ -90,8 +95,9 @@ private:
     /// \brief Sample → publish (GATT) → comparison-log → delay, forever.
     void run();
 
-    volatile uint32_t m_period_ms{DEFAULT_PERIOD_MS}; ///< Sampling cadence (ms).
-    TaskHandle_t      m_handle{nullptr};              ///< FreeRTOS task handle.
+    volatile uint32_t m_period_ms{
+        DEFAULT_PERIOD_MS};         ///< Sampling cadence (ms).
+    TaskHandle_t m_handle{nullptr}; ///< FreeRTOS task handle.
 };
 
 } // namespace sentinel::task

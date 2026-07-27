@@ -9,18 +9,21 @@
 ///          (firmware #34) and its tests can run without wearing out flash and
 ///          without needing a physical part on the bus.
 ///
-///          Because \ref sentinel::diagnostics::system_event_log is templated on
-///          its store type, the exact same log code runs over
+///          Because \ref sentinel::diagnostics::system_event_log is templated
+///          on its store type, the exact same log code runs over
 ///          \ref sentinel::record_store in the application and over
 ///          \ref sentinel::ram_record_store in the testbench.
 ///          This store therefore mirrors the flash store's observable contract:
 ///
 ///          - `bool initialize()`            — recover head/tail from backing
-///          - `bool append(const RecordT&)`  — power-loss-safe two-phase write
-///          - `bool read(uint32_t, RecordT*)`— indexed read in [tail, head)
+///          - `bool append(const RecordType&)`  — power-loss-safe two-phase
+///          write
+///          - `std::optional<RecordType> read(uint32_t)` — indexed read in
+///          [tail, head)
 ///          - `uint32_t count() / capacity() / head_index() / tail_index()`
 ///          - `bool erase_all()`             — reset backing to empty
-///          - `bool append_uncommitted_for_test(const RecordT&)` — torn write
+///          - `bool append_uncommitted_for_test(const RecordType&)` — torn
+///          write
 ///          - `err last_error()` / `bool initialized()`
 ///
 ///          === Backing layout (mirrors the flash slot header) ===
@@ -32,16 +35,16 @@
 ///          offset 0 : status   (1 byte)  0xFF empty / 0xA5 valid
 ///          offset 1 : reserved (3 bytes)
 ///          offset 4 : sequence (4 bytes) monotonic absolute record index
-///          offset 8 : payload  (sizeof(RecordT) bytes)
+///          offset 8 : payload  (sizeof(RecordType) bytes)
 ///          \endcode
 ///
 ///          Unlike the flash store, RAM has no 4 KiB erase granularity, so a
-///          slot is exactly `8 + sizeof(RecordT)` bytes (no power-of-two
+///          slot is exactly `8 + sizeof(RecordType)` bytes (no power-of-two
 ///          padding) and on wrap the single oldest record is overwritten and
 ///          \c tail advances by one. The buffer being *caller-owned* is what
 ///          lets a test simulate a warm reboot: construct a fresh store over
-///          the same buffer and call \ref sentinel::ram_record_store::initialize()
-///          to re-derive head/tail
+///          the same buffer and call \ref
+///          sentinel::ram_record_store::initialize() to re-derive head/tail
 ///          purely from the bytes already there — exactly as the flash store
 ///          recovers from on-flash state.
 ///
@@ -55,48 +58,51 @@
 
 #include <cstdint>
 #include <cstring>
+#include <optional>
 #include <type_traits>
 
 namespace sentinel {
 
 ///
-/// \brief RAM-backed circular record store mirroring \ref sentinel::record_store.
+/// \brief RAM-backed circular record store mirroring \ref
+/// sentinel::record_store.
 ///
-/// \tparam RecordT The caller's fixed-size record payload. Must be trivially
+/// \tparam RecordType The caller's fixed-size record payload. Must be trivially
 ///                 copyable and a multiple of 4 bytes (same constraints the
 ///                 flash store imposes, so a type that fits one fits both).
 ///
-template <typename RecordT>
+template <typename RecordType>
 class ram_record_store {
-    static_assert(std::is_trivially_copyable_v<RecordT>,
-                  "RecordT must be trivially copyable");
-    static_assert(sizeof(RecordT) % 4 == 0,
-                  "RecordT must be a multiple of 4 bytes");
+    static_assert(std::is_trivially_copyable_v<RecordType>,
+                  "RecordType must be trivially copyable");
+    static_assert(sizeof(RecordType) % 4 == 0,
+                  "RecordType must be a multiple of 4 bytes");
 
 public:
     ///
     /// \brief Error codes for the most recent operation (see \ref last_error).
     ///
     enum class err : int8_t {
-        ok               = 0,
+        ok = 0,
         invalid_argument = -2, ///< Bad buffer/index/argument.
-        not_initialized  = -3, ///< Operation issued before \ref initialize().
-        corrupt_record   = -4, ///< A slot expected valid had a bad status byte.
+        not_initialized = -3,  ///< Operation issued before \ref initialize().
+        corrupt_record = -4,   ///< A slot expected valid had a bad status byte.
     };
 
     /// Per-slot header: status(1) + reserved(3) + sequence(4).
     static constexpr uint32_t HEADER_SIZE = 8u;
 
-    static constexpr uint32_t OFFSET_STATUS   = 0u; ///< Status byte offset.
+    static constexpr uint32_t OFFSET_STATUS = 0u;   ///< Status byte offset.
     static constexpr uint32_t OFFSET_SEQUENCE = 4u; ///< Sequence field offset.
-    static constexpr uint32_t OFFSET_PAYLOAD  = 8u; ///< Payload field offset.
+    static constexpr uint32_t OFFSET_PAYLOAD = 8u;  ///< Payload field offset.
 
     /// Slot stride in bytes (no power-of-two padding needed in RAM).
     static constexpr uint32_t SLOT_SIZE =
-        HEADER_SIZE + static_cast<uint32_t>(sizeof(RecordT));
+        HEADER_SIZE + static_cast<uint32_t>(sizeof(RecordType));
 
     static constexpr uint8_t STATUS_EMPTY = 0xFFu; ///< Slot never written.
-    static constexpr uint8_t STATUS_VALID = 0xA5u; ///< Slot holds a valid record.
+    static constexpr uint8_t STATUS_VALID =
+        0xA5u; ///< Slot holds a valid record.
 
     ///
     /// \brief Construct a store over a caller-owned byte buffer.
@@ -110,10 +116,10 @@ public:
     ram_record_store(uint8_t *buffer, uint32_t buffer_size) noexcept
         : m_buffer(buffer), m_capacity(buffer_size / SLOT_SIZE) {}
 
-    ram_record_store(const ram_record_store &)            = delete;
+    ram_record_store(const ram_record_store &) = delete;
     ram_record_store &operator=(const ram_record_store &) = delete;
     /// \brief Move-construct from another instance (defaulted).
-    ram_record_store(ram_record_store &&) noexcept        = default;
+    ram_record_store(ram_record_store &&) noexcept = default;
     /// \brief Move-assign from another instance (defaulted).
     /// \return Reference to this instance.
     ram_record_store &operator=(ram_record_store &&) noexcept = default;
@@ -136,7 +142,7 @@ public:
     uint32_t tail_index() const noexcept { return m_tail; }
     /// \brief Has \ref initialize() (or \ref erase_all()) run successfully?
     /// \return \c true if the store is ready for append/read.
-    bool     initialized() const noexcept { return m_initialized; }
+    bool initialized() const noexcept { return m_initialized; }
 
     ///
     /// \brief Recover \c head / \c tail by scanning the backing buffer.
@@ -156,8 +162,8 @@ public:
         }
 
         auto have_any = false;
-        auto min_seq  = uint32_t{0};
-        auto max_seq  = uint32_t{0};
+        auto min_seq = uint32_t{0};
+        auto max_seq = uint32_t{0};
 
         for (auto slot = uint32_t{0}; slot < m_capacity; slot++) {
             const auto *s = slot_ptr(slot);
@@ -166,12 +172,16 @@ public:
             }
             auto seq = load_sequence(s);
             if (!have_any) {
-                min_seq  = seq;
-                max_seq  = seq;
+                min_seq = seq;
+                max_seq = seq;
                 have_any = true;
             } else {
-                if (seq < min_seq) min_seq = seq;
-                if (seq > max_seq) max_seq = seq;
+                if (seq < min_seq) {
+                    min_seq = seq;
+                }
+                if (seq > max_seq) {
+                    max_seq = seq;
+                }
             }
         }
 
@@ -184,7 +194,7 @@ public:
         }
 
         m_initialized = true;
-        m_last_error  = err::ok;
+        m_last_error = err::ok;
         return true;
     }
 
@@ -200,10 +210,10 @@ public:
             return false;
         }
         std::memset(m_buffer, STATUS_EMPTY, m_capacity * SLOT_SIZE);
-        m_head        = 0u;
-        m_tail        = 0u;
+        m_head = 0u;
+        m_tail = 0u;
         m_initialized = true;
-        m_last_error  = err::ok;
+        m_last_error = err::ok;
         return true;
     }
 
@@ -218,7 +228,7 @@ public:
     /// \param record The record to store.
     /// \return \c true on success; \c false if not initialized.
     ///
-    bool append(const RecordT &record) noexcept {
+    bool append(const RecordType &record) noexcept {
         if (!m_initialized) {
             m_last_error = err::not_initialized;
             return false;
@@ -235,7 +245,7 @@ public:
         write_payload(slot, m_head, record);
         slot_ptr(slot)[OFFSET_STATUS] = STATUS_VALID; // commit
 
-        m_head++;
+        ++m_head;
         m_last_error = err::ok;
         return true;
     }
@@ -244,27 +254,28 @@ public:
     /// \brief Read the record at an absolute index in <tt>[tail, head)</tt>.
     ///
     /// \param index Absolute record index; must be in <tt>[tail, head)</tt>.
-    /// \param out   Destination for the payload.
-    /// \return \c true on success; \c false if not initialized, \p out is
-    ///         \c nullptr, \p index is out of range, or the slot is corrupt.
+    /// \return The record on success; \c std::nullopt if not initialized,
+    ///         \p index is out of range, or the slot is corrupt (see
+    ///         \ref last_error()).
     ///
-    bool read(uint32_t index, RecordT *out) const noexcept {
+    std::optional<RecordType> read(uint32_t index) const noexcept {
         if (!m_initialized) {
             m_last_error = err::not_initialized;
-            return false;
+            return std::nullopt;
         }
-        if (out == nullptr || index < m_tail || index >= m_head) {
+        if (index < m_tail || index >= m_head) {
             m_last_error = err::invalid_argument;
-            return false;
+            return std::nullopt;
         }
         const auto *s = slot_ptr(index % m_capacity);
         if (s[OFFSET_STATUS] != STATUS_VALID) {
             m_last_error = err::corrupt_record;
-            return false;
+            return std::nullopt;
         }
-        std::memcpy(out, s + OFFSET_PAYLOAD, sizeof(RecordT));
+        auto record = RecordType{};
+        std::memcpy(&record, s + OFFSET_PAYLOAD, sizeof(RecordType));
         m_last_error = err::ok;
-        return true;
+        return record;
     }
 
     ///
@@ -277,7 +288,7 @@ public:
     /// \param record The record to write (payload only; status left \c 0xFF).
     /// \return \c true on success; \c false if not initialized.
     ///
-    bool append_uncommitted_for_test(const RecordT &record) noexcept {
+    bool append_uncommitted_for_test(const RecordType &record) noexcept {
         if (!m_initialized) {
             m_last_error = err::not_initialized;
             return false;
@@ -315,17 +326,17 @@ private:
     /// \param sequence Absolute record index to stamp into the slot.
     /// \param record   Record payload to write.
     void write_payload(uint32_t slot, uint32_t sequence,
-                       const RecordT &record) noexcept {
+                       const RecordType &record) noexcept {
         auto *s = slot_ptr(slot);
         std::memcpy(s + OFFSET_SEQUENCE, &sequence, sizeof(sequence));
-        std::memcpy(s + OFFSET_PAYLOAD, &record, sizeof(RecordT));
+        std::memcpy(s + OFFSET_PAYLOAD, &record, sizeof(RecordType));
     }
 
-    uint8_t    *m_buffer;   ///< Non-owning backing storage.
-    uint32_t    m_capacity; ///< Slot count.
-    uint32_t    m_head{0};  ///< Next write index.
-    uint32_t    m_tail{0};  ///< Oldest valid index.
-    bool        m_initialized{false};  ///< Set once \ref initialize() runs.
+    uint8_t *m_buffer;                 ///< Non-owning backing storage.
+    uint32_t m_capacity;               ///< Slot count.
+    uint32_t m_head{0};                ///< Next write index.
+    uint32_t m_tail{0};                ///< Oldest valid index.
+    bool m_initialized{false};         ///< Set once \ref initialize() runs.
     mutable err m_last_error{err::ok}; ///< Cached most-recent error.
 };
 

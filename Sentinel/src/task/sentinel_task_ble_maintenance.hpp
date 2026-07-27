@@ -10,8 +10,8 @@
 ///          (safe from the BT task context); this task performs it, so the BT
 ///          callback returns promptly and the write response is not stalled.
 ///
-///          OO/class style (decision #16): request bits + handle live in private
-///          members; the loop runs as a private
+///          OO/class style (decision #16): request bits + handle live in
+///          private members; the loop runs as a private
 ///          \ref sentinel::task::ble_maintenance_task::run reached via a static
 ///          trampoline. Use the
 ///          \ref sentinel::task::ble_maintenance_task::instance singleton.
@@ -59,8 +59,10 @@ public:
     /// \param stack_words Task stack size, in words.
     /// \return \c pdPASS on success, otherwise the \c xTaskCreate failure code.
     BaseType_t task_create(
-        UBaseType_t priority = static_cast<UBaseType_t>(configMAX_PRIORITIES - 4),
-        uint16_t stack_words = static_cast<uint16_t>(configMINIMAL_STACK_SIZE * 4)) noexcept;
+        UBaseType_t priority = static_cast<UBaseType_t>(configMAX_PRIORITIES -
+                                                        4),
+        uint16_t stack_words = static_cast<uint16_t>(configMINIMAL_STACK_SIZE *
+                                                     4)) noexcept;
 
     /// \brief Request an erase of the Snapshot History store (async).
     void request_clear_snapshots() noexcept;

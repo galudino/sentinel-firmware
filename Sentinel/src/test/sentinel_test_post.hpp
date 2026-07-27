@@ -14,7 +14,8 @@
 ///          (disconnect a pin, swap a part, pull the RTC battery) is a manual
 ///          on-bench step documented per test:
 ///          - \c all_pass_path        -- every healthy probe passes; summary
-///            reports all_passed, failure_count 0; the log gets one post_passed.
+///            reports all_passed, failure_count 0; the log gets one
+///            post_passed.
 ///          - \c bme280_disconnect    -- a non-responding BME280 yields
 ///            fail_no_ack for the bme280 subsystem.
 ///          - \c w25q128_unknown_jedec -- an unknown JEDEC id yields

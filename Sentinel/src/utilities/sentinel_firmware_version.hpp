@@ -250,11 +250,13 @@ constexpr bool cstr_equal(const char *a, const char *b) noexcept {
 
 // Lock the "major.minor.patch.build" c_str() format (regression guard: a prior
 // bug produced "0.0.01." — separator before build missing, stray trailing '.').
-static_assert(detail::cstr_equal(firmware_version(0, 0, 0, 1).c_str(), "0.0.0.1"),
+static_assert(detail::cstr_equal(firmware_version(0, 0, 0, 1).c_str(),
+                                 "0.0.0.1"),
               "firmware_version::c_str() must be major.minor.patch.build");
-static_assert(detail::cstr_equal(firmware_version(255, 255, 255, 65535).c_str(),
-                                 "255.255.255.65535"),
-              "firmware_version::c_str() must fit + format the maximum version");
+static_assert(
+    detail::cstr_equal(firmware_version(255, 255, 255, 65535).c_str(),
+                       "255.255.255.65535"),
+    "firmware_version::c_str() must fit + format the maximum version");
 
 /// \}
 

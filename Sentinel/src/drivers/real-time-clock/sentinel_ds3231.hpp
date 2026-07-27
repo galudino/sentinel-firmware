@@ -80,11 +80,6 @@ extern "C" {
 
 namespace sentinel {
 
-template <typename Transport>
-class ds3231;
-
-} // namespace sentinel
-
 ///
 /// \brief DS3231 real-time clock driver class
 ///
@@ -104,7 +99,7 @@ class ds3231;
 ///                   \c byte_transport<Transport, i2c_tag>.
 ///
 template <typename Transport>
-class sentinel::ds3231 {
+class ds3231 {
     static_assert(
         std::is_base_of_v<byte_transport<Transport, i2c_tag>, Transport>,
         "Transport must derive from "
@@ -385,11 +380,11 @@ public:
             }
 
             auto days = uint32_t{0};
-            for (auto y = uint16_t{1970}; y < dt.year; ++y) {
+            for (auto y = uint16_t{1970}; y < dt.year; y++) {
                 days += is_leap_year(y) ? 366 : 365;
             }
 
-            for (auto m = uint8_t{1}; m < dt.month; ++m) {
+            for (auto m = uint8_t{1}; m < dt.month; m++) {
                 days += days_in_month(dt.year, m);
             }
 
@@ -526,7 +521,7 @@ public:
     struct alarm1_setting {
         alarm1_match_mode match_mode =
             alarm1_match_mode::once_per_second; ///< Which fields participate
-                                                 ///< in the match.
+                                                ///< in the match.
         uint8_t second = 0;      ///< 0–59 (ignored for \c once_per_second).
         uint8_t minute = 0;      ///< 0–59.
         uint8_t hour = 0;        ///< 0–23 (24-hour clock).
@@ -541,7 +536,7 @@ public:
     struct alarm2_setting {
         alarm2_match_mode match_mode =
             alarm2_match_mode::once_per_minute; ///< Which fields participate
-                                                 ///< in the match.
+                                                ///< in the match.
         uint8_t minute = 0;      ///< 0–59 (ignored for \c once_per_minute).
         uint8_t hour = 0;        ///< 0–23 (24-hour clock).
         uint8_t day_or_date = 1; ///< Day-of-week (1–7) if the match mode is
@@ -1183,8 +1178,9 @@ public:
     ///
     std::optional<int8_t> aging_offset() const noexcept {
         auto v = read_register(register_address::aging_offset);
-        if (!v)
+        if (!v) {
             return std::nullopt;
+        }
         return static_cast<int8_t>(*v);
     }
 
@@ -1358,16 +1354,21 @@ private:
     static constexpr alarm1_match_mode
     alarm1_mode_from_flags(bool m1, bool m2, bool m3, bool m4,
                            bool day_not_date) noexcept {
-        if (m1 && m2 && m3 && m4)
+        if (m1 && m2 && m3 && m4) {
             return alarm1_match_mode::once_per_second;
-        if (!m1 && m2 && m3 && m4)
+        }
+        if (!m1 && m2 && m3 && m4) {
             return alarm1_match_mode::seconds;
-        if (!m1 && !m2 && m3 && m4)
+        }
+        if (!m1 && !m2 && m3 && m4) {
             return alarm1_match_mode::minutes_seconds;
-        if (!m1 && !m2 && !m3 && m4)
+        }
+        if (!m1 && !m2 && !m3 && m4) {
             return alarm1_match_mode::hours_minutes_seconds;
-        if (day_not_date)
+        }
+        if (day_not_date) {
             return alarm1_match_mode::day_of_week_hours_minutes_seconds;
+        }
         return alarm1_match_mode::date_hours_minutes_seconds;
     }
 
@@ -1380,14 +1381,18 @@ private:
     static constexpr alarm2_match_mode
     alarm2_mode_from_flags(bool m2, bool m3, bool m4,
                            bool day_not_date) noexcept {
-        if (m2 && m3 && m4)
+        if (m2 && m3 && m4) {
             return alarm2_match_mode::once_per_minute;
-        if (!m2 && m3 && m4)
+        }
+        if (!m2 && m3 && m4) {
             return alarm2_match_mode::minutes;
-        if (!m2 && !m3 && m4)
+        }
+        if (!m2 && !m3 && m4) {
             return alarm2_match_mode::hours_minutes;
-        if (day_not_date)
+        }
+        if (day_not_date) {
             return alarm2_match_mode::day_of_week_hours_minutes;
+        }
         return alarm2_match_mode::date_hours_minutes;
     }
 
@@ -1488,7 +1493,7 @@ private:
 
         auto buf = std::array<uint8_t, MAX_CONTIGUOUS_BYTES>{};
         buf[0] = static_cast<uint8_t>(reg);
-        for (auto i = size_t{0}; i < count; ++i) {
+        for (auto i = size_t{0}; i < count; i++) {
             buf[i + 1] = data[i];
         }
 
@@ -1507,5 +1512,7 @@ private:
                                        ///< operation's error code; exposed
                                        ///< by \ref last_error().
 };
+
+} // namespace sentinel
 
 #endif /* SENTINEL_DS3231_HPP */

@@ -157,7 +157,7 @@ sentinel::logging::unix_seconds_to_datetime(int64_t unix_seconds) {
 
     if (seconds_in_day < 0) {
         seconds_in_day += 86400;
-        days_since_epoch--;
+        --days_since_epoch;
     }
 
     dt.hour = seconds_in_day / 3600;

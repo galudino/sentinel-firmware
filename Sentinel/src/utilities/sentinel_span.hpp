@@ -40,19 +40,19 @@ class span {
 public:
     using element_type = T; ///< Element type, as given (may be const).
     using value_type =
-        typename std::remove_cv<T>::type; ///< Element type, cv-stripped.
-    using size_type = size_t;              ///< Type used for sizes/indices.
+        typename std::remove_cv<T>::type;   ///< Element type, cv-stripped.
+    using size_type = size_t;               ///< Type used for sizes/indices.
     using difference_type = std::ptrdiff_t; ///< Type used for iterator diffs.
-    using pointer = T *;                   ///< Pointer to an element.
-    using const_pointer = const T *;       ///< Pointer to a const element.
-    using reference = T &;                 ///< Reference to an element.
-    using const_reference = const T &;     ///< Reference to a const element.
-    using iterator = T *;                  ///< Forward iterator type.
-    using const_iterator = const T *;      ///< Const forward iterator type.
+    using pointer = T *;                    ///< Pointer to an element.
+    using const_pointer = const T *;        ///< Pointer to a const element.
+    using reference = T &;                  ///< Reference to an element.
+    using const_reference = const T &;      ///< Reference to a const element.
+    using iterator = T *;                   ///< Forward iterator type.
+    using const_iterator = const T *;       ///< Const forward iterator type.
     using reverse_iterator =
         std::reverse_iterator<iterator>; ///< Reverse iterator type.
-    using const_reverse_iterator = std::reverse_iterator<
-        const_iterator>; ///< Const reverse iterator type.
+    using const_reverse_iterator =
+        std::reverse_iterator<const_iterator>; ///< Const reverse iterator type.
 
     ///
     /// \brief Default constructor creates an empty span

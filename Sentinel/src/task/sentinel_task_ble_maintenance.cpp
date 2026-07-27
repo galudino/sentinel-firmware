@@ -29,9 +29,11 @@ namespace sentinel::task {
 
 namespace {
 
-constexpr uint32_t BIT_CLEAR_SNAPSHOTS = 1u << 0; ///< Request: erase Snapshot History.
-constexpr uint32_t BIT_CLEAR_EVENTS    = 1u << 1; ///< Request: erase System Event Log.
-constexpr uint32_t BIT_BOOTLOADER      = 1u << 2; ///< Request: enter the bootloader.
+constexpr uint32_t BIT_CLEAR_SNAPSHOTS =
+    1u << 0; ///< Request: erase Snapshot History.
+constexpr uint32_t BIT_CLEAR_EVENTS =
+    1u << 1; ///< Request: erase System Event Log.
+constexpr uint32_t BIT_BOOTLOADER = 1u << 2; ///< Request: enter the bootloader.
 
 /// \brief Grace period before the bootloader reset so the write response +
 ///        disconnect can flush.
@@ -46,8 +48,9 @@ ble_maintenance_task &ble_maintenance_task::instance() noexcept {
 
 BaseType_t ble_maintenance_task::task_create(UBaseType_t priority,
                                              uint16_t stack_words) noexcept {
-    return xTaskCreate(&ble_maintenance_task::task_trampoline, "BLE Maintenance",
-                       stack_words, this, priority, &m_handle);
+    return xTaskCreate(&ble_maintenance_task::task_trampoline,
+                       "BLE Maintenance", stack_words, this, priority,
+                       &m_handle);
 }
 
 void ble_maintenance_task::task_trampoline(void *task_parameter) {

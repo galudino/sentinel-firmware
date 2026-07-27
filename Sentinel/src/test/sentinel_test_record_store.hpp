@@ -24,7 +24,8 @@
 ///          FreeRTOS task — the serial test orchestrator calls
 ///          \ref sentinel::test::record_store::run_all directly. Internally it
 ///          uses a TU-local fixture that owns the
-///          bus-arbitrated SPI transport, so there is no file-static bus global.
+///          bus-arbitrated SPI transport, so there is no file-static bus
+///          global.
 ///
 /// \author  galudino
 /// \date    2026-06-28

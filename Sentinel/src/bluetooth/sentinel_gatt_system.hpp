@@ -6,10 +6,10 @@
 ///          service value arrays: Serial Number (R/W device-identity key),
 ///          Firmware Version (R, 5-byte packed), Request Bootloader Mode (W),
 ///          and Platform ID (R, \ref sentinel::platform_id). Like the rest of
-///          the \c sentinel::gatt::\<svc\> layer these are \c inline + \c noexcept
-///          (the values are \c extern GATT-DB globals, not constant
-///          expressions) and keep the generated \c app_system_* / \c HDLC_SYSTEM_*
-///          symbols out of the call sites.
+///          the \c sentinel::gatt::\<svc\> layer these are \c inline + \c
+///          noexcept (the values are \c extern GATT-DB globals, not constant
+///          expressions) and keep the generated \c app_system_* / \c
+///          HDLC_SYSTEM_* symbols out of the call sites.
 ///
 /// \author  galudino
 /// \date    2026-07-08
@@ -58,7 +58,8 @@ inline void set_serial_number(uint32_t serial) noexcept {
                           static_cast<uint16_t>(sizeof(le)));
 }
 
-/// \brief Set the Firmware Version characteristic (5-byte packed, little-endian:
+/// \brief Set the Firmware Version characteristic (5-byte packed,
+/// little-endian:
 ///        major, minor, patch, build[2]).
 /// \param v Firmware version to encode into the characteristic.
 inline void set_firmware_version(const sentinel::firmware_version &v) noexcept {
@@ -86,19 +87,21 @@ inline sentinel::platform_id platform_id() noexcept {
 
 // ---- CPU Temperature (R/Notify) — PSoC 6 on-die temperature, 0.01 °C -------
 
-/// \brief \c true while a central has subscribed to CPU Temperature notifications.
+/// \brief \c true while a central has subscribed to CPU Temperature
+/// notifications.
 /// \return \c true if the CCCD notification bit is set.
 inline bool cpu_temperature_notifications_enabled() noexcept {
     return app_system_cpu_temperature_client_char_config[0] &
            wiced_bt_gatt_client_char_config_e::GATT_CLIENT_CONFIG_NOTIFICATION;
 }
 
-/// \brief Write the CPU Temperature characteristic (0.01 °C / LSB, little-endian).
+/// \brief Write the CPU Temperature characteristic (0.01 °C / LSB,
+/// little-endian).
 /// \param centi_c Temperature in hundredths of a degree Celsius.
 inline void set_cpu_temperature_centi_c(int16_t centi_c) noexcept {
-    uint8_t le[2] = {static_cast<uint8_t>(static_cast<uint16_t>(centi_c) & 0xFFu),
-                     static_cast<uint8_t>(
-                         (static_cast<uint16_t>(centi_c) >> 8) & 0xFFu)};
+    uint8_t le[2] = {
+        static_cast<uint8_t>(static_cast<uint16_t>(centi_c) & 0xFFu),
+        static_cast<uint8_t>((static_cast<uint16_t>(centi_c) >> 8) & 0xFFu)};
     ble_gatt_db_set_value(HDLC_SYSTEM_CPU_TEMPERATURE_VALUE, le,
                           static_cast<uint16_t>(sizeof(le)));
 }
@@ -106,7 +109,8 @@ inline void set_cpu_temperature_centi_c(int16_t centi_c) noexcept {
 /// \brief Notify the connected central with the current CPU Temperature value.
 /// \param connection_id BLE connection to notify.
 /// \return \c wiced_bt_gatt_status_t result of the notification send.
-inline wiced_bt_gatt_status_t notify_cpu_temperature(uint16_t connection_id) noexcept {
+inline wiced_bt_gatt_status_t
+notify_cpu_temperature(uint16_t connection_id) noexcept {
     return wiced_bt_gatt_server_send_notification(
         connection_id, HDLC_SYSTEM_CPU_TEMPERATURE_VALUE,
         app_system_cpu_temperature_len, app_system_cpu_temperature, nullptr);

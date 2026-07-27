@@ -98,7 +98,8 @@ inline bool region_is_blank(w25q128_t &flash, uint32_t address,
 }
 
 ///
-/// \brief Test fixture: owns the bus-arbitrated SPI transport every test shares.
+/// \brief Test fixture: owns the bus-arbitrated SPI transport every test
+/// shares.
 ///
 /// \details Targets the SCB's flash chip-select line (\c CYBSP_SPI_FLASH_CS).
 ///          Constructed fresh by \ref sentinel::test::w25q128::run_all (like a
@@ -470,7 +471,7 @@ bool fixture::power_down_release() noexcept {
 
 sentinel::test::tally sentinel::test::w25q128::run_all() noexcept {
     auto fx = fixture{};
-    auto t  = sentinel::test::tally{};
+    auto t = sentinel::test::tally{};
 
     t.record(fx.presence_check());
     yield_for_debug_drain(200);

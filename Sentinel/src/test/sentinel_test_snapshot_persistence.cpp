@@ -3,9 +3,9 @@
 /// \brief   Snapshot persistence task test suite implementation (lane 1, #38)
 ///
 /// \details Implements the run-to-completion suite declared in
-///          \c sentinel_test_snapshot_persistence.hpp. A TU-local \c fixture owns
-///          a scratch \ref sentinel::resource::snapshot_store_t over two sectors
-///          near the top of flash (\c kRegionOffset) — clear of the
+///          \c sentinel_test_snapshot_persistence.hpp. A TU-local \c fixture
+///          owns a scratch \ref sentinel::resource::snapshot_store_t over two
+///          sectors near the top of flash (\c kRegionOffset) — clear of the
 ///          record_store suite's region (0xF00000), the w25q128 scratch sector
 ///          (0xFFF000), and the production event-log / snapshot regions low in
 ///          flash — and binds it to the real
@@ -53,7 +53,7 @@ using sentinel::task::snapshot_persistence_task;
 
 /// Scratch region: two sectors above the record_store suite's 0xF00000 region.
 constexpr uint32_t kRegionOffset = 0xF02000u;
-constexpr uint32_t kRegionSize   = 2u * flash_t::SECTOR_SIZE_BYTES; ///< 8 KiB.
+constexpr uint32_t kRegionSize = 2u * flash_t::SECTOR_SIZE_BYTES; ///< 8 KiB.
 
 /// \brief Yield long enough for the BLE debug ring buffer to drain.
 /// \param milliseconds Delay duration, in milliseconds.
@@ -73,11 +73,11 @@ inline bool snapshot_well_formed(const snapshot &s) noexcept {
 /// \brief Fixture: owns the scratch store and binds it to the real task.
 ///
 struct fixture {
-    // The flash driver holds a reference to its transport, so the transport must
-    // be a named member that outlives it (not a constructor temporary).
+    // The flash driver holds a reference to its transport, so the transport
+    // must be a named member that outlives it (not a constructor temporary).
     /// SPI transport backing \ref flash; must outlive it.
-    sentinel::cyhal_spi_bus_transport flash_bus{sentinel::resource::cybsp_spi_bus,
-                                                CYBSP_SPI_FLASH_CS};
+    sentinel::cyhal_spi_bus_transport flash_bus{
+        sentinel::resource::cybsp_spi_bus, CYBSP_SPI_FLASH_CS};
     /// W25Q128 driver bound to \ref flash_bus.
     flash_t flash{flash_bus, sentinel::resource::flash_device_mutex};
     /// Scratch snapshot store over \ref kRegionOffset / \ref kRegionSize.
@@ -165,8 +165,8 @@ bool fixture::capture_and_readback() noexcept {
     }
 
     for (auto i = uint32_t{0}; i < kCount; i++) {
-        auto s = snapshot{};
-        if (!task.read(i, &s) || !snapshot_well_formed(s)) {
+        auto s = task.read(i);
+        if (!s || !snapshot_well_formed(*s)) {
             loge("capture_and_readback FAIL: read/verify index %u",
                  static_cast<unsigned>(i));
             return false;
@@ -262,9 +262,10 @@ bool fixture::wrap_around() noexcept {
         return false;
     }
 
-    // Capture past capacity to force a sector recycle (oldest-overwritten-wins).
+    // Capture past capacity to force a sector recycle
+    // (oldest-overwritten-wins).
     const auto capacity = store.capacity();
-    const auto total    = capacity + store_t::RECORDS_PER_SECTOR + 1u;
+    const auto total = capacity + store_t::RECORDS_PER_SECTOR + 1u;
     for (auto i = uint32_t{0}; i < total; i++) {
         if (!task.capture_now()) {
             loge("wrap_around FAIL: capture %u error %d",
@@ -285,17 +286,16 @@ bool fixture::wrap_around() noexcept {
 
     const auto tail = store.tail_index();
     const auto head = store.head_index();
-    auto oldest = snapshot{};
-    auto newest = snapshot{};
-    if (!task.read(tail, &oldest) || !snapshot_well_formed(oldest) ||
-        !task.read(head - 1u, &newest) || !snapshot_well_formed(newest)) {
+    auto oldest = task.read(tail);
+    auto newest = task.read(head - 1u);
+    if (!oldest || !snapshot_well_formed(*oldest) || !newest ||
+        !snapshot_well_formed(*newest)) {
         loge("wrap_around FAIL: tail/head read (tail=%u head=%u)",
              static_cast<unsigned>(tail), static_cast<unsigned>(head));
         return false;
     }
 
-    auto evicted = snapshot{};
-    if (tail > 0u && task.read(tail - 1u, &evicted)) {
+    if (tail > 0u && task.read(tail - 1u)) {
         loge("wrap_around FAIL: evicted record %u still readable",
              static_cast<unsigned>(tail - 1u));
         return false;
@@ -313,10 +313,9 @@ bool fixture::wrap_around() noexcept {
 // sentinel::test::snapshot_persistence::run_all
 // ============================================================================
 
-sentinel::test::tally
-sentinel::test::snapshot_persistence::run_all() noexcept {
+sentinel::test::tally sentinel::test::snapshot_persistence::run_all() noexcept {
     auto fx = fixture{};
-    auto t  = sentinel::test::tally{};
+    auto t = sentinel::test::tally{};
 
     t.record(fx.presence_check());
     yield_for_debug_drain(200);

@@ -1,11 +1,13 @@
 ///
 /// \file    sentinel_orchestrator_entry.hpp
-/// \brief   Common target entry symbol so one main.cpp can serve both builds (#51)
+/// \brief   Common target entry symbol so one main.cpp can serve both builds
+/// (#51)
 ///
 /// \details Each firmware target differs only in which one-shot orchestrator it
 ///          creates after \ref sentinel::resource::system_initialize. This
 ///          declares a single \ref sentinel::create_orchestrator entry symbol,
-///          \b defined per-target in that target's orchestrator translation unit
+///          \b defined per-target in that target's orchestrator translation
+///          unit
 ///          (\c sentinel_boot_orchestrator.cpp → boot orchestrator;
 ///          \c sentinel_test_orchestrator.cpp → test orchestrator). Because
 ///          the Makefile compiles exactly one of those TUs (the other dir is

@@ -42,13 +42,14 @@ namespace sentinel::gatt::bme280 {
 ///        (#6). Mirrored 1:1 by the client (sentinel-client #9).
 ///
 struct __attribute__((packed)) bme280_sample {
-    int16_t  temperature_centi_degC; ///< 0.01 °C / LSB.
-    uint16_t humidity_centi_pct;     ///< 0.01 %RH / LSB.
-    uint32_t pressure_pa;            ///< Pa / LSB.
+    int16_t temperature_centi_degC; ///< 0.01 °C / LSB.
+    uint16_t humidity_centi_pct;    ///< 0.01 %RH / LSB.
+    uint32_t pressure_pa;           ///< Pa / LSB.
 };
 static_assert(sizeof(bme280_sample) == 8, "bme280_sample must be 8 bytes");
 
-/// \brief \c true while a central has subscribed to Ambient Sample notifications.
+/// \brief \c true while a central has subscribed to Ambient Sample
+/// notifications.
 /// \return \c true if the CCCD notification bit is set.
 inline bool notifications_enabled() noexcept {
     return app_bme280_ambient_sample_client_char_config[0] &

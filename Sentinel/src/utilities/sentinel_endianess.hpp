@@ -153,8 +153,9 @@ constexpr T sentinel::read_integral(const uint8_t *buffer, endianess order) {
 }
 
 template <typename T>
-constexpr T sentinel::read_integral(const std::array<uint8_t, sizeof(T)> &buffer,
-                               endianess order) {
+constexpr T
+sentinel::read_integral(const std::array<uint8_t, sizeof(T)> &buffer,
+                        endianess order) {
     return read_integral<T>(buffer.data(), order);
 }
 
@@ -171,7 +172,7 @@ sentinel::to_bytes(T value, endianess order) noexcept {
     switch (order) {
     case endianess::little:
         // Little-endian: LSB first
-        for (std::size_t i = 0; i < sizeof(T); ++i) {
+        for (std::size_t i = 0; i < sizeof(T); i++) {
             bytes[i] = static_cast<std::uint8_t>(u & 0xFFu);
             u >>= 8;
         }
@@ -180,7 +181,7 @@ sentinel::to_bytes(T value, endianess order) noexcept {
     case endianess::big:
     default:
         // Big-endian: MSB first
-        for (std::size_t i = 0; i < sizeof(T); ++i) {
+        for (std::size_t i = 0; i < sizeof(T); i++) {
             // Fill from the end for big-endian
             bytes[sizeof(T) - 1 - i] = static_cast<std::uint8_t>(u & 0xFFu);
             u >>= 8;

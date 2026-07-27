@@ -6,9 +6,10 @@
 ///          Name is derived from \ref sentinel::vendor_of (single source of
 ///          truth, #45); Firmware Revision mirrors \ref
 ///          sentinel::firmware_version; Serial Number mirrors the \c System
-///          service Serial Number. Model Number and Hardware Revision are static
-///          display strings baked into the GATT database (design.cybt) and need
-///          no runtime write. PnP ID carries a documented placeholder Vendor ID.
+///          service Serial Number. Model Number and Hardware Revision are
+///          static display strings baked into the GATT database (design.cybt)
+///          and need no runtime write. PnP ID carries a documented placeholder
+///          Vendor ID.
 ///
 ///          Display strings (Model Number, Hardware Revision) are never parsed
 ///          for logic — logic branches on \ref sentinel::platform_id.
@@ -40,24 +41,31 @@ extern "C" {
 
 namespace sentinel::gatt::dis {
 
-/// \brief Human-readable manufacturer name for the DIS, derived from the vendor.
+/// \brief Human-readable manufacturer name for the DIS, derived from the
+/// vendor.
 /// \param v Vendor identifier to name.
 /// \return Static string naming \p v (\c "Unknown" if unrecognized).
 inline const char *manufacturer_name(sentinel::vendor_id v) noexcept {
     switch (v) {
-    case sentinel::vendor_id::infineon:             return "Infineon Technologies";
-    case sentinel::vendor_id::raspberry_pi_ltd:     return "Raspberry Pi Ltd";
-    case sentinel::vendor_id::nordic_semiconductor: return "Nordic Semiconductor";
-    default:                                        return "Unknown";
+    case sentinel::vendor_id::infineon:
+        return "Infineon Technologies";
+    case sentinel::vendor_id::raspberry_pi_ltd:
+        return "Raspberry Pi Ltd";
+    case sentinel::vendor_id::nordic_semiconductor:
+        return "Nordic Semiconductor";
+    default:
+        return "Unknown";
     }
 }
 
-/// \brief Write a UTF-8 string to a DIS characteristic (bounded by its max_len).
+/// \brief Write a UTF-8 string to a DIS characteristic (bounded by its
+/// max_len).
 /// \param handle  GATT-DB value handle of the target characteristic.
 /// \param s       Null-terminated UTF-8 string to write.
 /// \param max_len Maximum length accepted by the characteristic; \p s is
 ///                truncated to this length if longer.
-inline void set_string(uint16_t handle, const char *s, uint16_t max_len) noexcept {
+inline void set_string(uint16_t handle, const char *s,
+                       uint16_t max_len) noexcept {
     auto n = static_cast<uint16_t>(std::strlen(s));
     if (n > max_len) {
         n = max_len;
@@ -78,17 +86,20 @@ inline void set_serial_number(uint32_t serial) noexcept {
 }
 
 ///
-/// \brief Populate the runtime DIS fields (Manufacturer / Firmware Rev / Serial).
+/// \brief Populate the runtime DIS fields (Manufacturer / Firmware Rev /
+/// Serial).
 ///
 /// \details Model Number + Hardware Revision are static display strings already
 ///          in the GATT database; PnP ID is a static placeholder. Call once at
 ///          boot after the \c System service values are seeded.
 ///
-/// \param p      Platform this image runs on (drives Manufacturer via vendor_of).
+/// \param p      Platform this image runs on (drives Manufacturer via
+/// vendor_of).
 /// \param v      Firmware version to mirror into Firmware Revision.
 /// \param serial Serial Number to mirror from the System service.
 ///
-inline void populate(sentinel::platform_id p, const sentinel::firmware_version &v,
+inline void populate(sentinel::platform_id p,
+                     const sentinel::firmware_version &v,
                      uint32_t serial) noexcept {
     set_string(HDLC_DIS_MANUFACTURER_NAME_STRING_VALUE,
                manufacturer_name(sentinel::vendor_of(p)),

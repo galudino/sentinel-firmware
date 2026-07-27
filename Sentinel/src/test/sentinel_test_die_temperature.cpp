@@ -51,7 +51,7 @@ constexpr uint32_t PAST_THROTTLE_MS = 1100;
 /// \return \c true if a cached reading was obtained within 3 attempts.
 bool read_fresh(int16_t &out_centi) noexcept {
     auto &die = sentinel::drivers::psoc6_die_temperature::instance();
-    for (int attempt = 0; attempt < 3; ++attempt) {
+    for (int attempt = 0; attempt < 3; attempt++) {
         die.refresh();
         if (die.cached_centi_c(out_centi)) {
             return true;
@@ -126,7 +126,7 @@ bool test_stability() noexcept {
     int16_t max_c = 0;
     bool have_any = false;
 
-    for (int i = 0; i < 4; ++i) {
+    for (int i = 0; i < 4; i++) {
         int16_t centi = 0;
         // read_genuine spaces each read past the throttle so this exercises 4
         // real conversions — otherwise the reads coalesce to one cached value

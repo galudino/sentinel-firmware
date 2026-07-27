@@ -3,12 +3,13 @@
 /// \brief   PSoC 6 SAR-ADC die-temperature driver implementation
 ///
 /// \details SAR configuration + conversion follow Infineon's DieTemp reference
-///          (single-ended DieTemp channel routed via \c CY_SAR_MUX_FW_TEMP_VPLUS,
-///          1.2 V bandgap reference, 32× averaging) and the canonical dual-slope
-///          counts→°C algorithm keyed off the per-part SFLASH calibration
-///          (\c SFLASH->SAR_TEMP_MULTIPLIER / \c SAR_TEMP_OFFSET). See the header
-///          and the tracking issue; the calibration + SAR clock divider need
-///          on-bench validation.
+///          (single-ended DieTemp channel routed via \c
+///          CY_SAR_MUX_FW_TEMP_VPLUS, 1.2 V bandgap reference, 32× averaging)
+///          and the canonical dual-slope counts→°C algorithm keyed off the
+///          per-part SFLASH calibration
+///          (\c SFLASH->SAR_TEMP_MULTIPLIER / \c SAR_TEMP_OFFSET). See the
+///          header and the tracking issue; the calibration + SAR clock divider
+///          need on-bench validation.
 ///
 /// \author  galudino
 /// \date    2026-07-08
@@ -65,9 +66,11 @@ constexpr uint32_t CHAN0_CONFIG =
 
 /// \brief Build the SAR configuration for a single DieTemp-sensor conversion.
 ///
-/// \details Value-initialized (zeros every field, incl. FIFO / deep-sleep fields
+/// \details Value-initialized (zeros every field, incl. FIFO / deep-sleep
+/// fields
 ///          unused here) then the DieTemp fields are set — this avoids C++20
-///          designated initializers (the project is C++17 + \c -pedantic-errors).
+///          designated initializers (the project is C++17 + \c
+///          -pedantic-errors).
 /// \return A fully populated \c cy_stc_sar_config_t for the DieTemp channel.
 cy_stc_sar_config_t make_die_temp_config() noexcept {
     cy_stc_sar_config_t c{};
@@ -77,8 +80,8 @@ cy_stc_sar_config_t make_die_temp_config() noexcept {
                    CY_SAR_AVG_MODE_SEQUENTIAL_FIXED;
     c.sampleTime01 = (SAR_SAMPLE_TIME0_CYCLES << CY_SAR_SAMPLE_TIME0_SHIFT) |
                      (4UL << CY_SAR_SAMPLE_TIME1_SHIFT);
-    c.sampleTime23 = (4UL << CY_SAR_SAMPLE_TIME2_SHIFT) |
-                     (4UL << CY_SAR_SAMPLE_TIME3_SHIFT);
+    c.sampleTime23 =
+        (4UL << CY_SAR_SAMPLE_TIME2_SHIFT) | (4UL << CY_SAR_SAMPLE_TIME3_SHIFT);
     c.rangeCond = CY_SAR_RANGE_COND_BELOW;
     c.chanEn = 0x01UL; // channel 0 only
     c.chanConfig[0] = CHAN0_CONFIG;
@@ -90,13 +93,13 @@ cy_stc_sar_config_t make_die_temp_config() noexcept {
 }
 
 // ---- Dual-slope conversion constants (DieTemp component / TRM Ch. 39). ------
-constexpr int32_t TEMP_OFFSET_MULT      = 0x400;    ///< Offset scale factor.
-constexpr int32_t Q16_ONE               = 0x10000;  ///< 1.0 in Q16.16.
-constexpr int32_t SCALE_ADJUSTMENT      = 8;        ///< Dual-slope scale numerator.
-constexpr int32_t SCALE_ADJUSTMENT_DIV  = 16;       ///< Dual-slope scale divisor.
-constexpr int32_t DUAL_SLOPE_CORRECTION = 0xF0000;  ///< 15.0 in Q16.16.
-constexpr int32_t HIGH_TEMPERATURE      = 0x640000; ///< 100.0 in Q16.16.
-constexpr int32_t LOW_TEMPERATURE       = 0x280000; ///< 40.0 in Q16.16.
+constexpr int32_t TEMP_OFFSET_MULT = 0x400;  ///< Offset scale factor.
+constexpr int32_t Q16_ONE = 0x10000;         ///< 1.0 in Q16.16.
+constexpr int32_t SCALE_ADJUSTMENT = 8;      ///< Dual-slope scale numerator.
+constexpr int32_t SCALE_ADJUSTMENT_DIV = 16; ///< Dual-slope scale divisor.
+constexpr int32_t DUAL_SLOPE_CORRECTION = 0xF0000; ///< 15.0 in Q16.16.
+constexpr int32_t HIGH_TEMPERATURE = 0x640000;     ///< 100.0 in Q16.16.
+constexpr int32_t LOW_TEMPERATURE = 0x280000;      ///< 40.0 in Q16.16.
 
 } // namespace
 
@@ -105,8 +108,7 @@ psoc6_die_temperature &psoc6_die_temperature::instance() noexcept {
     return the_instance;
 }
 
-int16_t
-psoc6_die_temperature::counts_to_centi_c(int16_t adc_counts) noexcept {
+int16_t psoc6_die_temperature::counts_to_centi_c(int16_t adc_counts) noexcept {
     const int32_t offset_reg = static_cast<int16_t>(SFLASH->SAR_TEMP_OFFSET);
     const int32_t mult_reg = static_cast<int16_t>(SFLASH->SAR_TEMP_MULTIPLIER);
 
@@ -116,15 +118,13 @@ psoc6_die_temperature::counts_to_centi_c(int16_t adc_counts) noexcept {
 
     int32_t t_adjust;
     if (t_initial >= DUAL_SLOPE_CORRECTION) {
-        t_adjust =
-            (SCALE_ADJUSTMENT * ((HIGH_TEMPERATURE - t_initial) /
-                                 SCALE_ADJUSTMENT_DIV)) /
-            ((HIGH_TEMPERATURE - DUAL_SLOPE_CORRECTION) / Q16_ONE);
+        t_adjust = (SCALE_ADJUSTMENT *
+                    ((HIGH_TEMPERATURE - t_initial) / SCALE_ADJUSTMENT_DIV)) /
+                   ((HIGH_TEMPERATURE - DUAL_SLOPE_CORRECTION) / Q16_ONE);
     } else {
-        t_adjust =
-            (SCALE_ADJUSTMENT * ((LOW_TEMPERATURE + t_initial) /
-                                 SCALE_ADJUSTMENT_DIV)) /
-            ((LOW_TEMPERATURE + DUAL_SLOPE_CORRECTION) / Q16_ONE);
+        t_adjust = (SCALE_ADJUSTMENT *
+                    ((LOW_TEMPERATURE + t_initial) / SCALE_ADJUSTMENT_DIV)) /
+                   ((LOW_TEMPERATURE + DUAL_SLOPE_CORRECTION) / Q16_ONE);
     }
 
     // Q16.16 temperature → 0.01 °C, rounded to nearest centi-degree.
@@ -181,7 +181,7 @@ bool psoc6_die_temperature::initialize() noexcept {
 bool psoc6_die_temperature::convert_once(int16_t &out_centi_c) noexcept {
     Cy_SAR_StartConvert(SAR, CY_SAR_START_CONVERT_SINGLE_SHOT);
 
-    for (uint32_t i = 0; i < CONVERT_POLL_LIMIT; ++i) {
+    for (uint32_t i = 0; i < CONVERT_POLL_LIMIT; i++) {
         if (Cy_SAR_IsEndConversion(SAR, CY_SAR_RETURN_STATUS) ==
             CY_SAR_SUCCESS) {
             out_centi_c = counts_to_centi_c(Cy_SAR_GetResult16(SAR, 0));
@@ -202,8 +202,8 @@ void psoc6_die_temperature::refresh() noexcept {
         return;
     }
 
-    // Zero timeout: if another producer is mid-conversion, skip rather than block
-    // the snapshot populate path.
+    // Zero timeout: if another producer is mid-conversion, skip rather than
+    // block the snapshot populate path.
     if (xSemaphoreTake(m_mutex, 0) != pdTRUE) {
         return;
     }
@@ -218,7 +218,8 @@ void psoc6_die_temperature::refresh() noexcept {
     xSemaphoreGive(m_mutex);
 }
 
-bool psoc6_die_temperature::cached_centi_c(int16_t &out_centi_c) const noexcept {
+bool psoc6_die_temperature::cached_centi_c(
+    int16_t &out_centi_c) const noexcept {
     if (!m_valid) {
         return false;
     }

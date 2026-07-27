@@ -77,39 +77,6 @@ extern "C" {
 
 namespace sentinel {
 
-template <typename Transport>
-class bme280;
-
-///
-/// \ingroup transport
-/// \brief Convenience alias for an I2C-backed \ref sentinel::bme280 instance
-///
-/// \details Equivalent to \c sentinel::bme280<I2CTransport>. The alias exists
-///          purely for readability at call sites and as a compile-time hint
-///          that the caller intends to construct over an I²C bus.
-///
-/// \tparam I2CTransport Transport implementation deriving from
-///                      \c byte_transport<I2CTransport, i2c_tag>.
-///
-template <typename I2CTransport>
-using bme280_i2c = bme280<I2CTransport>;
-
-///
-/// \ingroup transport
-/// \brief Convenience alias for a SPI-backed \ref sentinel::bme280 instance
-///
-/// \details Equivalent to \c sentinel::bme280<SPITransport>. The alias exists
-///          purely for readability at call sites and as a compile-time hint
-///          that the caller intends to construct over an SPI bus.
-///
-/// \tparam SPITransport Transport implementation deriving from
-///                      \c byte_transport<SPITransport, spi_tag>.
-///
-template <typename SPITransport>
-using bme280_spi = bme280<SPITransport>;
-
-} // namespace sentinel
-
 ///
 /// \brief BME280 temperature/pressure/humidity sensor driver class
 ///
@@ -141,7 +108,7 @@ using bme280_spi = bme280<SPITransport>;
 ///                   \c byte_transport<Transport, spi_tag>.
 ///
 template <typename Transport>
-class sentinel::bme280 {
+class bme280 {
     // ---------------------------------------------------------------------
     // Compile-time tag detection
     // ---------------------------------------------------------------------
@@ -637,5 +604,35 @@ private:
                                             ///< most recent Bosch call;
                                             ///< exposed by \ref last_error().
 };
+
+///
+/// \ingroup transport
+/// \brief Convenience alias for an I2C-backed \ref sentinel::bme280 instance.
+///
+/// \details Equivalent to \c sentinel::bme280<I2CTransport>. The alias exists
+///          purely for readability at call sites and as a compile-time hint
+///          that the caller intends to construct over an I²C bus.
+///
+/// \tparam I2CTransport Transport implementation deriving from
+///                      \c byte_transport<I2CTransport, i2c_tag>.
+///
+template <typename I2CTransport>
+using bme280_i2c = bme280<I2CTransport>;
+
+///
+/// \ingroup transport
+/// \brief Convenience alias for a SPI-backed \ref sentinel::bme280 instance.
+///
+/// \details Equivalent to \c sentinel::bme280<SPITransport>. The alias exists
+///          purely for readability at call sites and as a compile-time hint
+///          that the caller intends to construct over an SPI bus.
+///
+/// \tparam SPITransport Transport implementation deriving from
+///                      \c byte_transport<SPITransport, spi_tag>.
+///
+template <typename SPITransport>
+using bme280_spi = bme280<SPITransport>;
+
+} // namespace sentinel
 
 #endif /* SENTINEL_BME280_HPP */

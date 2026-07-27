@@ -64,10 +64,6 @@ extern "C" {
 
 namespace sentinel {
 
-class cyhal_i2c_bus_transport;
-
-} // namespace sentinel
-
 ///
 /// \brief Bus-arbitrated CYHAL I²C transport.
 ///
@@ -78,7 +74,7 @@ class cyhal_i2c_bus_transport;
 ///          be confused with another transport's responses sharing the
 ///          same bus.
 ///
-class sentinel::cyhal_i2c_bus_transport
+class cyhal_i2c_bus_transport
     : public byte_transport<cyhal_i2c_bus_transport, i2c_tag> {
 public:
     ///
@@ -100,7 +96,8 @@ public:
     explicit cyhal_i2c_bus_transport(sentinel::task::i2c_bus &bus,
                                      uint16_t target_address) noexcept
         : m_bus(bus), m_target_address(target_address),
-          m_response_queue(xQueueCreate(1, sizeof(sentinel::task::i2c_response))) {}
+          m_response_queue(
+              xQueueCreate(1, sizeof(sentinel::task::i2c_response))) {}
 
     /// \brief Destroy the transport, deleting its response queue.
     ~cyhal_i2c_bus_transport() noexcept {
@@ -188,12 +185,12 @@ public:
                     bool send_stop = true) noexcept {
         sentinel::unused(send_stop);
 
-        auto request                  = sentinel::task::i2c_request{};
-        request.target_address        = m_target_address;
-        request.tx                    = sentinel::make_cspan(tx, size);
-        request.rx                    = sentinel::span<uint8_t>{};
-        request.timeout_ms_per_phase  = timeout_ms;
-        request.response_queue        = m_response_queue;
+        auto request = sentinel::task::i2c_request{};
+        request.target_address = m_target_address;
+        request.tx = sentinel::make_cspan(tx, size);
+        request.rx = sentinel::span<uint8_t>{};
+        request.timeout_ms_per_phase = timeout_ms;
+        request.response_queue = m_response_queue;
 
         return exchange(request);
     }
@@ -215,12 +212,12 @@ public:
                    bool send_stop = true) noexcept {
         sentinel::unused(send_stop);
 
-        auto request                  = sentinel::task::i2c_request{};
-        request.target_address        = m_target_address;
-        request.tx                    = sentinel::span<const uint8_t>{};
-        request.rx                    = sentinel::make_span(rx, size);
-        request.timeout_ms_per_phase  = timeout_ms;
-        request.response_queue        = m_response_queue;
+        auto request = sentinel::task::i2c_request{};
+        request.target_address = m_target_address;
+        request.tx = sentinel::span<const uint8_t>{};
+        request.rx = sentinel::make_span(rx, size);
+        request.timeout_ms_per_phase = timeout_ms;
+        request.response_queue = m_response_queue;
 
         return exchange(request);
     }
@@ -258,12 +255,12 @@ public:
         sentinel::unused(send_stop_on_write);
         sentinel::unused(send_stop_on_read);
 
-        auto request                  = sentinel::task::i2c_request{};
-        request.target_address        = m_target_address;
-        request.tx                    = sentinel::make_cspan(tx, tx_size);
-        request.rx                    = sentinel::make_span(rx, rx_size);
-        request.timeout_ms_per_phase  = timeout_on_write;
-        request.response_queue        = m_response_queue;
+        auto request = sentinel::task::i2c_request{};
+        request.target_address = m_target_address;
+        request.tx = sentinel::make_cspan(tx, tx_size);
+        request.rx = sentinel::make_span(rx, rx_size);
+        request.timeout_ms_per_phase = timeout_on_write;
+        request.response_queue = m_response_queue;
 
         return exchange(request);
     }
@@ -333,11 +330,11 @@ public:
     static int8_t bosch_read(uint8_t reg_addr, uint8_t *reg_data,
                              uint32_t length, void *intf_ptr) noexcept {
         auto *self = static_cast<cyhal_i2c_bus_transport *>(intf_ptr);
-        auto rc    = self->write_read(&reg_addr, sizeof(reg_addr), reg_data,
-                                      length, /*timeout_on_write=*/100,
-                                      /*timeout_on_read=*/100,
-                                      /*send_stop_on_write=*/false,
-                                      /*send_stop_on_read=*/true);
+        auto rc = self->write_read(&reg_addr, sizeof(reg_addr), reg_data,
+                                   length, /*timeout_on_write=*/100,
+                                   /*timeout_on_read=*/100,
+                                   /*send_stop_on_write=*/false,
+                                   /*send_stop_on_read=*/true);
         return rc == CY_RSLT_SUCCESS ? int8_t{0} : int8_t{-1};
     }
 
@@ -424,17 +421,19 @@ private:
         }
 
         auto response = sentinel::task::i2c_response{};
-        if (xQueueReceive(m_response_queue, &response, portMAX_DELAY)
-            != pdPASS) {
+        if (xQueueReceive(m_response_queue, &response, portMAX_DELAY) !=
+            pdPASS) {
             return static_cast<cy_rslt_t>(CY_RSLT_TYPE_ERROR);
         }
 
         return response.cy_status;
     }
 
-    sentinel::task::i2c_bus &m_bus;             ///< Bus arbiter (non-owning).
-    uint16_t                 m_target_address;  ///< I²C target address.
-    QueueHandle_t            m_response_queue;  ///< Per-instance response.
+    sentinel::task::i2c_bus &m_bus; ///< Bus arbiter (non-owning).
+    uint16_t m_target_address;      ///< I²C target address.
+    QueueHandle_t m_response_queue; ///< Per-instance response.
 };
+
+} // namespace sentinel
 
 #endif /* SENTINEL_CYHAL_I2C_BUS_TRANSPORT_HPP */

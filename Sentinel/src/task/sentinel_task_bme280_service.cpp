@@ -145,9 +145,10 @@ void bme280_service::publish(const sample &s) noexcept {
         xQueueSendToBack(m_notify_queue, &s, 0);
     }
 
-    // Publish to the BME280 Ambient Sample GATT characteristic (#6): refresh the
-    // read value and notify a subscribed central. A no-op on the wire when no
-    // central is connected/subscribed; the notify gate lives in the gatt layer.
+    // Publish to the BME280 Ambient Sample GATT characteristic (#6): refresh
+    // the read value and notify a subscribed central. A no-op on the wire when
+    // no central is connected/subscribed; the notify gate lives in the gatt
+    // layer.
     if (s.valid) {
         sentinel::gatt::bme280::publish(s.temperature_centi_c,
                                         s.humidity_centi_pct, s.pressure_pa);

@@ -283,7 +283,7 @@ bool fixture::time_read() noexcept {
     auto observed_change = false;
     auto previous_second = uint8_t{0xFF};
 
-    for (auto i = uint8_t{0}; i < 3; ++i) {
+    for (auto i = uint8_t{0}; i < 3; i++) {
         auto now = rtc.time();
         if (!now) {
             loge("time_read FAIL: read %d returned error %d",
@@ -374,7 +374,7 @@ bool fixture::time_write() noexcept {
     }
 
     auto seconds_drift_ok = false;
-    for (auto offset = uint8_t{0}; offset <= 2; ++offset) {
+    for (auto offset = uint8_t{0}; offset <= 2; offset++) {
         auto expected_second =
             static_cast<uint8_t>((target.second + offset) % 60);
         if (after->second == expected_second) {
@@ -519,7 +519,7 @@ bool fixture::temperature_read() noexcept {
     // Poll BSY for up to ~200 ms. The datasheet quotes typical conversion
     // time at ~125 ms.
     auto completed = false;
-    for (auto i = uint8_t{0}; i < 20; ++i) {
+    for (auto i = uint8_t{0}; i < 20; i++) {
         vTaskDelay(pdMS_TO_TICKS(10));
         auto busy = rtc.is_temperature_conversion_busy();
         if (!busy) {
@@ -669,7 +669,7 @@ bool fixture::alarm_round_trip() noexcept {
 
 sentinel::test::tally sentinel::test::ds3231::run_all() noexcept {
     auto fx = fixture{};
-    auto t  = sentinel::test::tally{};
+    auto t = sentinel::test::tally{};
 
     t.record(fx.presence_check());
     yield_for_debug_drain(200);
@@ -692,7 +692,8 @@ sentinel::test::tally sentinel::test::ds3231::run_all() noexcept {
     t.record(fx.alarm_round_trip());
     yield_for_debug_drain(200);
 
-    // Continuous time/temperature reads are owned by sentinel::task::rtc_service,
-    // which the orchestrator starts after this one-shot suite completes.
+    // Continuous time/temperature reads are owned by
+    // sentinel::task::rtc_service, which the orchestrator starts after this
+    // one-shot suite completes.
     return t;
 }

@@ -31,7 +31,8 @@
 ///             / \ref sentinel::diagnostics::post_result pair. Because they are
 ///             duck-typed, the testbench drives them with
 ///             tiny fake driver doubles to exercise every result code
-///             deterministically (mirroring each hardware acceptance criterion).
+///             deterministically (mirroring each hardware acceptance
+///             criterion).
 ///          2. \b Aggregate — \ref sentinel::diagnostics::post::run() calls
 ///             every probe in turn and accumulates the results into a
 ///             \ref sentinel::diagnostics::post::summary (\c all_passed /
@@ -46,13 +47,14 @@
 ///
 ///          POST never halts boot. A failing subsystem is recorded and the
 ///          application proceeds without it (degraded operation is preferred
-///          over a boot-loop). If the *record store itself* fails POST, no event
-///          can be persisted; \ref sentinel::diagnostics::post::record_results()
-///          then falls back to the BLE debug stream (#25) — the only logging
-///          path that does not depend on flash — and skips the (futile)
-///          event-log writes.
+///          over a boot-loop). If the *record store itself* fails POST, no
+///          event can be persisted; \ref
+///          sentinel::diagnostics::post::record_results() then falls back to
+///          the BLE debug stream (#25) — the only logging path that does not
+///          depend on flash — and skips the (futile) event-log writes.
 ///
-///          === Read-only record-store probe (deviation from the #35 sketch) ===
+///          === Read-only record-store probe (deviation from the #35 sketch)
+///          ===
 ///
 ///          The issue sketch had the record-store probe write a throwaway test
 ///          record and read it back. That would pollute the System Event Log
@@ -90,15 +92,15 @@ namespace sentinel::diagnostics {
 ///          0x10+ range is reserved for Phase II/III application peripherals.
 ///
 enum class post_subsystem : uint8_t {
-    bme280       = 0x01,
-    ds3231       = 0x02,
-    w25q128      = 0x03,
+    bme280 = 0x01,
+    ds3231 = 0x02,
+    w25q128 = 0x03,
     record_store = 0x04, ///< Log header readable + a record writable?
-    ble_stack    = 0x05, ///< Stack init ok + GATT database registered?
+    ble_stack = 0x05,    ///< Stack init ok + GATT database registered?
 
     // Application-specific (Phase II/III).
     rotary_encoder = 0x10,
-    display        = 0x11,
+    display = 0x11,
 
     invalid = 0xFF, ///< Sentinel terminating
                     ///< \ref sentinel::diagnostics::post::summary::results.
@@ -112,12 +114,12 @@ enum class post_subsystem : uint8_t {
 ///          \c pass is 0 so a zeroed record reads as "passed".
 ///
 enum class post_result : uint8_t {
-    pass           = 0x00,
-    fail_no_ack    = 0x01, ///< Device did not respond on the bus.
-    fail_wrong_id  = 0x02, ///< Device responded with the wrong chip id.
+    pass = 0x00,
+    fail_no_ack = 0x01,    ///< Device did not respond on the bus.
+    fail_wrong_id = 0x02,  ///< Device responded with the wrong chip id.
     fail_self_test = 0x03, ///< Device's own internal self-test failed.
-    fail_timeout   = 0x04, ///< Device responded but the operation timed out.
-    fail_init      = 0x05, ///< Initialization sequence returned an error.
+    fail_timeout = 0x04,   ///< Device responded but the operation timed out.
+    fail_init = 0x05,      ///< Initialization sequence returned an error.
 };
 
 ///
@@ -128,10 +130,10 @@ enum class post_result : uint8_t {
 ///          W25Q128, 0 where there is nothing useful to carry.
 ///
 struct post_subsystem_result {
-    post_subsystem subsystem;    ///< Subsystem this result is for.
-    post_result    result;       ///< Outcome code for \c subsystem.
-    uint8_t        error_detail; ///< Subsystem-specific detail byte (0 if
-                                 ///< unused; see the struct \details).
+    post_subsystem subsystem; ///< Subsystem this result is for.
+    post_result result;       ///< Outcome code for \c subsystem.
+    uint8_t error_detail;     ///< Subsystem-specific detail byte (0 if
+                              ///< unused; see the struct \details).
 };
 
 ///
@@ -158,14 +160,15 @@ public:
     ///          it. \c count is kept for O(1) appends.
     ///
     struct summary {
-        bool    all_passed{true};   ///< \c true iff every probe passed.
-        uint8_t failure_count{0};   ///< Failed-probe count (saturating).
-        uint8_t count{0};           ///< Entries appended so far.
+        bool all_passed{true};    ///< \c true iff every probe passed.
+        uint8_t failure_count{0}; ///< Failed-probe count (saturating).
+        uint8_t count{0};         ///< Entries appended so far.
         std::array<post_subsystem_result, kMaxResults>
             results{}; ///< Sentinel-terminated result array (see the struct
                        ///< description).
 
-        /// \brief Construct an empty summary with a sentinel-filled result array.
+        /// \brief Construct an empty summary with a sentinel-filled result
+        /// array.
         summary() noexcept {
             results.fill(post_subsystem_result{post_subsystem::invalid,
                                                post_result::pass, 0u});
@@ -183,11 +186,11 @@ public:
                 return;
             }
             results[count] = r;
-            count++;
+            ++count;
             if (r.result != post_result::pass) {
                 all_passed = false;
                 if (failure_count < 0xFFu) {
-                    failure_count++;
+                    ++failure_count;
                 }
             }
             if (count < kMaxResults) {
@@ -276,17 +279,17 @@ public:
     template <typename Store>
     static post_subsystem_result probe_record_store(Store &store) noexcept {
         // Re-scanning the backing flash region is O(capacity) — ~8 k serialized
-        // SPI reads for the production event-log region (tracked for optimization
-        // in issue #49). The boot orchestrator already initializes the store
-        // before POST runs, so trust an already-initialized store and only verify
-        // its geometry; a fresh store (the off-bench fakes, or a skipped boot
-        // init) is initialized here as before.
+        // SPI reads for the production event-log region (tracked for
+        // optimization in issue #49). The boot orchestrator already initializes
+        // the store before POST runs, so trust an already-initialized store and
+        // only verify its geometry; a fresh store (the off-bench fakes, or a
+        // skipped boot init) is initialized here as before.
         if (!store.initialized() && !store.initialize()) {
             return {post_subsystem::record_store, post_result::fail_init, 0u};
         }
         const auto head = store.head_index();
         const auto tail = store.tail_index();
-        const auto cap  = store.capacity();
+        const auto cap = store.capacity();
         if (cap == 0u || head < tail || (head - tail) > cap) {
             return {post_subsystem::record_store, post_result::fail_self_test,
                     0u};
@@ -356,11 +359,12 @@ public:
     ///          \c post_subsystem_failed is emitted per failed subsystem,
     ///          carrying its subsystem id / result / detail. Every failure is
     ///          additionally mirrored to the BLE debug stream. If the record
-    ///          store itself failed POST, the event-log writes would be lost, so
-    ///          they are skipped and the debug stream is the only record.
+    ///          store itself failed POST, the event-log writes would be lost,
+    ///          so they are skipped and the debug stream is the only record.
     ///
     /// \param log A \ref sentinel::diagnostics::system_event_log (or any type
-    ///            exposing \c record_post_passed / \c record_post_subsystem_fail).
+    ///            exposing \c record_post_passed / \c
+    ///            record_post_subsystem_fail).
     /// \param s   The summary returned by \ref run().
     ///
     template <typename Log>

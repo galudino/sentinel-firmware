@@ -43,6 +43,8 @@ extern "C" {
 #include "sentinel_system_event.hpp"
 
 #include <cstdint>
+#include <cstring>
+#include <optional>
 
 namespace sentinel::gatt::paged {
 
@@ -61,7 +63,8 @@ inline uint32_t read_u32_le(const uint8_t *p) noexcept {
 /// \brief Write a store's record count into its Record Count characteristic.
 /// \tparam Store       Record-store type; must expose \c count().
 /// \param  store       Record store to query.
-/// \param  count_handle GATT-DB value handle of the Record Count characteristic.
+/// \param  count_handle GATT-DB value handle of the Record Count
+/// characteristic.
 template <typename Store>
 inline void set_count(const Store &store, uint16_t count_handle) noexcept {
     const uint32_t c = store.count();
@@ -82,13 +85,15 @@ inline void set_count(const Store &store, uint16_t count_handle) noexcept {
 ///                     \c tail_index(), and \c read().
 /// \param  store       Record store to read from.
 /// \param  cursor      Relative starting index in <tt>[0, count)</tt>.
-/// \param  block_handle GATT-DB value handle of the Record Block characteristic.
+/// \param  block_handle GATT-DB value handle of the Record Block
+/// characteristic.
 /// \param  block_max   Maximum bytes the characteristic can hold.
 ///
 template <typename Rec, typename Store>
 inline void fill_block(const Store &store, uint32_t cursor,
                        uint16_t block_handle, uint32_t block_max) noexcept {
-    static uint8_t buf[BLOCK_SCRATCH]; // GATT reads are serialized in the BT task.
+    static uint8_t
+        buf[BLOCK_SCRATCH]; // GATT reads are serialized in the BT task.
 
     const uint32_t rec = static_cast<uint32_t>(sizeof(Rec));
     const uint32_t per = block_max / rec;
@@ -100,11 +105,12 @@ inline void fill_block(const Store &store, uint32_t cursor,
     }
 
     uint32_t bytes = 0;
-    for (uint32_t i = 0; i < n; ++i) {
-        auto *dst = reinterpret_cast<Rec *>(buf + bytes);
-        if (!store.read(store.tail_index() + cursor + i, dst)) {
+    for (uint32_t i = 0; i < n; i++) {
+        auto r = store.read(store.tail_index() + cursor + i);
+        if (!r) {
             break; // a torn/overwritten slot ends the block early.
         }
+        std::memcpy(buf + bytes, &*r, rec);
         bytes += rec;
     }
     ble_gatt_db_set_value(block_handle, buf, static_cast<uint16_t>(bytes));
@@ -127,7 +133,8 @@ inline void refresh_event_count() noexcept {
 }
 
 ///
-/// \brief Refresh a paged characteristic value just before a GATT read responds.
+/// \brief Refresh a paged characteristic value just before a GATT read
+/// responds.
 ///
 /// \details Called at the top of the read handler; a no-op for non-paged
 ///          handles. Record Count is recomputed from the store; Record Block is

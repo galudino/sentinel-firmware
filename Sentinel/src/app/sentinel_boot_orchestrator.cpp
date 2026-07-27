@@ -2,24 +2,27 @@
 /// \file    sentinel_boot_orchestrator.cpp
 /// \brief   Production boot orchestrator task implementation (#38)
 ///
-/// \details Implements \ref sentinel::app::boot_orchestrator. See the header and
+/// \details Implements \ref sentinel::app::boot_orchestrator. See the header
+/// and
 ///          decision #13 for the full rationale. The boot sequence here is the
 ///          real-hardware counterpart of #34/#35's off-bench testbenches: POST
-///          probes the actual BME280 / DS3231 / W25Q128 through the shared device
-///          context, and its results plus the boot-lifecycle records land in the
-///          flash-backed System Event Log.
+///          probes the actual BME280 / DS3231 / W25Q128 through the shared
+///          device context, and its results plus the boot-lifecycle records
+///          land in the flash-backed System Event Log.
 ///
-///          \b Event ordering. \c post::record_results enqueues the POST records
-///          (non-blocking), then the event-log drain task is started: its
+///          \b Event ordering. \c post::record_results enqueues the POST
+///          records (non-blocking), then the event-log drain task is started:
+///          its
 ///          \c run() runs \c run_boot_sequence() FIRST — appending
-///          \c shutdown_unexpected / \c boot_complete directly to flash while the
-///          POST records are still queued — then block-drains the POST records.
-///          Reading the prior session's last flash record \e before this boot's
-///          POST records are persisted is what lets \c shutdown_unexpected carry
-///          the correct prior-crash timestamp (decision #11). Consequence: the
-///          POST records sit just after \c boot_complete rather than before it —
-///          a deliberate deviation from decision #13's literal "POST is the first
-///          writer" wording, in favour of accurate crash attribution.
+///          \c shutdown_unexpected / \c boot_complete directly to flash while
+///          the POST records are still queued — then block-drains the POST
+///          records. Reading the prior session's last flash record \e before
+///          this boot's POST records are persisted is what lets \c
+///          shutdown_unexpected carry the correct prior-crash timestamp
+///          (decision #11). Consequence: the POST records sit just after \c
+///          boot_complete rather than before it — a deliberate deviation from
+///          decision #13's literal "POST is the first writer" wording, in
+///          favour of accurate crash attribution.
 ///
 /// \author  galudino
 /// \date    2026-06-30
@@ -38,14 +41,14 @@ extern "C" {
 
 #include "sentinel_ble_context.hpp"
 #include "sentinel_debug_print.hpp"
-#include "sentinel_psoc6_die_temperature.hpp"
-#include "sentinel_orchestrator_entry.hpp"
 #include "sentinel_device_context.hpp"
 #include "sentinel_gatt_dis.hpp"
 #include "sentinel_gatt_snapshot_stream.hpp"
 #include "sentinel_gatt_system.hpp"
+#include "sentinel_orchestrator_entry.hpp"
 #include "sentinel_platform_id.hpp"
 #include "sentinel_post.hpp"
+#include "sentinel_psoc6_die_temperature.hpp"
 
 ///< Service tasks the orchestrator spawns.
 #include "sentinel_task_battery_service.hpp"
@@ -65,8 +68,8 @@ namespace {
 /// \brief First failed subsystem id (0 = all passed) for the snapshot field.
 /// \param s POST summary to scan.
 /// \return The first failed \c post_subsystem id, or 0 if all passed.
-uint8_t first_failure_id(
-    const sentinel::diagnostics::post::summary &s) noexcept {
+uint8_t
+first_failure_id(const sentinel::diagnostics::post::summary &s) noexcept {
     if (s.all_passed) {
         return 0u;
     }
@@ -84,14 +87,22 @@ uint8_t first_failure_id(
 const char *subsystem_name(sentinel::diagnostics::post_subsystem s) noexcept {
     using ps = sentinel::diagnostics::post_subsystem;
     switch (s) {
-    case ps::bme280:         return "bme280";
-    case ps::ds3231:         return "ds3231";
-    case ps::w25q128:        return "w25q128";
-    case ps::record_store:   return "record_store";
-    case ps::ble_stack:      return "ble_stack";
-    case ps::rotary_encoder: return "rotary_encoder";
-    case ps::display:        return "display";
-    case ps::invalid:        return "invalid";
+    case ps::bme280:
+        return "bme280";
+    case ps::ds3231:
+        return "ds3231";
+    case ps::w25q128:
+        return "w25q128";
+    case ps::record_store:
+        return "record_store";
+    case ps::ble_stack:
+        return "ble_stack";
+    case ps::rotary_encoder:
+        return "rotary_encoder";
+    case ps::display:
+        return "display";
+    case ps::invalid:
+        return "invalid";
     }
     return "?";
 }
@@ -102,12 +113,18 @@ const char *subsystem_name(sentinel::diagnostics::post_subsystem s) noexcept {
 const char *result_name(sentinel::diagnostics::post_result r) noexcept {
     using pr = sentinel::diagnostics::post_result;
     switch (r) {
-    case pr::pass:           return "PASS";
-    case pr::fail_no_ack:    return "fail_no_ack";
-    case pr::fail_wrong_id:  return "fail_wrong_id";
-    case pr::fail_self_test: return "fail_self_test";
-    case pr::fail_timeout:   return "fail_timeout";
-    case pr::fail_init:      return "fail_init";
+    case pr::pass:
+        return "PASS";
+    case pr::fail_no_ack:
+        return "fail_no_ack";
+    case pr::fail_wrong_id:
+        return "fail_wrong_id";
+    case pr::fail_self_test:
+        return "fail_self_test";
+    case pr::fail_timeout:
+        return "fail_timeout";
+    case pr::fail_init:
+        return "fail_init";
     }
     return "?";
 }
@@ -132,7 +149,7 @@ BaseType_t boot_orchestrator::task_create(bool ble_stack_ok, bool gatt_db_ok,
                                           UBaseType_t priority,
                                           uint16_t stack_words) noexcept {
     m_ble_stack_ok = ble_stack_ok;
-    m_gatt_db_ok   = gatt_db_ok;
+    m_gatt_db_ok = gatt_db_ok;
     return xTaskCreate(&boot_orchestrator::task_trampoline, "Boot Orchestrator",
                        stack_words, this, priority, &m_handle);
 }
@@ -142,7 +159,7 @@ void boot_orchestrator::task_trampoline(void *task_parameter) {
 }
 
 void boot_orchestrator::run() {
-    namespace res  = sentinel::resource;
+    namespace res = sentinel::resource;
     namespace diag = sentinel::diagnostics;
 
     logi("boot: starting sequence");
@@ -151,7 +168,8 @@ void boot_orchestrator::run() {
     // First touch of context() constructs the drivers here, post-scheduler, so
     // the BME280 calibration read goes through the running I²C arbiter. The two
     // region scans are O(capacity) (~8 k SPI reads each — slow; see issue #49),
-    // so the progress lines below matter: without them a healthy boot looks hung.
+    // so the progress lines below matter: without them a healthy boot looks
+    // hung.
     logi("boot: building device context...");
     auto &ctx = res::context();
     logi("boot: device context built (BME280 init err=%d)",
@@ -182,11 +200,12 @@ void boot_orchestrator::run() {
 
     // ---- 2. POST against the real drivers; log + record each probe. ----
     // probe_record_store now reuses the already-initialized event store (no
-    // redundant rescan), so POST is fast and the per-probe lines print promptly.
+    // redundant rescan), so POST is fast and the per-probe lines print
+    // promptly.
     logi("---- [ POST ] ----");
     // Time only the probe phase (no interleaved logging inside run()), so the
-    // reported duration is the true POST timing for #35's "< 100 ms" hardware AC
-    // — the multi-second flash scans above are NOT part of POST.
+    // reported duration is the true POST timing for #35's "< 100 ms" hardware
+    // AC — the multi-second flash scans above are NOT part of POST.
     const auto post_start_ticks = xTaskGetTickCount();
     // Read the real GATT-DB registration result live (#6): it is set from the
     // asynchronous BTM_ENABLED path, which has already run by now (the flash-
@@ -194,12 +213,12 @@ void boot_orchestrator::run() {
     // value only if that path somehow has not completed.
     const auto gatt_db_ok =
         sentinel::ble_context_object.gatt_db_ok() || m_gatt_db_ok;
-    const auto summary = diag::post::run(ctx.bme, ctx.rtc, ctx.flash,
-                                         ctx.event_store, m_ble_stack_ok,
-                                         gatt_db_ok);
+    const auto summary =
+        diag::post::run(ctx.bme, ctx.rtc, ctx.flash, ctx.event_store,
+                        m_ble_stack_ok, gatt_db_ok);
     const auto post_ms = static_cast<unsigned>(
         (xTaskGetTickCount() - post_start_ticks) * portTICK_PERIOD_MS);
-    for (auto i = uint8_t{0}; i < summary.count; ++i) {
+    for (auto i = uint8_t{0}; i < summary.count; i++) {
         const auto &r = summary.results[i];
         logi("post: %s %s", subsystem_name(r.subsystem), result_name(r.result));
     }
@@ -214,17 +233,18 @@ void boot_orchestrator::run() {
     // ordering.
     start_task("event log", ctx.event_log().task_create());
 
-    // ---- 4a. Seed the System service + Device Information Service (#6/#45). ----
-    // The GATT DB value arrays live in RAM independent of registration; seed the
-    // machine-stable identity now (before a central connects) so first reads are
-    // correct. Manufacturer Name is derived from vendor_of(platform) (#45); the
-    // DIS Firmware Revision / Serial mirror the System values.
+    // ---- 4a. Seed the System service + Device Information Service (#6/#45).
+    // ---- The GATT DB value arrays live in RAM independent of registration;
+    // seed the machine-stable identity now (before a central connects) so first
+    // reads are correct. Manufacturer Name is derived from vendor_of(platform)
+    // (#45); the DIS Firmware Revision / Serial mirror the System values.
     {
         namespace gsys = sentinel::gatt::system;
         const auto platform = sentinel::current_platform_id();
         gsys::set_firmware_version(sentinel::current_firmware_version);
         gsys::set_platform_id(platform);
-        sentinel::gatt::dis::populate(platform, sentinel::current_firmware_version,
+        sentinel::gatt::dis::populate(platform,
+                                      sentinel::current_firmware_version,
                                       gsys::serial_number());
         logi("boot: GATT identity seeded (platform=%u, serial=%lu)",
              static_cast<unsigned>(sentinel::to_underlying(platform)),
@@ -237,27 +257,30 @@ void boot_orchestrator::run() {
     if (drivers::psoc6_die_temperature::instance().initialize()) {
         logi("boot: die-temperature sensor ready");
     } else {
-        loge("boot: die-temperature sensor init failed (snapshot CPU temp = 0)");
+        loge(
+            "boot: die-temperature sensor init failed (snapshot CPU temp = 0)");
     }
 
     // ---- 4. Start the service tasks. ----
     logi("boot: starting service tasks...");
     start_task("rtc service", task::rtc_service::instance().task_create());
-    start_task("bme280 service", task::bme280_service::instance().task_create());
+    start_task("bme280 service",
+               task::bme280_service::instance().task_create());
     start_task("snapshot persistence",
                task::snapshot_persistence_task::instance().task_create());
-    // Attach the live snapshot stream (#46, lane 2) to its GATT notify sink (#6)
-    // before starting it, so the Snapshot Notify Enable characteristic can drive
-    // start()/stop() and each produced snapshot lands on the Current Device
-    // Snapshot characteristic.
+    // Attach the live snapshot stream (#46, lane 2) to its GATT notify sink
+    // (#6) before starting it, so the Snapshot Notify Enable characteristic can
+    // drive start()/stop() and each produced snapshot lands on the Current
+    // Device Snapshot characteristic.
     task::snapshot_stream_task::instance().set_notify_sink(
         &sentinel::gatt::snapshot_stream::notify_sink);
     start_task("snapshot stream",
                task::snapshot_stream_task::instance().task_create());
     start_task("battery service",
                task::battery_service::instance().task_create());
-    // CPU on-die temperature: publishes the System CPU Temperature char (#6) and
-    // logs die vs BME280-ambient vs DS3231 for on-bench comparison (#55 AC).
+    // CPU on-die temperature: publishes the System CPU Temperature char (#6)
+    // and logs die vs BME280-ambient vs DS3231 for on-bench comparison (#55
+    // AC).
     start_task("cpu die-temp service",
                task::cpu_die_temp_service::instance().task_create());
     // Async handler for slow BLE-triggered maintenance (store clears + deferred

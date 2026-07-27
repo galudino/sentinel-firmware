@@ -76,10 +76,11 @@ public:
     ///
     /// \brief \c true once the GATT database registered successfully (#6).
     ///
-    /// \details Set from \c ble_start_advertising after \c wiced_bt_gatt_db_init.
+    /// \details Set from \c ble_start_advertising after \c
+    /// wiced_bt_gatt_db_init.
     ///          The boot orchestrator reads this live for the POST \c gatt_db
-    ///          probe; by POST time (after the multi-second flash-store scan) the
-    ///          asynchronous \c BTM_ENABLED registration has already run.
+    ///          probe; by POST time (after the multi-second flash-store scan)
+    ///          the asynchronous \c BTM_ENABLED registration has already run.
     ///
     /// \return \c true once the GATT database has registered successfully.
     ///
@@ -242,9 +243,9 @@ private:
 
     bool m_gatt_db_ok{false}; ///< GATT-DB registration result (#6).
 
-    volatile int8_t m_peer_rssi{0};     ///< Last cached peer RSSI, dBm (#6).
-    volatile int8_t m_tx_power_dbm{0};  ///< Last cached TX power, dBm (#6).
-    uint32_t m_last_metrics_tick{0};    ///< Throttle for refresh_link_metrics.
+    volatile int8_t m_peer_rssi{0};    ///< Last cached peer RSSI, dBm (#6).
+    volatile int8_t m_tx_power_dbm{0}; ///< Last cached TX power, dBm (#6).
+    uint32_t m_last_metrics_tick{0};   ///< Throttle for refresh_link_metrics.
 
     std::array<uint8_t, BD_ADDR_LEN>
         m_peer_address; ///< Bluetooth address of connected peer
@@ -269,7 +270,8 @@ private:
     cy_ota_network_params_t
         m_ota_network_params; ///< OTA network configuration parameters
 
-    uint16_t m_mtu; ///< Negotiated MTU value for BLE notifications (default 23, updated on connection)
+    uint16_t m_mtu; ///< Negotiated MTU value for BLE notifications (default 23,
+                    ///< updated on connection)
 
     ///
     /// \brief Initialize BLE context with default values

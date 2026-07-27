@@ -5,11 +5,11 @@
 ///
 /// \details Defines the \ref sentinel::platform_id discriminator exposed over
 ///          the \c System GATT service (fw#6) and the \ref sentinel::vendor_id
-///          it derives, plus \ref sentinel::vendor_of. This is the single source
-///          of truth shared by the GATT layer (the Platform ID characteristic
-///          and the Device Information Service Manufacturer Name) and, later, the
-///          cloud manifest \c target key. The iOS client (\c sentinel-client #9)
-///          mirrors these values 1:1.
+///          it derives, plus \ref sentinel::vendor_of. This is the single
+///          source of truth shared by the GATT layer (the Platform ID
+///          characteristic and the Device Information Service Manufacturer
+///          Name) and, later, the cloud manifest \c target key. The iOS client
+///          (\c sentinel-client #9) mirrors these values 1:1.
 ///
 ///          \b Wire \b contract. Both enums are transmitted over BLE and reused
 ///          as cloud-manifest target keys, so treat the values like protobuf
@@ -42,10 +42,10 @@ namespace sentinel {
 ///          contract — see the file header.
 ///
 enum class platform_id : uint8_t {
-    unknown      = 0x00, ///< Unrecognized / not-yet-resolved platform.
+    unknown = 0x00,      ///< Unrecognized / not-yet-resolved platform.
     cyble_416045 = 0x01, ///< Infineon CYBLE-416045-EVAL.
-    rpi5         = 0x02, ///< Raspberry Pi 5.
-    nrf5340      = 0x03, ///< Nordic Semiconductor nRF5340.
+    rpi5 = 0x02,         ///< Raspberry Pi 5.
+    nrf5340 = 0x03,      ///< Nordic Semiconductor nRF5340.
 };
 
 ///
@@ -56,9 +56,9 @@ enum class platform_id : uint8_t {
 /// \details Append-only wire contract — see the file header.
 ///
 enum class vendor_id : uint8_t {
-    unknown              = 0x00, ///< Unrecognized / not-yet-resolved vendor.
-    infineon             = 0x01, ///< Infineon Technologies.
-    raspberry_pi_ltd     = 0x02, ///< Raspberry Pi Ltd.
+    unknown = 0x00,              ///< Unrecognized / not-yet-resolved vendor.
+    infineon = 0x01,             ///< Infineon Technologies.
+    raspberry_pi_ltd = 0x02,     ///< Raspberry Pi Ltd.
     nordic_semiconductor = 0x03, ///< Nordic Semiconductor.
 };
 

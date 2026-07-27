@@ -67,8 +67,8 @@ constexpr int kMaxGroups = 8;
 
 /// One group's name + result, retained for the final per-group summary.
 struct group_result {
-    const char *name{nullptr};       ///< Group name, printed in the summary.
-    sentinel::test::tally tally{};   ///< Group's accumulated pass/fail tally.
+    const char *name{nullptr};     ///< Group name, printed in the summary.
+    sentinel::test::tally tally{}; ///< Group's accumulated pass/fail tally.
 };
 
 /// Print a horizontal rule to the UART diagnostic log.
