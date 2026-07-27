@@ -112,7 +112,8 @@ public:
     size_t size() const;
 
 private:
-    static constexpr size_t DEBUG_RING_BUFFER_CAPACITY = 2048;
+    static constexpr size_t DEBUG_RING_BUFFER_CAPACITY =
+        2048; ///< Backing storage size in bytes.
 
     uint8_t m_buffer[DEBUG_RING_BUFFER_CAPACITY]; ///< Ring buffer storage.
 
@@ -139,7 +140,7 @@ static constexpr auto DEBUG_OUTPUT_STREAM_MAX_LEN = 512;
 void bleprint_format(const char *fmt, ...);
 
 ///
-/// \brief      \c va_list form of \ref bleprint_format.
+/// \brief      \c va_list form of \ref sentinel::logging::bleprint_format.
 ///
 /// \param      fmt     Format string.
 /// \param      args    va_list of arguments.
@@ -155,6 +156,7 @@ void blevprint_format(const char *fmt, va_list args);
 
 #else
 
+/// Compiled out: \c BLE_DEBUG_ENABLE is 0, so raw debug printf is a no-op.
 #define bleprintf(...)                                                         \
     do {                                                                       \
     } while (0)

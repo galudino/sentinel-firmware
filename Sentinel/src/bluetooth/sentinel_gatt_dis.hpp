@@ -41,6 +41,8 @@ extern "C" {
 namespace sentinel::gatt::dis {
 
 /// \brief Human-readable manufacturer name for the DIS, derived from the vendor.
+/// \param v Vendor identifier to name.
+/// \return Static string naming \p v (\c "Unknown" if unrecognized).
 inline const char *manufacturer_name(sentinel::vendor_id v) noexcept {
     switch (v) {
     case sentinel::vendor_id::infineon:             return "Infineon Technologies";
@@ -51,6 +53,10 @@ inline const char *manufacturer_name(sentinel::vendor_id v) noexcept {
 }
 
 /// \brief Write a UTF-8 string to a DIS characteristic (bounded by its max_len).
+/// \param handle  GATT-DB value handle of the target characteristic.
+/// \param s       Null-terminated UTF-8 string to write.
+/// \param max_len Maximum length accepted by the characteristic; \p s is
+///                truncated to this length if longer.
 inline void set_string(uint16_t handle, const char *s, uint16_t max_len) noexcept {
     auto n = static_cast<uint16_t>(std::strlen(s));
     if (n > max_len) {
@@ -62,6 +68,7 @@ inline void set_string(uint16_t handle, const char *s, uint16_t max_len) noexcep
 
 /// \brief Mirror the \c System Serial Number into the DIS Serial Number string
 ///        (uppercase hex, e.g. 0x0000000A -> "0000000A").
+/// \param serial Serial number to format and write.
 inline void set_serial_number(uint32_t serial) noexcept {
     char buf[MAX_LEN_DIS_SERIAL_NUMBER_STRING + 1];
     std::snprintf(buf, sizeof(buf), "%08lX",

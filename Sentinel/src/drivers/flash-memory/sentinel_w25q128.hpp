@@ -1070,6 +1070,7 @@ private:
                 xSemaphoreTakeRecursive(m_mutex, portMAX_DELAY);
             }
         }
+        /// \brief Release the held device mutex (no-op if none was taken).
         ~scoped_device_lock() {
             if (m_mutex != nullptr) {
                 xSemaphoreGiveRecursive(m_mutex);

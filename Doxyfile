@@ -60,10 +60,12 @@ WARN_AS_ERROR          = NO
 #---------------------------------------------------------------------------
 # Input
 #---------------------------------------------------------------------------
-INPUT                  = Sentinel/src README.md docs/architecture
-FILE_PATTERNS          = *.hpp *.cpp *.h *.md
+# Code only. The hand-authored narrative Markdown (root README, src/README,
+# docs/architecture) is rendered by GitHub (issues #57 / docs), not Doxygen —
+# feeding it here only produces GitHub-vs-Doxygen anchor-resolution noise.
+INPUT                  = Sentinel/src
+FILE_PATTERNS          = *.hpp *.cpp *.h
 RECURSIVE              = YES
-USE_MDFILE_AS_MAINPAGE = README.md
 
 # Reference-only / generated / vendored / scaffold trees are excluded from the
 # sweep. `bosch/` is the third-party BSD-3-Clause Bosch Sensortec BME280 API
@@ -73,7 +75,9 @@ EXCLUDE_PATTERNS       = */GeneratedSource/* \
                          */libs/* \
                          */build/* \
                          *driver_file_template* \
-                         */bosch/*
+                         */bosch/* \
+                         *app_bt_utils* \
+                         *cy_ota_config*
 EXCLUDE_SYMLINKS       = YES
 
 #---------------------------------------------------------------------------
@@ -93,7 +97,8 @@ MACRO_EXPANSION        = YES
 EXPAND_ONLY_PREDEF     = YES
 SEARCH_INCLUDES        = YES
 PREDEFINED             = __cplusplus \
-                         SENTINEL_TESTBENCH=0
+                         SENTINEL_TESTBENCH=0 \
+                         __attribute__(x)=
 
 #---------------------------------------------------------------------------
 # Output formats

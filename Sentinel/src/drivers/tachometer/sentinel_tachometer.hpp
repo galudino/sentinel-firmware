@@ -15,7 +15,7 @@
 ///          - on_edge(tick): Called from ISR context on each detected edge
 ///          - handle_edge(tick): CRTP compile-time dispatch target
 ///
-/// \example
+/// \par Example
 /// \code
 /// // Using CRTP for zero-overhead edge handling
 /// class my_tach_handler : public sentinel::tach_callback_crtp<my_tach_handler> {
@@ -92,7 +92,7 @@ public:
 ///
 /// \tparam Derived The derived class that implements handle_edge(uint32_t)
 ///
-/// \example
+/// \par Example
 /// \code
 /// class my_tach : public sentinel::tach_callback_crtp<my_tach> {
 /// public:
@@ -117,6 +117,11 @@ public:
         static_cast<Derived *>(this)->on_edge(tick);
     }
 
+    ///
+    /// \brief Dispatch pulse-count query to the derived class.
+    ///
+    /// \return Number of pulses observed in the derived class's last window.
+    ///
     uint32_t pulses_in_last_window() const noexcept {
         return static_cast<Derived *>(this)->pulses_in_last_window();
     }

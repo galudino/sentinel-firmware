@@ -102,6 +102,7 @@ public:
         : m_bus(bus), m_target_address(target_address),
           m_response_queue(xQueueCreate(1, sizeof(sentinel::task::i2c_response))) {}
 
+    /// \brief Destroy the transport, deleting its response queue.
     ~cyhal_i2c_bus_transport() noexcept {
         if (m_response_queue != nullptr) {
             vQueueDelete(m_response_queue);

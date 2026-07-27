@@ -25,7 +25,8 @@
 ///          - Operations that just act on the device return \c bool
 ///            (\c true on success).
 ///          - The most recent low-level Bosch error code is preserved in
-///            \ref last_error() so callers retain full diagnostic
+///            \ref sentinel::bme280::last_error() so callers retain full
+///            diagnostic
 ///            information without paying the call-site cost of
 ///            \c std::variant or wide return tuples.
 ///          - The "value-or-nullopt" idiom keeps the happy path compact;
@@ -225,8 +226,10 @@ public:
     bme280(const bme280 &) = delete;
     bme280 &operator=(const bme280 &) = delete;
 
-    /// Movable.
+    /// \brief Move-construct from another instance (defaulted).
     bme280(bme280 &&) noexcept = default;
+    /// \brief Move-assign from another instance (defaulted).
+    /// \return Reference to this instance.
     bme280 &operator=(bme280 &&) noexcept = default;
 
     // =====================================================================

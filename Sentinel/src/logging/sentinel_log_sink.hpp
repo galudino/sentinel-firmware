@@ -11,8 +11,10 @@
 ///
 ///             Backends (selected at compile time, mirroring the CRTP transport
 ///             pattern used for buses):
-///               - \ref sink::serial   — cyhal/Infineon retarget-io \c printf
-///               - \ref sink::ble_debug — BLE debug output stream ring buffer
+///               - \ref sentinel::logging::sink::serial — cyhal/Infineon
+///                 retarget-io \c printf
+///               - \ref sentinel::logging::sink::ble_debug — BLE debug output
+///                 stream ring buffer
 ///
 ///             Future platforms add a sink here (POSIX \c std::cout, Nordic
 ///             RTT/SEGGER) without touching call sites.
@@ -40,7 +42,8 @@ enum class level : uint8_t {
 };
 
 ///
-/// \brief      Map a \ref level to its lowercase prefix string.
+/// \brief      Map a \ref sentinel::logging::level to its lowercase prefix
+///             string.
 ///
 /// \param      l   Severity level.
 /// \return     One of "debug", "info", "warn", "error".

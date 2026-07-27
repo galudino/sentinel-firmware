@@ -17,20 +17,21 @@
 ///          Public API design (matches \ref sentinel::w25q128 /
 ///          \ref sentinel::bme280 / \ref sentinel::ds3231):
 ///          - Action / mutator members return \c bool (\c true on success).
-///          - The most recent error is exposed via \ref last_error(), typed
-///            as \ref err.
+///          - The most recent error is exposed via
+///            \ref sentinel::record_store::last_error(), typed as
+///            \ref sentinel::record_store::err.
 ///
 ///          === On-flash record layout ===
 ///
 ///          Every record is stored in a fixed-size *slot*. The slot begins
 ///          with an 8-byte header followed by the caller's \c RecordT payload:
 ///
-///          \verbatim
+///          \code{.unparsed}
 ///          offset 0  : status   (1 byte)  0xFF empty / 0xA5 valid / 0x5A dead
 ///          offset 1  : reserved (3 bytes) padding -> 4-byte align
 ///          offset 4  : sequence (4 bytes) monotonic absolute record index
 ///          offset 8  : payload  (sizeof(RecordT) bytes)
-///          \endverbatim
+///          \endcode
 ///
 ///          The slot size is the smallest power of two that holds the 8-byte
 ///          header plus the payload. Because every power of two <= 256 divides
@@ -47,7 +48,8 @@
 ///          after wrap, every slot's status byte is identical (0xA5) and the
 ///          newest record is indistinguishable from the oldest by status
 ///          alone. We therefore store a 4-byte monotonic \c sequence in each
-///          slot. On boot \ref initialize() scans the region, and head/tail
+///          slot. On boot \ref sentinel::record_store::initialize() scans the
+///          region, and head/tail
 ///          are recovered as \c max(sequence)+1 and \c min(sequence) over the
 ///          valid slots. CRC is still deferred to a future hardening pass, as
 ///          the issue notes — the status byte alone gives power-loss safety.
@@ -61,7 +63,8 @@
 ///          NOR programming only clears bits (1->0), so writing the status
 ///          byte after the payload is legal. If power is lost between the two
 ///          steps the slot keeps \c status == 0xFF and is treated as empty on
-///          the next \ref initialize() scan — a half-written record is never
+///          the next \ref sentinel::record_store::initialize() scan — a
+///          half-written record is never
 ///          read as valid.
 ///
 ///          === Concurrency ===
@@ -117,6 +120,9 @@ class sentinel::record_store {
 
     // Declared first so the static data member SLOT_SIZE (whose initializer
     // is parsed immediately, not in the complete-class context) can call it.
+    /// \brief Smallest power of two that is >= \p value.
+    /// \param value Value to round up.
+    /// \return The smallest power of two >= \p value.
     static constexpr uint32_t next_power_of_two(uint32_t value) noexcept {
         auto p = uint32_t{1};
         while (p < value) {
@@ -130,8 +136,12 @@ public:
     // Types
     // =====================================================================
 
+    /// Backing \ref sentinel::w25q128 driver type for this store's \c Transport.
     using flash_type = sentinel::w25q128<Transport>;
 
+    ///
+    /// \brief Error codes for the most recent operation (see \ref last_error).
+    ///
     enum class err : int8_t {
         ok              =  0,
         flash_failure   = -1, ///< An underlying W25Q128 operation failed.
@@ -153,9 +163,9 @@ public:
     /// Per-slot header: status(1) + reserved(3) + sequence(4).
     static constexpr uint32_t HEADER_SIZE = 8u;
 
-    static constexpr uint32_t OFFSET_STATUS   = 0u;
-    static constexpr uint32_t OFFSET_SEQUENCE = 4u;
-    static constexpr uint32_t OFFSET_PAYLOAD  = 8u;
+    static constexpr uint32_t OFFSET_STATUS   = 0u; ///< Status byte offset.
+    static constexpr uint32_t OFFSET_SEQUENCE = 4u; ///< Sequence field offset.
+    static constexpr uint32_t OFFSET_PAYLOAD  = 8u; ///< Payload field offset.
 
     /// Size of a single record slot on flash (power-of-two padded).
     static constexpr uint32_t SLOT_SIZE =
@@ -169,8 +179,9 @@ public:
 
     // Status byte states. Flash erases to 0xFF, and NOR programming can only
     // clear bits, so EMPTY (all ones) -> VALID is a legal transition.
-    static constexpr uint8_t STATUS_EMPTY   = 0xFFu;
-    static constexpr uint8_t STATUS_VALID   = 0xA5u;
+    static constexpr uint8_t STATUS_EMPTY   = 0xFFu; ///< Slot never written.
+    static constexpr uint8_t STATUS_VALID   = 0xA5u; ///< Slot holds a valid
+                                                     ///< record.
     static constexpr uint8_t STATUS_INVALID = 0x5Au; ///< Reserved for future
                                                      ///< logical delete.
 
@@ -201,9 +212,14 @@ public:
 
     record_store(const record_store &)            = delete;
     record_store &operator=(const record_store &) = delete;
+    /// \brief Move-construct from another instance (defaulted).
     record_store(record_store &&) noexcept        = default;
+    /// \brief Move-assign from another instance (defaulted).
+    /// \return Reference to this instance.
     record_store &operator=(record_store &&) noexcept = default;
 
+    /// \brief The error code recorded by the most recent failed operation.
+    /// \return The most recent \ref err (\c err::ok if none).
     err last_error() const noexcept { return m_last_error; }
 
     // =====================================================================
@@ -211,17 +227,23 @@ public:
     // =====================================================================
 
     /// Total number of record slots the region can hold.
+    /// \return \ref m_capacity.
     uint32_t capacity() const noexcept { return m_capacity; }
 
     /// Number of valid records currently stored: \c head - \c tail.
+    /// \return Current record count.
     uint32_t count() const noexcept { return m_head - m_tail; }
 
     /// Absolute index where the next appended record will land.
+    /// \return \ref m_head.
     uint32_t head_index() const noexcept { return m_head; }
 
     /// Absolute index of the oldest still-valid record.
+    /// \return \ref m_tail.
     uint32_t tail_index() const noexcept { return m_tail; }
 
+    /// \brief Has \ref initialize() (or \ref erase_all()) run successfully?
+    /// \return \c true if the store is ready for append/read.
     bool initialized() const noexcept { return m_initialized; }
 
     // =====================================================================
@@ -397,6 +419,9 @@ public:
     ///          (\ref erase_all()) before normal appends resume, since the
     ///          partial slot's bytes are no longer all-ones.
     ///
+    /// \param record The record whose payload is written (uncommitted).
+    /// \return \c true on success; \c false on error (see \ref last_error()).
+    ///
     bool append_uncommitted_for_test(const RecordT &record) noexcept {
         if (!m_initialized) {
             m_last_error = err::not_initialized;
@@ -418,10 +443,16 @@ private:
     ///
     /// Because \ref SLOT_SIZE divides \ref SECTOR_SIZE evenly, the per-sector
     /// layout is gapless and the address reduces to a single multiply.
+    /// \param slot Region-relative slot index.
+    /// \return Absolute byte address of the slot on flash.
     uint32_t slot_address(uint32_t slot) const noexcept {
         return m_region_offset + slot * SLOT_SIZE;
     }
 
+    /// \brief Load a slot header's 4-byte sequence field.
+    /// \param header Pointer to a slot's 8-byte header (as read by
+    ///               \ref read_slot_header).
+    /// \return The slot's stored sequence number.
     static uint32_t load_sequence(const uint8_t *header) noexcept {
         auto seq = uint32_t{0};
         std::memcpy(&seq, header + OFFSET_SEQUENCE, sizeof(seq));
@@ -429,6 +460,9 @@ private:
     }
 
     /// Read a slot's 8-byte header into \p out (caller-owned, HEADER_SIZE).
+    /// \param slot Region-relative slot index.
+    /// \param out  Destination buffer, at least \ref HEADER_SIZE bytes.
+    /// \return \c true on success; \c false on a transport failure.
     bool read_slot_header(uint32_t slot, uint8_t *out) noexcept {
         if (!m_flash.read_data(slot_address(slot),
                                sentinel::make_span(out, HEADER_SIZE))) {
@@ -439,6 +473,9 @@ private:
     }
 
     /// Read just a slot's 1-byte status field into \p out_status.
+    /// \param slot       Region-relative slot index.
+    /// \param out_status Destination for the 1-byte status field.
+    /// \return \c true on success; \c false on a transport failure.
     bool read_slot_status(uint32_t slot, uint8_t *out_status) noexcept {
         if (!m_flash.read_data(slot_address(slot),
                                sentinel::make_span(out_status, 1u))) {
@@ -590,6 +627,9 @@ private:
     ///          sector is erased and \c tail advances past the records it
     ///          destroyed.
     ///
+    /// \param slot Region-relative slot about to be written.
+    /// \return \c true on success; \c false on a flash erase failure.
+    ///
     bool recycle_sector_if_needed(uint32_t slot) noexcept {
         if (slot % RECORDS_PER_SECTOR != 0u) {
             return true; // not a sector boundary; nothing to recycle
@@ -628,6 +668,10 @@ private:
     }
 
     /// Phase one: program sequence + payload, leaving status at 0xFF.
+    /// \param slot     Region-relative slot to write.
+    /// \param sequence Absolute record index to stamp into the slot.
+    /// \param record   Record payload to write.
+    /// \return \c true on success; \c false on a flash program failure.
     bool write_payload(uint32_t slot, uint32_t sequence,
                        const RecordT &record) noexcept {
         auto buffer = std::array<uint8_t, 4 + sizeof(RecordT)>{};
@@ -644,6 +688,8 @@ private:
     }
 
     /// Phase two: program the status byte to commit the record.
+    /// \param slot Region-relative slot to commit.
+    /// \return \c true on success; \c false on a flash program failure.
     bool commit_status(uint32_t slot) noexcept {
         auto status = std::array<uint8_t, 1>{STATUS_VALID};
         const auto addr = slot_address(slot) + OFFSET_STATUS;
@@ -667,8 +713,8 @@ private:
 
     uint32_t       m_head{0};                     ///< Next write index.
     uint32_t       m_tail{0};                     ///< Oldest valid index.
-    bool           m_initialized{false};
-    mutable err    m_last_error{err::ok};
+    bool           m_initialized{false};    ///< Set once \ref initialize() runs.
+    mutable err    m_last_error{err::ok};    ///< Cached most-recent error.
 };
 
 #endif /* SENTINEL_RECORD_STORE_HPP */

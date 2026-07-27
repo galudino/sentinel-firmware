@@ -6,7 +6,7 @@
 ///          service value arrays: Serial Number (R/W device-identity key),
 ///          Firmware Version (R, 5-byte packed), Request Bootloader Mode (W),
 ///          and Platform ID (R, \ref sentinel::platform_id). Like the rest of
-///          the \c sentinel::gatt::<svc> layer these are \c inline + \c noexcept
+///          the \c sentinel::gatt::\<svc\> layer these are \c inline + \c noexcept
 ///          (the values are \c extern GATT-DB globals, not constant
 ///          expressions) and keep the generated \c app_system_* / \c HDLC_SYSTEM_*
 ///          symbols out of the call sites.
@@ -39,6 +39,7 @@ extern "C" {
 namespace sentinel::gatt::system {
 
 /// \brief Current device Serial Number (little-endian device-identity key).
+/// \return The 32-bit serial number.
 inline uint32_t serial_number() noexcept {
     return static_cast<uint32_t>(app_system_serial_number[0]) |
            (static_cast<uint32_t>(app_system_serial_number[1]) << 8) |
@@ -47,6 +48,7 @@ inline uint32_t serial_number() noexcept {
 }
 
 /// \brief Set the Serial Number characteristic (little-endian).
+/// \param serial New 32-bit serial number to write.
 inline void set_serial_number(uint32_t serial) noexcept {
     uint8_t le[4] = {static_cast<uint8_t>(serial & 0xFFu),
                      static_cast<uint8_t>((serial >> 8) & 0xFFu),
@@ -58,6 +60,7 @@ inline void set_serial_number(uint32_t serial) noexcept {
 
 /// \brief Set the Firmware Version characteristic (5-byte packed, little-endian:
 ///        major, minor, patch, build[2]).
+/// \param v Firmware version to encode into the characteristic.
 inline void set_firmware_version(const sentinel::firmware_version &v) noexcept {
     // build() truncates to 8 bits in the current firmware_version API; array()
     // carries the full 16-bit build, matching the 5-byte wire struct (#6).
@@ -70,11 +73,13 @@ inline void set_firmware_version(const sentinel::firmware_version &v) noexcept {
 }
 
 /// \brief Set the Platform ID characteristic.
+/// \param p New platform ID to write.
 inline void set_platform_id(sentinel::platform_id p) noexcept {
     app_system_platform_id[0] = sentinel::to_underlying(p);
 }
 
 /// \brief Current Platform ID characteristic value.
+/// \return The device's \ref sentinel::platform_id.
 inline sentinel::platform_id platform_id() noexcept {
     return static_cast<sentinel::platform_id>(app_system_platform_id[0]);
 }
@@ -82,12 +87,14 @@ inline sentinel::platform_id platform_id() noexcept {
 // ---- CPU Temperature (R/Notify) — PSoC 6 on-die temperature, 0.01 °C -------
 
 /// \brief \c true while a central has subscribed to CPU Temperature notifications.
+/// \return \c true if the CCCD notification bit is set.
 inline bool cpu_temperature_notifications_enabled() noexcept {
     return app_system_cpu_temperature_client_char_config[0] &
            wiced_bt_gatt_client_char_config_e::GATT_CLIENT_CONFIG_NOTIFICATION;
 }
 
 /// \brief Write the CPU Temperature characteristic (0.01 °C / LSB, little-endian).
+/// \param centi_c Temperature in hundredths of a degree Celsius.
 inline void set_cpu_temperature_centi_c(int16_t centi_c) noexcept {
     uint8_t le[2] = {static_cast<uint8_t>(static_cast<uint16_t>(centi_c) & 0xFFu),
                      static_cast<uint8_t>(
@@ -97,6 +104,8 @@ inline void set_cpu_temperature_centi_c(int16_t centi_c) noexcept {
 }
 
 /// \brief Notify the connected central with the current CPU Temperature value.
+/// \param connection_id BLE connection to notify.
+/// \return \c wiced_bt_gatt_status_t result of the notification send.
 inline wiced_bt_gatt_status_t notify_cpu_temperature(uint16_t connection_id) noexcept {
     return wiced_bt_gatt_server_send_notification(
         connection_id, HDLC_SYSTEM_CPU_TEMPERATURE_VALUE,
@@ -106,6 +115,8 @@ inline wiced_bt_gatt_status_t notify_cpu_temperature(uint16_t connection_id) noe
 ///
 /// \brief Publish the CPU die temperature: refresh the read value and notify a
 ///        subscribed central (mirrors the BME280 / DS3231 sensor-char pattern).
+///
+/// \param centi_c Temperature in hundredths of a degree Celsius.
 ///
 inline void publish_cpu_temperature(int16_t centi_c) noexcept {
     set_cpu_temperature_centi_c(centi_c);

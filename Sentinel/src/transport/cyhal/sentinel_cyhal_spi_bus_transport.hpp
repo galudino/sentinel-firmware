@@ -96,6 +96,7 @@ public:
           m_response_queue(
               xQueueCreate(1, sizeof(sentinel::task::spi_response))) {}
 
+    /// \brief Destroy the transport, deleting its response queue.
     ~cyhal_spi_bus_transport() noexcept {
         if (m_response_queue != nullptr) {
             vQueueDelete(m_response_queue);

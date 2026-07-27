@@ -39,6 +39,8 @@ class sentinel::tach_rpm_windowed
     : public tach_callback_crtp<tach_rpm_windowed> {
 public:
     ///
+    /// \brief Construct the windowed RPM calculator.
+    ///
     /// \param ticks_per_second  Timer frequency (e.g., 1'000'000 for 1 MHz)
     /// \param pulses_per_rev    Tach pulses per mechanical revolution
     ///
@@ -91,28 +93,34 @@ public:
         m_rpm = static_cast<uint32_t>(rev_per_sec * 60.0f);
     }
 
+    /// \brief Reset the window state and last computed RPM to zero.
     void reset() noexcept { m_start_tick = m_pulse_count = m_rpm = 0; }
 
     ///
     /// \brief Get last computed RPM
+    ///
+    /// \return RPM computed by the last \ref end_window call.
     ///
     uint32_t rpm() const noexcept { return m_rpm; }
 
     ///
     /// \brief Get the pulse count from the last window
     ///
+    /// \return Number of edges counted between \ref begin_window and
+    ///         \ref end_window.
+    ///
     uint32_t pulse_count() const noexcept { return m_pulse_count; }
 
 private:
     // Supplied during object construction, by the caller
-    uint32_t m_ticks_per_sec;
-    uint8_t m_pulses_per_rev;
+    uint32_t m_ticks_per_sec;  ///< Timer frequency in ticks/second.
+    uint8_t m_pulses_per_rev;  ///< Tach pulses per mechanical revolution.
 
-    uint32_t m_start_tick;  // Assigned in begin_window()
-    uint32_t m_pulse_count; // Assigned when an edge event occurs; ISR function
-                            // increments this
+    uint32_t m_start_tick;  ///< Assigned in begin_window().
+    uint32_t m_pulse_count; ///< Assigned when an edge event occurs; ISR
+                            ///< function increments this.
     uint32_t
-        m_rpm; // (pulse_count / pulses_per_rev) / (delta_ticks / ticks_per_sec)
+        m_rpm; ///< (pulse_count / pulses_per_rev) / (delta_ticks / ticks_per_sec)
 };
 
 #endif /* SENTINEL_TACH_RPM_WINDOWED_HPP */

@@ -7,7 +7,8 @@
 ///          Index (a \e relative cursor in <tt>[0, count)</tt>), read Record
 ///          Block (\c floor(max/record_size) records from the cursor). The read
 ///          values are refreshed lazily from \c resource::context()'s stores in
-///          \ref before_read, just before the GATT read responds, so a client
+///          \ref sentinel::gatt::paged::before_read, just before the GATT read
+///          responds, so a client
 ///          always sees current data. Index writes are stored by the default
 ///          write path; Clear Store is deferred to the async maintenance task
 ///          (\c record_store::erase_all erases every sector — far too slow for
@@ -49,6 +50,8 @@ namespace sentinel::gatt::paged {
 inline constexpr uint16_t BLOCK_SCRATCH = 512;
 
 /// \brief Read a little-endian uint32 from a 4-byte GATT value array.
+/// \param p Pointer to at least 4 bytes, little-endian encoded.
+/// \return The decoded 32-bit value.
 inline uint32_t read_u32_le(const uint8_t *p) noexcept {
     return static_cast<uint32_t>(p[0]) | (static_cast<uint32_t>(p[1]) << 8) |
            (static_cast<uint32_t>(p[2]) << 16) |
@@ -56,6 +59,9 @@ inline uint32_t read_u32_le(const uint8_t *p) noexcept {
 }
 
 /// \brief Write a store's record count into its Record Count characteristic.
+/// \tparam Store       Record-store type; must expose \c count().
+/// \param  store       Record store to query.
+/// \param  count_handle GATT-DB value handle of the Record Count characteristic.
 template <typename Store>
 inline void set_count(const Store &store, uint16_t count_handle) noexcept {
     const uint32_t c = store.count();
@@ -70,6 +76,14 @@ inline void set_count(const Store &store, uint16_t count_handle) noexcept {
 /// \brief Fill a Record Block characteristic with up to
 ///        \c floor(block_max/sizeof(Rec)) records starting at \p cursor
 ///        (relative index in <tt>[0, count)</tt>).
+///
+/// \tparam Rec         Record type stored in \p store.
+/// \tparam Store       Record-store type; must expose \c count(),
+///                     \c tail_index(), and \c read().
+/// \param  store       Record store to read from.
+/// \param  cursor      Relative starting index in <tt>[0, count)</tt>.
+/// \param  block_handle GATT-DB value handle of the Record Block characteristic.
+/// \param  block_max   Maximum bytes the characteristic can hold.
 ///
 template <typename Rec, typename Store>
 inline void fill_block(const Store &store, uint32_t cursor,
@@ -118,6 +132,8 @@ inline void refresh_event_count() noexcept {
 /// \details Called at the top of the read handler; a no-op for non-paged
 ///          handles. Record Count is recomputed from the store; Record Block is
 ///          filled from the current Index cursor.
+///
+/// \param handle GATT-DB value handle about to be read.
 ///
 inline void before_read(uint16_t handle) noexcept {
     if (!resource::context_ready()) {
