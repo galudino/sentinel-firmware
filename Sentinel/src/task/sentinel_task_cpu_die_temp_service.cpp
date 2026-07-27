@@ -48,6 +48,10 @@ constexpr uint32_t LOG_EVERY_N = 30;
 
 /// \brief Split a signed centi-value into sign / whole / two-digit fraction so
 ///        `%c%d.%02d` never prints strings like "-23.-05".
+/// \param centi Signed centi-unit value to format.
+/// \param sign  Set to \c '-' if \p centi is negative, \c '+' otherwise.
+/// \param whole Set to the whole-unit magnitude of \p centi.
+/// \param frac  Set to the fractional (hundredths) magnitude of \p centi.
 void split_centi(int32_t centi, char &sign, int32_t &whole,
                  int32_t &frac) noexcept {
     sign = centi < 0 ? '-' : '+';

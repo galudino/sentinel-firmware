@@ -49,7 +49,14 @@ extern "C" {
 // the shell), e.g. `sentinel-firmware` — not a string literal. Stringize it so
 // it can be interpolated with %s. The two-level indirection expands the macro
 // first, then converts the resulting token sequence to a string literal.
+
+/// \brief Helper level: stringize \p x after macro expansion.
 #define SENTINEL_STRINGIZE2(x) #x
+
+/// \brief Stringize \p x, expanding it first (two-level indirection via
+///        \ref SENTINEL_STRINGIZE2) so a macro argument like
+///        \c APP_NAME_STRING is stringized to its expanded token, not its
+///        literal name.
 #define SENTINEL_STRINGIZE(x) SENTINEL_STRINGIZE2(x)
 
 namespace sentinel::resource {

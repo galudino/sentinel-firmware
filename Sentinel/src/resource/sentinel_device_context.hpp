@@ -26,7 +26,8 @@
 ///          file-scope object is constructed before \c main() runs the
 ///          scheduler, so its calibration read would dead-lock on an arbiter
 ///          that never runs. The context is therefore a function-local
-///          \c static (\ref context()) first touched from the boot-orchestrator
+///          \c static (\ref sentinel::resource::context()) first touched from
+///          the boot-orchestrator
 ///          task — i.e. post-scheduler, on the production arbiter path — exactly
 ///          like the testbench fixtures (#48). End state is identical to #13's
 ///          intent: one instance owned by \c sentinel::resource, borrowed by
@@ -127,6 +128,9 @@ using event_log_t = sentinel::diagnostics::system_event_log<event_store_t>;
 ///          stays decoupled from the RTC driver (decision #11). Matches
 ///          \ref event_log_t::now_unix_fn.
 ///
+/// \return Current Unix time in seconds, or 0 if the RTC has not yet
+///         reported one.
+///
 inline uint32_t now_unix_seconds() noexcept {
     return sentinel::task::rtc_service::instance().last_unix_time();
 }
@@ -145,23 +149,23 @@ inline uint32_t now_unix_seconds() noexcept {
 struct device_context {
     // ---- Bus transports (one per device; each carries its own target). ----
     sentinel::cyhal_i2c_bus_transport bme_bus{sentinel::resource::cybsp_i2c_bus,
-                                              BME280_I2C_ADDR_PRIM};
+                                              BME280_I2C_ADDR_PRIM}; ///< BME280's I2C transport.
     sentinel::cyhal_i2c_bus_transport rtc_bus{
         sentinel::resource::cybsp_i2c_bus,
-        static_cast<uint16_t>(ds3231_t::slave_address::primary)};
+        static_cast<uint16_t>(ds3231_t::slave_address::primary)}; ///< DS3231's I2C transport.
     sentinel::cyhal_spi_bus_transport flash_bus{
-        sentinel::resource::cybsp_spi_bus, CYBSP_SPI_FLASH_CS};
+        sentinel::resource::cybsp_spi_bus, CYBSP_SPI_FLASH_CS}; ///< W25Q128's SPI transport.
 
     // ---- Drivers. ----
-    bme280_t  bme{bme_bus, BME280_I2C_ADDR_PRIM};
-    ds3231_t  rtc{rtc_bus};
-    w25q128_t flash{flash_bus, sentinel::resource::flash_device_mutex};
+    bme280_t  bme{bme_bus, BME280_I2C_ADDR_PRIM}; ///< Temperature/humidity/pressure sensor.
+    ds3231_t  rtc{rtc_bus};                       ///< Real-time clock.
+    w25q128_t flash{flash_bus, sentinel::resource::flash_device_mutex}; ///< SPI NOR flash.
 
     // ---- Flash-backed record stores. ----
     event_store_t event_store{flash, sentinel::diagnostics::kEventLogRegionOffsetBytes,
-                              sentinel::diagnostics::kEventLogRegionSizeBytes};
+                              sentinel::diagnostics::kEventLogRegionSizeBytes}; ///< System Event Log's store.
     snapshot_store_t snapshot_store{flash, kSnapshotRegionOffsetBytes,
-                                    kSnapshotRegionSizeBytes};
+                                    kSnapshotRegionSizeBytes}; ///< Snapshot history's store.
 
     ///
     /// \brief First failed POST subsystem id (0 = all passed), cached by the
@@ -171,14 +175,17 @@ struct device_context {
 
     /// \brief The application System Event Log singleton (bound by
     ///        \ref initialize_stores).
+    /// \return Reference to the singleton \ref event_log_t instance.
     static event_log_t &event_log() noexcept { return event_log_t::instance(); }
 
     /// \brief Valid records currently in the event log region.
+    /// \return Count of valid records in \ref event_store.
     uint32_t event_log_record_count() const noexcept {
         return event_store.count();
     }
 
     /// \brief Valid records currently in the snapshot history region.
+    /// \return Count of valid records in \ref snapshot_store.
     uint32_t snapshot_record_count() const noexcept {
         return snapshot_store.count();
     }
@@ -191,6 +198,8 @@ struct device_context {
 ///          then), so the first call MUST come from a task running after the
 ///          scheduler has started — the boot orchestrator (app) or the test
 ///          orchestrator (testbench). Borrowed by reference everywhere else.
+///
+/// \return Reference to the single application \ref device_context.
 ///
 inline device_context &context() noexcept {
     static device_context ctx;
@@ -208,6 +217,7 @@ inline device_context &context() noexcept {
 inline bool g_context_ready = false;
 
 /// \brief Has the context been built and its stores initialized?
+/// \return \c true once \ref initialize_stores has completed successfully.
 inline bool context_ready() noexcept { return g_context_ready; }
 
 ///

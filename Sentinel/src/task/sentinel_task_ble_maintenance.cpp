@@ -29,9 +29,9 @@ namespace sentinel::task {
 
 namespace {
 
-constexpr uint32_t BIT_CLEAR_SNAPSHOTS = 1u << 0;
-constexpr uint32_t BIT_CLEAR_EVENTS    = 1u << 1;
-constexpr uint32_t BIT_BOOTLOADER      = 1u << 2;
+constexpr uint32_t BIT_CLEAR_SNAPSHOTS = 1u << 0; ///< Request: erase Snapshot History.
+constexpr uint32_t BIT_CLEAR_EVENTS    = 1u << 1; ///< Request: erase System Event Log.
+constexpr uint32_t BIT_BOOTLOADER      = 1u << 2; ///< Request: enter the bootloader.
 
 /// \brief Grace period before the bootloader reset so the write response +
 ///        disconnect can flush.

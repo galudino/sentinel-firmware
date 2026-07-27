@@ -1,5 +1,5 @@
 ///
-/// \file    sentinel_battery_service_task.cpp
+/// \file    sentinel_task_battery_service.cpp
 /// \brief   Battery Service Task implementation
 ///
 /// \details This file implements the Battery Service FreeRTOS task that
@@ -43,6 +43,9 @@ constexpr auto BATTERY_LEVEL_UPDATE_FREQ =
 /// Battery level is read from GATT DB and is reduced by `decrease_interval`
 /// percent by default, and initialized again to 100 once it reaches 0.
 ///
+/// \param decrease_interval Percent to subtract from the current level
+///                          (wraps to 100 once the level reaches 0).
+///
 inline void
 update_battery_percentage(uint8_t decrease_interval = BATTERY_LEVEL_CHANGE) {
     using sentinel::gatt::battery::level;
@@ -51,6 +54,8 @@ update_battery_percentage(uint8_t decrease_interval = BATTERY_LEVEL_CHANGE) {
     set_level(level() == 0 ? 100 : level() - decrease_interval);
 }
 
+/// \brief Send a GATT notification of the current battery level to the
+///        connected peer.
 inline void send_notification_for_battery_percentage() {
     sentinel::gatt::battery::notify(
         sentinel::ble_context_object.connection_id());

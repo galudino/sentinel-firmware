@@ -10,7 +10,7 @@
 ///          \c sentinel_test_orchestrator.cpp → test orchestrator). Because
 ///          the Makefile compiles exactly one of those TUs (the other dir is
 ///          \c CY_IGNORE'd), the linker resolves this symbol to the correct
-///          orchestrator with \b no \c #ifdef in the shared entry point.
+///          orchestrator with \b no \c \#ifdef in the shared entry point.
 ///
 ///          This is the code half of #51 (unify entry points); the matching
 ///          config-file de-duplication + single \c main.cpp move are manual

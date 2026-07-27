@@ -5,7 +5,8 @@
 /// \details Declares the BME280 sample service task. The task samples the
 ///          BME280 (#14) over the arbitrated I²C bus at a configurable cadence
 ///          (default 1 Hz), caches the most-recent compensated reading, and
-///          publishes it via \ref latest for any consumer — the device
+///          publishes it via \ref sentinel::task::bme280_service::latest for any
+///          consumer — the device
 ///          snapshot \c populate() (#36), the live BLE BME280 characteristic
 ///          (#6), and internal threshold logic.
 ///
@@ -45,7 +46,7 @@ namespace sentinel::task {
 ///        configurable cadence, caches the latest reading, and notifies a
 ///        subscribed BLE handler.
 ///
-/// \details OO/class style, mirroring \ref sentinel::task::spi_bus: the task's
+/// \details OO/class style, mirroring \ref sentinel::task::spi_bus — the task's
 ///          state (cached sample + its mutex, the notify queue, the cadence,
 ///          the task handle) lives in private members rather than \c .cpp
 ///          file-static globals, and the loop runs as a private \ref run
@@ -77,6 +78,8 @@ public:
     ///
     /// \brief The single BME280-service instance.
     ///
+    /// \return Reference to the singleton \ref bme280_service instance.
+    ///
     static bme280_service &instance() noexcept;
 
     /// Non-copyable, non-movable: the task entry point captures \c this.
@@ -102,6 +105,8 @@ public:
     ///          (i.e. before \ref task_create), returns a default \ref sample
     ///          with \c valid == false.
     ///
+    /// \return Copy of the most recently cached \ref sample.
+    ///
     sample latest() noexcept;
 
     ///
@@ -114,6 +119,8 @@ public:
 
     ///
     /// \brief Current sampling cadence in milliseconds.
+    ///
+    /// \return Current \ref set_sample_period_ms value, in milliseconds.
     ///
     uint32_t sample_period_ms() const noexcept;
 
@@ -141,6 +148,8 @@ public:
 private:
     bme280_service() = default;
 
+    /// \brief Static FreeRTOS task entry point; forwards to \ref run.
+    /// \param task_parameter Unused (\c this is captured via \ref instance).
     static void task_trampoline(void *task_parameter);
 
     ///
@@ -152,6 +161,8 @@ private:
     ///
     /// \brief Publish a fresh sample to the cache (under the mutex) and, if a
     ///        subscriber is attached, to its queue (non-blocking).
+    ///
+    /// \param s The fresh sample to cache and (if subscribed) forward.
     ///
     void publish(const sample &s) noexcept;
 
