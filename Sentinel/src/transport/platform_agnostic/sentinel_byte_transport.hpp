@@ -15,7 +15,7 @@
 ///
 /// \author  galudino
 /// \date    2021-2026
-/// \version 1.2 - SPI façade gains delay_us for Bosch-style sensor drivers
+/// \version 1.2 - SPI façade gains delay_us for microsecond-granular drivers
 ///
 
 #ifndef SENTINEL_BYTE_TRANSPORT_HPP
@@ -172,50 +172,6 @@ public:
         return impl().read(rx, size, timeout_ms, send_stop);
     }
 
-    ///
-    /// \brief Bosch Sensortec API write wrapper
-    ///
-    /// \details Static wrapper function compatible with Bosch Sensortec sensor
-    ///          APIs (BMA400, BMP388, etc.). Forwards write operations to the
-    ///          implementation's I2C write method.
-    ///
-    /// \param reg_addr Starting register address to write
-    /// \param reg_data Pointer to data buffer to write
-    /// \param length Number of bytes to write
-    /// \param intf_ptr Interface pointer (typically points to transport
-    /// instance)
-    /// \return Bosch API compatible result code (0 = success)
-    ///
-    /// \note This function signature matches Bosch Sensortec's required
-    ///       function pointer type for write operations.
-    ///
-    static auto bosch_write(uint8_t reg_addr, const uint8_t *reg_data,
-                            uint32_t length, void *intf_ptr) noexcept {
-        return impl().write(reg_addr, reg_data, length, intf_ptr);
-    }
-
-    ///
-    /// \brief Bosch Sensortec API read wrapper
-    ///
-    /// \details Static wrapper function compatible with Bosch Sensortec sensor
-    ///          APIs (BMA400, BMP388, etc.). Forwards read operations to the
-    ///          implementation's I2C read method.
-    ///
-    /// \param reg_addr Starting register address to read from
-    /// \param reg_data Pointer to buffer for read data
-    /// \param length Number of bytes to read
-    /// \param intf_ptr Interface pointer (typically points to transport
-    /// instance)
-    /// \return Bosch API compatible result code (0 = success)
-    ///
-    /// \note This function signature matches Bosch Sensortec's required
-    ///       function pointer type for read operations.
-    ///
-    static auto bosch_read(uint8_t reg_addr, uint8_t *reg_data, uint32_t length,
-                           void *intf_ptr) noexcept {
-        return impl().read(reg_addr, reg_data, length, intf_ptr);
-    }
-
     // ---------------------------------------------------------------------
     // Basic I/O (span convenience; forwards to pointer-based)
     // ---------------------------------------------------------------------
@@ -348,25 +304,6 @@ public:
     ///
     auto delay_us(uint32_t microseconds) noexcept {
         return impl().delay_us(microseconds);
-    }
-
-    ///
-    /// \brief Bosch Sensortec API delay wrapper
-    ///
-    /// \details Static wrapper function compatible with Bosch Sensortec sensor
-    ///          APIs (BMA400, BMP388, etc.). Forwards delay operations to the
-    ///          implementation's delay method.
-    ///
-    /// \param period Delay duration in milliseconds
-    /// \param intf_ptr Interface pointer (typically points to transport
-    /// instance)
-    /// \return Bosch API compatible result code (0 = success)
-    ///
-    /// \note This function signature matches Bosch Sensortec's required
-    ///       function pointer type for delay operations.
-    ///
-    static auto bosch_delay(uint32_t period, void *intf_ptr) noexcept {
-        return impl().delay(period, intf_ptr);
     }
 
 private:
@@ -564,8 +501,8 @@ public:
     ///
     /// \brief Delay execution (microseconds)
     ///
-    /// \details Required for Bosch Sensortec drivers whose delay callback
-    ///          signature is expressed in microseconds.
+    /// \details Provided for sensor drivers whose delay callback signature is
+    ///          expressed in microseconds.
     ///
     /// \param microseconds Delay duration in microseconds
     /// \return Implementation-specific status/result code

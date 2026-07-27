@@ -100,39 +100,6 @@ public:
     }
 
     ///
-    /// \brief Bosch Sensortec API write wrapper.
-    ///
-    /// \details Combines \p reg_addr and \p reg_data into a single
-    ///          contiguous transmit buffer (256-byte scratch buffer) and
-    ///          issues one atomic I2C write transaction.
-    ///
-    /// \param reg_addr Starting register address to write.
-    /// \param reg_data Pointer to data buffer to write.
-    /// \param length   Number of bytes to write.
-    /// \param intf_ptr Interface pointer; must point to a
-    ///                 \c cyhal_i2c_transport instance.
-    /// \return Bosch API compatible result code (0 = success).
-    ///
-    static int8_t bosch_write(uint8_t reg_addr, const uint8_t *reg_data,
-                              uint32_t length, void *intf_ptr) noexcept {
-        auto *self = static_cast<cyhal_i2c_transport *>(intf_ptr);
-        // Allocate buffer to combine register address and data
-        // I2C write operations require register address followed by write_data
-        // bytes
-        auto buffer = std::array<uint8_t, 256>();
-
-        // Prepare the complete write buffer: [register_address, write_data]
-        buffer[0] = reg_addr;
-        std::copy(reg_data, reg_data + length, buffer.data() + 1);
-
-        // Perform the complete I2C write operation in a single transaction
-        // This ensures atomic register write operation
-        auto result = self->write(buffer.data(), length + 1);
-
-        return result;
-    }
-
-    ///
     /// \brief Read bytes from I2C target device
     ///
     /// \param rx Pointer to receive buffer
@@ -145,27 +112,6 @@ public:
                    bool send_stop = true) noexcept {
         return cyhal_i2c_master_read(m_i2c_object, m_target_address, rx, size,
                                      timeout, send_stop);
-    }
-
-    ///
-    /// \brief Bosch Sensortec API read wrapper.
-    ///
-    /// \details Issues a write of \p reg_addr followed by a repeated-start
-    ///          read of \p length bytes into \p reg_data.
-    ///
-    /// \param reg_addr Starting register address to read from.
-    /// \param reg_data Pointer to buffer for read data.
-    /// \param length   Number of bytes to read.
-    /// \param intf_ptr Interface pointer; must point to a
-    ///                 \c cyhal_i2c_transport instance.
-    /// \return Bosch API compatible result code (0 = success).
-    ///
-    static int8_t bosch_read(uint8_t reg_addr, uint8_t *reg_data,
-                             uint32_t length, void *intf_ptr) noexcept {
-        auto *self = static_cast<cyhal_i2c_transport *>(intf_ptr);
-        auto result = self->write_read(&reg_addr, sizeof(reg_addr), reg_data,
-                                       length, 100, false, true);
-        return result;
     }
 
     ///
@@ -236,34 +182,6 @@ public:
     cy_rslt_t delay_us(uint32_t microseconds) noexcept {
         cyhal_system_delay_us(microseconds);
         return CY_RSLT_SUCCESS;
-    }
-
-    ///
-    /// \brief Bosch Sensortec API delay wrapper.
-    ///
-    /// \details Bosch callbacks express their period in microseconds;
-    ///          CYHAL's system delay is millisecond-granular, so the
-    ///          period is rounded up (minimum 1 ms).
-    ///
-    /// \param period   Delay duration in microseconds.
-    /// \param intf_ptr Interface pointer; must point to a
-    ///                 \c cyhal_i2c_transport instance.
-    ///
-    static void bosch_delay(uint32_t period, void *intf_ptr) noexcept {
-        // Interface pointer is unused but required by Bosch API signature
-        auto *self = static_cast<cyhal_i2c_transport *>(intf_ptr);
-
-        // Convert microseconds to milliseconds with proper rounding
-        // PSoC HAL only supports millisecond delays, so we round up
-        auto delay_ms = (period + 999) / 1000;
-
-        // Ensure minimum delay of 1ms for very short microsecond delays
-        if (delay_ms == 0) {
-            delay_ms = 1;
-        }
-
-        // Perform the delay using PSoC HAL system delay function
-        self->delay(delay_ms);
     }
 
 private:
