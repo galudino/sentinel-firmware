@@ -20,11 +20,31 @@ than letting them accumulate here.
 
 ---
 
-**Last updated:** 2026-07-26 (session: **#56 + #49 ON-BENCH SIGNED OFF + CLOSED**;
-testbench 47/47 on GD25Q128/CYBLE-416045). Earlier: #6/#45/#55 GATT, #38, #51
-merged. **NEXT: review/merge the #53 + #57 docs branches; then the
-end-of-Phase-I clang-format sweep (#53) and OTA DFU validation with
-`sentinel-client` (the Phase I finale).**
+**Last updated:** 2026-07-27 (session: **#53 Doxygen backfill DONE — tree at 0
+warnings; #57 src/README merged; #58 + #59 filed (Phase II)**). Earlier:
+#56 + #49 on-bench signed off + closed; #6/#45/#55 GATT, #38, #51 merged.
+**NEXT: OTA DFU validation with `sentinel-client` (the Phase I finale);
+end-of-Phase-I clang-format sweep (#53's remaining half).**
+
+**THIS SESSION (2026-07-27):**
+- **#53 Doxygen backfill — DONE (merged `90c42dc`, tag
+  `53-doxygen-backfill-history`).** `doxygen Doxyfile` emits **0 warnings**
+  tree-wide (was 1,248). Every entity in `Sentinel/src` documented; Doxyfile is
+  now a **code-only** build (`INPUT = Sentinel/src`; narrative Markdown renders
+  on GitHub per #57; `__attribute__(x)` stripped; vendored `bosch/`/
+  `app_bt_utils`/`cy_ota_config`/`*driver_file_template*` excluded). Delivered
+  by a 6-way subagent fan-out + parent mop-up. Comments only; both builds link.
+  **⚠️ Doxygen verify:** run `doxygen Doxyfile` **as-is** (HTML on) — the
+  `GENERATE_HTML=NO` shortcut hits a 1.11.0 false-positive on member
+  `\param`/`\return`. #53 stays **In Progress** for its *other* half: the
+  end-of-Phase-I `clang-format -i` + reviewer-rule sweep (`RecordT`→
+  `RecordType`, namespace-nested defs, prefix/postfix, ref-for-mutation).
+- **#57 — `Sentinel/src/README.md` keystone merged (`d7ba68e`).** Module map +
+  4 Mermaid diagrams. Remaining: per-directory README fan-out (In Progress).
+- **#58 (User button SW2/P0_4 driver) + #59 (on-demand diagnostics service =
+  extended POST, button + GATT triggered, non-destructive) — filed, Phase II
+  Backlog.** The exhaustive destructive testbench stays a separate app
+  (decision #15); #59 is the safe, live-unit "more involved POST".
 
 **⚠️ BENCH RELIABILITY WATCH — marginal SPI (flash) connection.** The testbench
 first came up with **5 failures** (W25Q128 `erase_program_read` + 4 flash-backed
