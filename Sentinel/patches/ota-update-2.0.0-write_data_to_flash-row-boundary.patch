@@ -1,0 +1,53 @@
+# Infineon ota-update release-v2.0.0 — write_data_to_flash() flash-row-boundary fix (#63)
+#
+# Library:  ota-update (pinned in Sentinel/deps/ota-update.mtb -> release-v2.0.0)
+# File:     mtb_shared/ota-update/release-v2.0.0/source/cy_ota_untar.c
+# Function: static cy_untar_result_t write_data_to_flash(...)
+#
+# WHY:
+#   The read-modify-write path uses a single one-flash-row scratch buffer
+#   (block_buffer[CY_FLASH_SIZEOF_ROW]). The loop clamps a write to the row
+#   *size* but not the row *boundary*, so a chunk that starts mid-row and
+#   extends past the row end (a) overflows block_buffer via memcpy and
+#   (b) writes only that one row -- the spill-over bytes that belong in the
+#   NEXT row are silently dropped. BLE OTA delivers MTU-sized, row-unaligned
+#   chunks, so this corrupts the stored image at nearly every row crossing:
+#   the secondary-slot image hash never matches and MCUBoot rejects every OTA
+#   ("Image in the secondary slot is not valid!"). The BLE CRC does not catch
+#   it because it is computed over the received RAM buffer, not flash.
+#
+# FIX: clamp each write to the bytes remaining in the current row; the loop
+#      writes the remainder on the next iteration.
+#
+# NOTE: mtb_shared/ is .gitignore'd and re-fetched by `make getlibs`, so this
+#       patch is applied by Sentinel/scripts/apply-mtb-shared-patches.sh (which
+#       the build-sentinel-*.sh scripts call automatically). This file is the
+#       human-readable reference; the script is the operational apply.
+#
+--- a/source/cy_ota_untar.c
++++ b/source/cy_ota_untar.c
+@@ write_data_to_flash(): clamp each write to the current flash row
+         uint32_t chunk_size = bytes_to_write;
+         if (chunk_size > CY_FLASH_SIZEOF_ROW)
+         {
+             chunk_size = CY_FLASH_SIZEOF_ROW;
+         }
+
++        /* #63 FIX (sentinel): never let a single write cross a flash-row
++         * boundary. block_buffer is exactly one row; the original code
++         * clamped only to CY_FLASH_SIZEOF_ROW, so a chunk that starts mid-row
++         * and extends past the row end overflowed block_buffer in the
++         * read-modify-write path below AND dropped the spill-over bytes
++         * (never written into the next row), corrupting the stored image.
++         * Clamp to the bytes remaining in the current row; the loop writes
++         * the remainder on the next iteration. */
++        {
++            uint32_t row_remaining =
++                CY_FLASH_SIZEOF_ROW - (curr_offset % CY_FLASH_SIZEOF_ROW);
++            if (chunk_size > row_remaining)
++            {
++                chunk_size = row_remaining;
++            }
++        }
++
+         /* Is the chunk_size smaller than a flash row? */

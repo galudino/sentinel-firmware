@@ -52,6 +52,9 @@ function main() {
 
     validate_argument $command_line_argument
 
+    ## Re-apply local mtb_shared library fixes (gitignored, wiped by getlibs). #63
+    "$(dirname "$0")/apply-mtb-shared-patches.sh"
+
     start_python_env
     make build CONFIG=$config APPNAME=$app_name_string TESTBENCH=$testbench_mode
     deactivate
