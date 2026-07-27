@@ -38,18 +38,21 @@ namespace sentinel {
 template <typename T>
 class span {
 public:
-    using element_type = T;
-    using value_type = typename std::remove_cv<T>::type;
-    using size_type = size_t;
-    using difference_type = std::ptrdiff_t;
-    using pointer = T *;
-    using const_pointer = const T *;
-    using reference = T &;
-    using const_reference = const T &;
-    using iterator = T *;
-    using const_iterator = const T *;
-    using reverse_iterator = std::reverse_iterator<iterator>;
-    using const_reverse_iterator = std::reverse_iterator<const_iterator>;
+    using element_type = T; ///< Element type, as given (may be const).
+    using value_type =
+        typename std::remove_cv<T>::type; ///< Element type, cv-stripped.
+    using size_type = size_t;              ///< Type used for sizes/indices.
+    using difference_type = std::ptrdiff_t; ///< Type used for iterator diffs.
+    using pointer = T *;                   ///< Pointer to an element.
+    using const_pointer = const T *;       ///< Pointer to a const element.
+    using reference = T &;                 ///< Reference to an element.
+    using const_reference = const T &;     ///< Reference to a const element.
+    using iterator = T *;                  ///< Forward iterator type.
+    using const_iterator = const T *;      ///< Const forward iterator type.
+    using reverse_iterator =
+        std::reverse_iterator<iterator>; ///< Reverse iterator type.
+    using const_reverse_iterator = std::reverse_iterator<
+        const_iterator>; ///< Const reverse iterator type.
 
     ///
     /// \brief Default constructor creates an empty span
@@ -157,7 +160,7 @@ public:
         : m_data(c.data()), m_size(static_cast<size_type>(c.size())) {}
 
     ///
-    /// \brief Implicit conversion from span<U> to span<const U>
+    /// \brief Implicit conversion from span\<U\> to span\<const U\>
     ///
     /// \tparam U Element type
     /// \param other Source span

@@ -60,6 +60,8 @@ struct tally {
     ///
     /// \brief Total number of tests recorded.
     ///
+    /// \return Sum of \ref passed and \ref failed.
+    ///
     uint16_t total() const noexcept {
         return static_cast<uint16_t>(passed + failed);
     }
@@ -67,10 +69,15 @@ struct tally {
     ///
     /// \brief \c true when no test in the suite failed.
     ///
+    /// \return \c true if \ref failed is zero.
+    ///
     bool all_passed() const noexcept { return failed == 0; }
 
     ///
     /// \brief Accumulate another tally (used by the orchestrator summary).
+    ///
+    /// \param other Tally to add into this one.
+    /// \return Reference to this tally, after accumulation.
     ///
     tally &operator+=(const tally &other) noexcept {
         passed = static_cast<uint16_t>(passed + other.passed);

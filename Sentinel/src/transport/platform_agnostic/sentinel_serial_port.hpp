@@ -56,6 +56,13 @@ struct serial_config {
     flow_control_mode flow_control{flow_control_mode::none}; ///< Flow control
 };
 
+///
+/// \brief Platform-agnostic serial-port façade (CRTP).
+///
+/// \tparam Implementation Platform-specific implementation (CRTP derived)
+///                        providing the same member functions (e.g.
+///                        \c sentinel::cyhal_uart_port).
+///
 template <typename Implementation>
 class serial_port {
 public:
@@ -66,12 +73,18 @@ public:
     ///
     /// \brief Configure serial port parameters
     ///
+    /// \param config Baud rate, data bits, parity, stop bits, flow control.
+    /// \return Implementation-specific status/result code.
+    ///
     auto configure(const serial_config &config) noexcept {
         return impl().configure(config);
     }
 
     ///
     /// \brief Set baud rate only
+    ///
+    /// \param baud_rate New baud rate in bits per second.
+    /// \return Implementation-specific status/result code.
     ///
     auto set_baud_rate(uint32_t baud_rate) noexcept {
         return impl().set_baud_rate(baud_rate);
@@ -84,10 +97,17 @@ public:
     ///
     /// \brief Write bytes (span)
     ///
+    /// \param tx Span of bytes to transmit.
+    /// \return Implementation-specific status/result code.
+    ///
     auto write(span<const uint8_t> tx) noexcept { return impl().write(tx); }
 
     ///
     /// \brief Write bytes (pointer convenience)
+    ///
+    /// \param tx      Pointer to transmit buffer.
+    /// \param tx_size Number of bytes to transmit.
+    /// \return Implementation-specific status/result code.
     ///
     auto write(const uint8_t *tx, size_t tx_size) noexcept {
         return impl().write(make_cspan(tx, tx_size));
@@ -96,7 +116,11 @@ public:
     ///
     /// \brief Write a single byte
     ///
-    /// \note Routes through the façade to use the span-based implementation.
+    /// \details Routes through the façade to use the span-based
+    ///          implementation.
+    ///
+    /// \param byte Byte value to write.
+    /// \return Implementation-specific status/result code.
     ///
     auto write_byte(uint8_t byte) noexcept {
         return this->write(&byte, sizeof(byte));
@@ -109,12 +133,21 @@ public:
     ///
     /// \brief Read bytes with timeout (span)
     ///
+    /// \param rx         Span for receive buffer.
+    /// \param timeout_ms Timeout in milliseconds.
+    /// \return Implementation-specific status/result code.
+    ///
     auto read(span<uint8_t> rx, uint32_t timeout_ms) noexcept {
         return impl().read(rx, timeout_ms);
     }
 
     ///
     /// \brief Read bytes with timeout (pointer convenience)
+    ///
+    /// \param rx         Pointer to receive buffer.
+    /// \param rx_size    Number of bytes to read.
+    /// \param timeout_ms Timeout in milliseconds.
+    /// \return Implementation-specific status/result code.
     ///
     auto read(uint8_t *rx, size_t rx_size, uint32_t timeout_ms) noexcept {
         return impl().read(make_span(rx, rx_size), timeout_ms);
@@ -123,7 +156,12 @@ public:
     ///
     /// \brief Read a single byte with timeout
     ///
-    /// \note Routes through the façade to use the span-based implementation.
+    /// \details Routes through the façade to use the span-based
+    ///          implementation.
+    ///
+    /// \param byte       Pointer to receive the byte read.
+    /// \param timeout_ms Timeout in milliseconds.
+    /// \return Implementation-specific status/result code.
     ///
     auto read_byte(uint8_t *byte, uint32_t timeout_ms) noexcept {
         return this->read(byte, sizeof(*byte), timeout_ms);
@@ -135,16 +173,19 @@ public:
 
     ///
     /// \brief Bytes available to read (implementation-defined meaning)
+    /// \return Number of bytes available, per the underlying implementation.
     ///
     auto available() const noexcept { return impl().available(); }
 
     ///
     /// \brief Wait for transmit drain/idle
+    /// \return Implementation-specific status/result code.
     ///
     auto flush_tx() noexcept { return impl().flush_tx(); }
 
     ///
     /// \brief Clear receive buffer (discard unread bytes)
+    /// \return Implementation-specific status/result code.
     ///
     auto clear_rx() noexcept { return impl().clear_rx(); }
 
@@ -152,12 +193,6 @@ public:
     // Delay
     // ---------------------------------------------------------------------
 
-    ///
-    /// \brief Delay in milliseconds
-    ///
-    /// \param milliseconds Delay in milliseconds
-    /// \return Implementation-specific status/result code
-    ///
     ///
     /// \brief Delay execution
     ///
@@ -169,13 +204,7 @@ public:
     }
 
     ///
-    /// \brief Delay in microseconds
-    ///
-    /// \param milliseconds Delay in microseconds
-    /// \return Implementation-specific status/result code
-    ///
-    ///
-    /// \brief Delay execution
+    /// \brief Delay execution (microseconds)
     ///
     /// \param microseconds Delay duration in microseconds
     /// \return Implementation-specific status/result code
@@ -191,6 +220,15 @@ public:
     ///
     /// \brief Read until terminal condition (pointer convenience)
     ///
+    /// \tparam Predicate Callable taking a \c uint8_t byte and returning
+    ///                   \c bool (true when the byte satisfies the
+    ///                   terminal condition).
+    /// \param rx         Pointer to receive buffer.
+    /// \param end        Capacity of \p rx in bytes.
+    /// \param is_terminal Predicate tested against each byte read.
+    /// \param timeout_ms Overall timeout in milliseconds.
+    /// \return Number of bytes read into \p rx.
+    ///
     template <typename Predicate>
     size_t read_until(uint8_t *rx, size_t end, Predicate is_terminal,
                       uint32_t timeout_ms) noexcept {
@@ -203,6 +241,14 @@ public:
     /// \details Repeatedly attempts to read 1 byte chunks (with a small
     ///          internal step delay) until the predicate returns true for the
     ///          last byte, the buffer fills, or the timeout elapses.
+    ///
+    /// \tparam Predicate Callable taking a \c uint8_t byte and returning
+    ///                   \c bool (true when the byte satisfies the
+    ///                   terminal condition).
+    /// \param rx         Span for receive buffer.
+    /// \param is_terminal Predicate tested against each byte read.
+    /// \param timeout_ms Overall timeout in milliseconds.
+    /// \return Number of bytes read into \p rx.
     ///
     template <typename Predicate>
     size_t read_until(span<uint8_t> rx, Predicate is_terminal,

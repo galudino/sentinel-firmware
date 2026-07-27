@@ -87,8 +87,8 @@ public:
     /// \details The transport creates a one-slot FreeRTOS response queue
     ///          for itself in this constructor. The bus arbiter
     ///          (\p bus) must have been initialised already, but does
-    ///          not need to have its task spawned yet — \ref task_create
-    ///          on the bus can happen later as long as it happens
+    ///          not need to have its task spawned yet — the arbiter's
+    ///          task can be created later as long as it happens
     ///          before any I²C transaction is attempted through this
     ///          transport.
     ///
@@ -113,7 +113,10 @@ public:
     cyhal_i2c_bus_transport &
     operator=(const cyhal_i2c_bus_transport &) = delete;
 
-    // Movable: transfer ownership of the response queue.
+    ///
+    /// \brief Move-construct, transferring ownership of the response queue.
+    /// \param other Source instance; left with a null response queue.
+    ///
     cyhal_i2c_bus_transport(cyhal_i2c_bus_transport &&other) noexcept
         : m_bus(other.m_bus), m_target_address(other.m_target_address),
           m_response_queue(other.m_response_queue) {
@@ -126,8 +129,17 @@ public:
     // Addressing
     // =====================================================================
 
+    ///
+    /// \brief Get the current I2C target device address.
+    /// \return Current 7-bit I2C target address.
+    ///
     uint16_t target_address() const noexcept { return m_target_address; }
 
+    ///
+    /// \brief Set the I2C target device address.
+    /// \param addr New 7-bit I2C target address.
+    /// \return \c CY_RSLT_SUCCESS (always succeeds).
+    ///
     cy_rslt_t set_target_address(uint16_t addr) noexcept {
         m_target_address = addr;
         return CY_RSLT_SUCCESS;
@@ -164,6 +176,13 @@ public:
     ///          For repeated-start writes followed by a read, use
     ///          \ref write_read instead.
     ///
+    /// \param tx         Pointer to transmit buffer.
+    /// \param size       Number of bytes to transmit.
+    /// \param timeout_ms Per-phase timeout in milliseconds (0 = none).
+    /// \param send_stop  Accepted for API compatibility; always
+    ///                   treated as \c true.
+    /// \return \c cy_rslt_t forwarded from the arbiter's response.
+    ///
     cy_rslt_t write(const uint8_t *tx, size_t size, uint32_t timeout_ms = 0,
                     bool send_stop = true) noexcept {
         sentinel::unused(send_stop);
@@ -183,6 +202,13 @@ public:
     ///
     /// \details \p send_stop is accepted for API compatibility and always
     ///          treated as \c true.
+    ///
+    /// \param rx         Pointer to receive buffer.
+    /// \param size       Number of bytes to read.
+    /// \param timeout_ms Per-phase timeout in milliseconds (0 = none).
+    /// \param send_stop  Accepted for API compatibility; always
+    ///                   treated as \c true.
+    /// \return \c cy_rslt_t forwarded from the arbiter's response.
     ///
     cy_rslt_t read(uint8_t *rx, size_t size, uint32_t timeout_ms = 0,
                    bool send_stop = true) noexcept {
@@ -208,6 +234,19 @@ public:
     ///          repeated-start (no STOP between write and read) and
     ///          STOP after the read, and uses
     ///          \p timeout_on_write as the single per-phase timeout.
+    ///
+    /// \param tx                  Pointer to transmit buffer.
+    /// \param tx_size             Number of bytes to transmit.
+    /// \param rx                  Pointer to receive buffer.
+    /// \param rx_size             Number of bytes to receive.
+    /// \param timeout_on_write    Per-phase timeout in milliseconds; used
+    ///                            as the single timeout for both phases.
+    /// \param timeout_on_read     Accepted for API compatibility; ignored.
+    /// \param send_stop_on_write  Accepted for API compatibility; ignored
+    ///                            (repeated-start is always used).
+    /// \param send_stop_on_read   Accepted for API compatibility; ignored
+    ///                            (STOP is always sent after the read).
+    /// \return \c cy_rslt_t forwarded from the arbiter's response.
     ///
     cy_rslt_t write_read(const uint8_t *tx, size_t tx_size, uint8_t *rx,
                          size_t rx_size, uint32_t timeout_on_write = 0,
@@ -237,6 +276,10 @@ public:
     ///          request via \ref sentinel::task::i2c_bus::submit and
     ///          poll your response queue yourself.
     ///
+    /// \param tx Unused (accepted for interface compatibility).
+    /// \param rx Unused (accepted for interface compatibility).
+    /// \return Always \c CY_RSLT_TYPE_ERROR.
+    ///
     cy_rslt_t transfer_async(sentinel::span<const uint8_t> tx,
                              sentinel::span<uint8_t> rx) noexcept {
         sentinel::unused(tx);
@@ -248,11 +291,21 @@ public:
     // Delay
     // =====================================================================
 
+    ///
+    /// \brief Delay execution (task sleep, not busy-wait).
+    /// \param milliseconds Delay duration in milliseconds.
+    /// \return \c CY_RSLT_SUCCESS (always succeeds).
+    ///
     cy_rslt_t delay(uint32_t milliseconds) noexcept {
         vTaskDelay(pdMS_TO_TICKS(milliseconds));
         return CY_RSLT_SUCCESS;
     }
 
+    ///
+    /// \brief Delay execution (microseconds, busy-wait via CYHAL).
+    /// \param microseconds Delay duration in microseconds.
+    /// \return \c CY_RSLT_SUCCESS (always succeeds).
+    ///
     cy_rslt_t delay_us(uint32_t microseconds) noexcept {
         cyhal_system_delay_us(microseconds);
         return CY_RSLT_SUCCESS;
@@ -268,6 +321,13 @@ public:
     ///
     /// \details Routes through this transport's bus arbiter; \p intf_ptr
     ///          must point to a \ref cyhal_i2c_bus_transport instance.
+    ///
+    /// \param reg_addr Starting register address to read from.
+    /// \param reg_data Pointer to buffer for read data.
+    /// \param length   Number of bytes to read.
+    /// \param intf_ptr Interface pointer; must point to a
+    ///                 \c cyhal_i2c_bus_transport instance.
+    /// \return Bosch API compatible result code (0 = success).
     ///
     static int8_t bosch_read(uint8_t reg_addr, uint8_t *reg_data,
                              uint32_t length, void *intf_ptr) noexcept {
@@ -291,6 +351,14 @@ public:
     ///          call write payload, but a static assertion in the
     ///          implementation guards against the unlikely future case
     ///          of a larger transfer.
+    ///
+    /// \param reg_addr Starting register address to write.
+    /// \param reg_data Pointer to data buffer to write.
+    /// \param length   Number of bytes to write.
+    /// \param intf_ptr Interface pointer; must point to a
+    ///                 \c cyhal_i2c_bus_transport instance.
+    /// \return Bosch API compatible result code (0 = success, -1 on
+    ///         oversized payload or transport failure).
     ///
     static int8_t bosch_write(uint8_t reg_addr, const uint8_t *reg_data,
                               uint32_t length, void *intf_ptr) noexcept {
@@ -317,6 +385,9 @@ public:
     ///          bus access — so this forwards directly to the CYHAL
     ///          microsecond delay.
     ///
+    /// \param period   Delay duration in microseconds.
+    /// \param intf_ptr Unused (accepted for Bosch API compatibility).
+    ///
     static void bosch_delay(uint32_t period, void *intf_ptr) noexcept {
         sentinel::unused(intf_ptr);
         cyhal_system_delay_us(period);
@@ -327,13 +398,19 @@ private:
     /// \brief Submit a request directly to the bus and return the raw
     ///        CYHAL status from the response.
     ///
-    /// \details Lower-level than \ref sentinel::task::i2c_bus::transact:
-    ///          we manage the submit + receive pair ourselves so the
+    /// \details Lower-level than \ref sentinel::task::i2c_bus::transact
+    ///          — we manage the submit + receive pair ourselves so the
     ///          underlying \c cy_rslt_t can be returned verbatim, instead
     ///          of being collapsed into a synthetic success/error code.
     ///          That preserves diagnostic information for callers that
     ///          inspect the result (e.g. the BME280 / DS3231 drivers
     ///          stash it in \c last_error).
+    ///
+    /// \param request Fully populated I2C request (target address, tx/rx
+    ///                spans, timeout, and this transport's response queue).
+    /// \return Raw \c cy_rslt_t from the arbiter's response, or
+    ///         \c CY_RSLT_TYPE_ERROR if the queue is unavailable, submit
+    ///         fails, or the response never arrives.
     ///
     cy_rslt_t exchange(const sentinel::task::i2c_request &request) noexcept {
         // If our response queue failed to allocate (heap exhausted at ctor

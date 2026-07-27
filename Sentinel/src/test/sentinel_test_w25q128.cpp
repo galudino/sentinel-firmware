@@ -12,8 +12,9 @@
 ///          \c fixture that owns the bus-arbitrated SPI transport, mirroring a
 ///          GoogleTest \c TEST_F fixture — the shared resource lives in the
 ///          fixture, not a file-static global. Each test returns \c true on
-///          pass / \c false on fail; \ref run_all constructs the fixture, folds
-///          every outcome into a \ref sentinel::test::tally, and returns it.
+///          pass / \c false on fail; \ref sentinel::test::w25q128::run_all
+///          constructs the fixture, folds every outcome into a
+///          \ref sentinel::test::tally, and returns it.
 ///
 /// \author  galudino
 /// \date    2026-05-18
@@ -49,6 +50,8 @@ namespace {
 ///
 /// \brief Yield long enough for the BLE debug ring buffer to drain.
 ///
+/// \param milliseconds Yield duration in milliseconds.
+///
 inline void yield_for_debug_drain(uint32_t milliseconds) noexcept {
     vTaskDelay(pdMS_TO_TICKS(milliseconds));
 }
@@ -59,7 +62,13 @@ inline void yield_for_debug_drain(uint32_t milliseconds) noexcept {
 using w25q128_t = sentinel::w25q128<sentinel::cyhal_spi_bus_transport>;
 
 ///
-/// \brief Erase + read-back-verify a small region as blank (\c 0xFF).
+/// \brief Read a region back in chunks and confirm every byte is blank
+///        (\c 0xFF).
+///
+/// \param flash   Driver instance to read through.
+/// \param address Starting byte address of the region to check.
+/// \param length  Number of bytes to check.
+/// \return \c true if every byte in the region reads as \c 0xFF.
 ///
 inline bool region_is_blank(w25q128_t &flash, uint32_t address,
                             uint32_t length) noexcept {
@@ -92,21 +101,37 @@ inline bool region_is_blank(w25q128_t &flash, uint32_t address,
 /// \brief Test fixture: owns the bus-arbitrated SPI transport every test shares.
 ///
 /// \details Targets the SCB's flash chip-select line (\c CYBSP_SPI_FLASH_CS).
-///          Constructed fresh by \ref run_all (like a GoogleTest \c SetUp), so
-///          there is no file-static bus global. The transport is inert until
+///          Constructed fresh by \ref sentinel::test::w25q128::run_all (like a
+///          GoogleTest \c SetUp), so there is no file-static bus global. The
+///          transport is inert until
 ///          \c peripheral_initialize() has spawned the arbiter, which the
 ///          orchestrator guarantees by running post-scheduler. When
 ///          BME280-on-SPI lands in issue #2, that suite will own its own
 ///          \c cyhal_spi_bus_transport with SS1.
 ///
 struct fixture {
+    /// Bus-arbitrated SPI transport, shared by every test below.
     sentinel::cyhal_spi_bus_transport w25q128_bus{
         sentinel::resource::cybsp_spi_bus, CYBSP_SPI_FLASH_CS};
 
+    /// \brief Read JEDEC / manufacturer-device / unique IDs and confirm
+    ///        the JEDEC triple is in the known-good list.
+    /// \return \c true if the JEDEC ID matches a known-good entry.
     bool presence_check() noexcept;
+    /// \brief Flip an SR1 bit via a volatile write, read it back, restore it.
+    /// \return \c true if the writable bits round-trip correctly.
     bool status_register_round_trip() noexcept;
+    /// \brief Erase the last sector, verify blank, program a pattern, verify.
+    /// \return \c true if every step succeeds and the readback matches.
     bool erase_program_read() noexcept;
+    /// \brief Erase security register 3, verify blank, program, verify,
+    ///        then erase again to leave it clean.
+    /// \return \c true if the programmed pattern round-trips correctly.
     bool security_register_round_trip() noexcept;
+    /// \brief Enter deep power-down, probe unresponsiveness, then release
+    ///        and confirm full responsiveness.
+    /// \return \c true if release yields the expected device ID and a
+    ///         subsequent JEDEC read matches a known-good entry.
     bool power_down_release() noexcept;
 };
 

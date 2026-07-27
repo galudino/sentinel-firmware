@@ -5,7 +5,7 @@
 /// \details Declares the testbench-side tests for the Power-On Self-Test
 ///          (firmware #35). POST's per-subsystem probes are duck-typed on the
 ///          drivers they test, so the suite drives them with tiny fake driver
-///          doubles — this exercises every result code deterministically,
+///          doubles -- this exercises every result code deterministically,
 ///          off-bench, without needing to physically tamper with hardware. The
 ///          same probe code runs against the real drivers in the application.
 ///
@@ -13,20 +13,20 @@
 ///          reproduce the *logic* of each criterion; the physical trigger
 ///          (disconnect a pin, swap a part, pull the RTC battery) is a manual
 ///          on-bench step documented per test:
-///          - \ref all_pass_path        — every healthy probe passes; summary
+///          - \c all_pass_path        -- every healthy probe passes; summary
 ///            reports all_passed, failure_count 0; the log gets one post_passed.
-///          - \ref bme280_disconnect    — a non-responding BME280 yields
+///          - \c bme280_disconnect    -- a non-responding BME280 yields
 ///            fail_no_ack for the bme280 subsystem.
-///          - \ref w25q128_unknown_jedec— an unknown JEDEC id yields
+///          - \c w25q128_unknown_jedec -- an unknown JEDEC id yields
 ///            fail_wrong_id with the manufacturer byte as detail.
-///          - \ref oscillator_stop      — a set OSF yields fail_self_test and
+///          - \c oscillator_stop      -- a set OSF yields fail_self_test and
 ///            the probe clears the flag.
-///          - \ref degraded_operation   — one forced failure is reported and
+///          - \c degraded_operation   -- one forced failure is reported and
 ///            the summary still enumerates every other subsystem (boot is never
 ///            halted by POST).
-///          - \ref records_failures     — record_results emits exactly one
+///          - \c records_failures     -- record_results emits exactly one
 ///            post_subsystem_failed per failure with the right fields.
-///          - \ref record_store_fallback— when the record store itself fails,
+///          - \c record_store_fallback -- when the record store itself fails,
 ///            no event-log writes are attempted (debug-stream-only fallback).
 ///
 /// \author  galudino
@@ -44,12 +44,12 @@ namespace sentinel::test::post {
 ///
 /// \brief Run the full POST test suite to completion.
 ///
-/// \details Drives every POST probe path against fake driver doubles —
+/// \details Drives every POST probe path against fake driver doubles --
 ///          all-pass, per-subsystem failures, degraded operation, and the
-///          record-store fallback — and returns the pass/fail
+///          record-store fallback -- and returns the pass/fail
 ///          \ref sentinel::test::tally. Run-to-completion (#48): no longer
 ///          self-schedules as a FreeRTOS task; the serial test orchestrator
-///          calls \ref run_all directly.
+///          calls \ref sentinel::test::post::run_all directly.
 ///
 /// \return The suite's pass/fail tally.
 ///

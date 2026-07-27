@@ -72,7 +72,7 @@ EXCLUDE_PATTERNS       = */GeneratedSource/* \
                          */mtb_shared/* \
                          */libs/* \
                          */build/* \
-                         */driver_file_template/* \
+                         *driver_file_template* \
                          */bosch/*
 EXCLUDE_SYMLINKS       = YES
 

@@ -107,7 +107,10 @@ public:
     cyhal_spi_bus_transport &
     operator=(const cyhal_spi_bus_transport &) = delete;
 
-    // Movable: transfer ownership of the response queue.
+    ///
+    /// \brief Move-construct, transferring ownership of the response queue.
+    /// \param other Source instance; left with a null response queue.
+    ///
     cyhal_spi_bus_transport(cyhal_spi_bus_transport &&other) noexcept
         : m_bus(other.m_bus), m_ssel(other.m_ssel),
           m_response_queue(other.m_response_queue) {
@@ -130,6 +133,9 @@ public:
     ///          returns success so the \c byte_transport interface
     ///          contract is satisfied.
     ///
+    /// \param hz Ignored.
+    /// \return \c CY_RSLT_SUCCESS.
+    ///
     cy_rslt_t configure(uint32_t hz) noexcept {
         sentinel::unused(hz);
         return CY_RSLT_SUCCESS;
@@ -139,6 +145,12 @@ public:
     // Pointer-based primitives
     // =====================================================================
 
+    ///
+    /// \brief Write \p size bytes (blocking).
+    /// \param tx   Pointer to transmit buffer.
+    /// \param size Number of bytes to transmit.
+    /// \return \c cy_rslt_t forwarded from the arbiter's response.
+    ///
     cy_rslt_t write(const uint8_t *tx, size_t size) noexcept {
         auto request           = sentinel::task::spi_request{};
         request.ssel           = m_ssel;
@@ -149,6 +161,12 @@ public:
         return exchange(request);
     }
 
+    ///
+    /// \brief Read \p size bytes (blocking).
+    /// \param rx   Pointer to receive buffer.
+    /// \param size Number of bytes to read.
+    /// \return \c cy_rslt_t forwarded from the arbiter's response.
+    ///
     cy_rslt_t read(uint8_t *rx, size_t size) noexcept {
         auto request           = sentinel::task::spi_request{};
         request.ssel           = m_ssel;
@@ -159,6 +177,14 @@ public:
         return exchange(request);
     }
 
+    ///
+    /// \brief Full-duplex write/read (blocking).
+    /// \param tx      Pointer to transmit buffer.
+    /// \param tx_size Number of bytes to transmit.
+    /// \param rx      Pointer to receive buffer.
+    /// \param rx_size Number of bytes to receive.
+    /// \return \c cy_rslt_t forwarded from the arbiter's response.
+    ///
     cy_rslt_t write_read(const uint8_t *tx, size_t tx_size, uint8_t *rx,
                          size_t rx_size) noexcept {
         auto request           = sentinel::task::spi_request{};
@@ -173,11 +199,17 @@ public:
     ///
     /// \brief Full-duplex transfer (blocking).
     ///
-    /// \details Same shape as \ref write_read above — both functions
+    /// \details Same shape as \c write_read above — both functions
     ///          ultimately submit a single \c spi_request to the arbiter
     ///          which calls \c cyhal_spi_transfer. CYHAL handles the
     ///          tx/rx length asymmetry by padding the shorter buffer
     ///          with \c write_fill or discarding extra received bytes.
+    ///
+    /// \param tx      Pointer to transmit buffer.
+    /// \param tx_size Number of bytes to transmit.
+    /// \param rx      Pointer to receive buffer.
+    /// \param rx_size Number of bytes to receive.
+    /// \return \c cy_rslt_t forwarded from the arbiter's response.
     ///
     cy_rslt_t transfer(const uint8_t *tx, size_t tx_size, uint8_t *rx,
                        size_t rx_size) noexcept {
@@ -193,6 +225,12 @@ public:
     ///          \ref sentinel::task::spi_bus::submit and poll your
     ///          response queue yourself if you need async.
     ///
+    /// \param tx      Unused (accepted for interface compatibility).
+    /// \param tx_size Unused (accepted for interface compatibility).
+    /// \param rx      Unused (accepted for interface compatibility).
+    /// \param rx_size Unused (accepted for interface compatibility).
+    /// \return Always \c CY_RSLT_TYPE_ERROR.
+    ///
     cy_rslt_t transfer_async(const uint8_t *tx, size_t tx_size, uint8_t *rx,
                              size_t rx_size) noexcept {
         sentinel::unused(tx);
@@ -206,11 +244,21 @@ public:
     // Delay
     // =====================================================================
 
+    ///
+    /// \brief Delay execution (task sleep, not busy-wait).
+    /// \param milliseconds Delay duration in milliseconds.
+    /// \return \c CY_RSLT_SUCCESS (always succeeds).
+    ///
     cy_rslt_t delay(uint32_t milliseconds) noexcept {
         vTaskDelay(pdMS_TO_TICKS(milliseconds));
         return CY_RSLT_SUCCESS;
     }
 
+    ///
+    /// \brief Delay execution (microseconds, busy-wait via CYHAL).
+    /// \param microseconds Delay duration in microseconds.
+    /// \return \c CY_RSLT_SUCCESS (always succeeds).
+    ///
     cy_rslt_t delay_us(uint32_t microseconds) noexcept {
         cyhal_system_delay_us(microseconds);
         return CY_RSLT_SUCCESS;
@@ -220,6 +268,12 @@ private:
     ///
     /// \brief Submit a request directly to the bus and return the raw
     ///        CYHAL status from the response.
+    ///
+    /// \param request Fully populated SPI request (SS pin, tx/rx spans,
+    ///                write-fill byte, and this transport's response queue).
+    /// \return Raw \c cy_rslt_t from the arbiter's response, or
+    ///         \c CY_RSLT_TYPE_ERROR if submit fails or the response
+    ///         never arrives.
     ///
     cy_rslt_t exchange(const sentinel::task::spi_request &request) noexcept {
         if (m_bus.submit(request) != pdPASS) {

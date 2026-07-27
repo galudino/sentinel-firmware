@@ -9,9 +9,10 @@
 ///          observing a file-static counting notify sink and toggling a
 ///          controllable connection predicate. Steps are ordered and stateful
 ///          (cadence delays, shared task), so they run sequentially inside
-///          \ref all rather than as independent pure bodies — the harness style
-///          otherwise mirrors the POST / device_snapshot suites (report
-///          PASS/FAIL to both the BLE debug stream and the retarget-IO UART).
+///          \ref sentinel::test::snapshot_stream::run_all rather than as
+///          independent pure bodies — the harness style otherwise mirrors
+///          the POST / device_snapshot suites (report PASS/FAIL to both the
+///          BLE debug stream and the retarget-IO UART).
 ///
 ///          \b Why this proves \c populate_is_cache_backed off-bench: the
 ///          stream notifies complete snapshots (\c trailer_magic set, written
@@ -55,14 +56,25 @@ volatile uint16_t g_last_magic   = 0;     ///< Trailer magic of the last snapsho
 volatile bool     g_connected    = true;  ///< Simulated central-connected state.
 
 /// \brief Counting notify sink: records that a complete snapshot was produced.
+/// \param snap Snapshot delivered by the stream task; only \c trailer_magic
+///             is inspected.
 void counting_sink(const device_snapshot &snap) noexcept {
     ++g_notify_count;
     g_last_magic = snap.trailer_magic;
 }
 
 /// \brief Controllable connection predicate (drives \c disconnect_autostop).
+/// \return The current value of \ref g_connected.
 bool controllable_connected() noexcept { return g_connected; }
 
+///
+/// \brief Log a test's PASS/FAIL verdict.
+///
+/// \param name   Test name, printed in the log line.
+/// \param ok     \c true to log PASS, \c false to log FAIL with \p detail.
+/// \param detail Failure reason, logged only when \p ok is \c false.
+/// \return \p ok, unchanged (so callers can fold it directly into a tally).
+///
 bool report(const char *name, bool ok, const char *detail) noexcept {
     if (ok) {
         logi("%s PASS", name);
@@ -72,6 +84,8 @@ bool report(const char *name, bool ok, const char *detail) noexcept {
     return ok;
 }
 
+/// \brief Block the calling task for \p milliseconds.
+/// \param milliseconds Delay duration in milliseconds.
 void delay_ms(uint32_t milliseconds) noexcept {
     vTaskDelay(pdMS_TO_TICKS(milliseconds));
 }

@@ -26,14 +26,16 @@ namespace {
 /// \brief Plausible die-temperature window, in 0.01 °C. Wider than a lab bench
 ///        (to avoid false failures in a cold/warm room) but tight enough to
 ///        catch a broken conversion (e.g. a raw-counts or sign error).
-constexpr int16_t PLAUSIBLE_MIN_CENTI_C = -4000; // -40 °C (operating minimum)
-constexpr int16_t PLAUSIBLE_MAX_CENTI_C = 12500; // 125 °C (operating maximum)
+constexpr int16_t PLAUSIBLE_MIN_CENTI_C = -4000; ///< -40 °C (operating minimum)
+constexpr int16_t PLAUSIBLE_MAX_CENTI_C = 12500; ///< 125 °C (operating maximum)
 
 /// \brief Max spread across a short burst of readings (0.01 °C). The die cannot
 ///        physically swing this far in a few hundred milliseconds; a larger
 ///        spread indicates noise / a config problem.
 constexpr int32_t MAX_BURST_SPREAD_CENTI_C = 1500; // 15 °C
 
+/// \brief Yield long enough for the BLE debug ring buffer to drain.
+/// \param ms Yield duration in milliseconds.
 void yield_for_debug_drain(uint32_t ms) noexcept {
     vTaskDelay(pdMS_TO_TICKS(ms));
 }
@@ -45,6 +47,8 @@ constexpr uint32_t PAST_THROTTLE_MS = 1100;
 
 /// \brief Take a reading (from the cache, filled by the first successful
 ///        \c refresh). Waits out the throttle only if no reading is cached yet.
+/// \param out_centi Receives the cached reading, in 0.01 °C, on success.
+/// \return \c true if a cached reading was obtained within 3 attempts.
 bool read_fresh(int16_t &out_centi) noexcept {
     auto &die = sentinel::drivers::psoc6_die_temperature::instance();
     for (int attempt = 0; attempt < 3; ++attempt) {
@@ -58,6 +62,8 @@ bool read_fresh(int16_t &out_centi) noexcept {
 }
 
 /// \brief Force a \b genuine conversion: wait past the throttle, then refresh.
+/// \param out_centi Receives the fresh reading, in 0.01 °C, on success.
+/// \return \c true if a reading was obtained after the forced refresh.
 bool read_genuine(int16_t &out_centi) noexcept {
     auto &die = sentinel::drivers::psoc6_die_temperature::instance();
     vTaskDelay(pdMS_TO_TICKS(PAST_THROTTLE_MS));
@@ -65,6 +71,8 @@ bool read_genuine(int16_t &out_centi) noexcept {
     return die.cached_centi_c(out_centi);
 }
 
+/// \brief Initialize the PSoC 6 die-temperature driver singleton.
+/// \return \c true if \c initialize() succeeds.
 bool test_initialize() noexcept {
     const bool ok =
         sentinel::drivers::psoc6_die_temperature::instance().initialize();
@@ -76,6 +84,8 @@ bool test_initialize() noexcept {
     return true;
 }
 
+/// \brief Confirm a reading can be produced at all.
+/// \return \c true if \ref read_fresh succeeds.
 bool test_reading_available() noexcept {
     int16_t centi = 0;
     if (!read_fresh(centi)) {
@@ -87,6 +97,9 @@ bool test_reading_available() noexcept {
     return true;
 }
 
+/// \brief Confirm a reading lands within the plausible operating range.
+/// \return \c true if the reading is within
+///         [\ref PLAUSIBLE_MIN_CENTI_C, \ref PLAUSIBLE_MAX_CENTI_C].
 bool test_plausible_range() noexcept {
     int16_t centi = 0;
     if (!read_fresh(centi)) {
@@ -105,6 +118,9 @@ bool test_plausible_range() noexcept {
     return true;
 }
 
+/// \brief Confirm a short burst of genuine readings does not spread too wide.
+/// \return \c true if the min/max spread across 4 readings stays within
+///         \ref MAX_BURST_SPREAD_CENTI_C.
 bool test_stability() noexcept {
     int16_t min_c = 0;
     int16_t max_c = 0;

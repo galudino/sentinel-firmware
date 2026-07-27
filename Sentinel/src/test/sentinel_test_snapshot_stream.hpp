@@ -40,8 +40,9 @@ namespace sentinel::test::snapshot_stream {
 ///          \ref sentinel::task::snapshot_stream_task singleton (idle ↔ stream
 ///          lifecycle, cadence, disconnect auto-stop). Run-to-completion (#48):
 ///          no longer self-schedules as a FreeRTOS task; the serial test
-///          orchestrator calls \ref run_all directly, after the singleton has
-///          been created. Returns the pass/fail \ref sentinel::test::tally.
+///          orchestrator calls \ref sentinel::test::snapshot_stream::run_all
+///          directly, after the singleton has been created. Returns the
+///          pass/fail \ref sentinel::test::tally.
 ///
 /// \return The suite's pass/fail tally.
 ///

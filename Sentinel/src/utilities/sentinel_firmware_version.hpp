@@ -204,7 +204,7 @@ private:
     /// Size: "255.255.255.65535\0" = 18 characters maximum
     char m_buf[18];
 
-    uint8_t m_padding;
+    uint8_t m_padding; ///< Unused alignment padding.
 };
 
 /// \name Firmware Version Management
@@ -230,7 +230,14 @@ constexpr auto current_firmware_version = firmware_version();
 
 namespace detail {
 
+///
 /// \brief constexpr C-string equality, for the version-format regression guard.
+///
+/// \param a First null-terminated string to compare.
+/// \param b Second null-terminated string to compare.
+/// \return \c true if \p a and \p b contain the same characters up to
+///         (and including) their terminating null.
+///
 constexpr bool cstr_equal(const char *a, const char *b) noexcept {
     while (*a != '\0' && *a == *b) {
         ++a;
