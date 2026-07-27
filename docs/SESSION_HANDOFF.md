@@ -20,11 +20,35 @@ than letting them accumulate here.
 
 ---
 
-**Last updated:** 2026-07-27 (session: **#53 Doxygen backfill DONE — tree at 0
-warnings; #57 src/README merged; #58 + #59 filed (Phase II)**). Earlier:
-#56 + #49 on-bench signed off + closed; #6/#45/#55 GATT, #38, #51 merged.
-**NEXT: OTA DFU validation with `sentinel-client` (the Phase I finale);
-end-of-Phase-I clang-format sweep (#53's remaining half).**
+**Last updated:** 2026-07-27 (session: **#53 FULLY DONE + CLOSED** — Doxygen
+backfill (0 warnings) + end-of-Phase-I formatting/convention sweep; docs.yml CI
+added; #58–#64 filed). Earlier: #56 + #49 on-bench signed off + closed;
+#6/#45/#55 GATT, #38, #51 merged. **NEXT: #57 per-directory README fan-out, then
+promote `develop → main`; OTA DFU validation (#63) is the Phase I finale.**
+
+**#53 sweep (this session, merged `5cdb265`, tag `53-format-sweep-history`):**
+`clang-format -i` across `Sentinel/src`; reviewer rules — `RecordT`→`RecordType`,
+classes defined inside `namespace sentinel {}` (no out-of-line qualified defs),
+for-loop postfix / statement prefix, and **record-store reads C-style out-param
+→ `std::optional<T>`** (`record_store`/`ram_record_store`/`system_event_log`/
+`snapshot_persistence`/`gatt_paged` read chain; `read_range` kept its
+caller-array buffer form). Verified: testbench debug + firmware release
+(OTA-signed) link; `doxygen Doxyfile` = 0 warnings. Delivered partly via
+subagent fan-out (test call sites + namespace-nested), parent-fixed the bme280
+alias-ordering + missed `run_boot_sequence` reads that the build caught.
+
+**New issues filed this session:** #60 (CI: build + artifacts), #61 (CI:
+clang-format + doxygen-0-warnings gates — the *enforcement* so docs/style never
+regress, replacing per-phase cleanup), #62 (enable GitHub Pages — needs repo
+public, gated on #53/#57), #63 (**OTA DFU validation vs a known-good Infineon
+host** — Phase I finale; client DFU is a separate `sentinel-client` concern),
+#64 (evaluate `std::expected`/value-or-error error handling — C++23, so a
+`__cplusplus`-gated `result<T,E>` alias for the RPi5/nRF5340 ports).
+
+**Docs are decoupled by design:** Doxygen = code-only API reference (`INPUT =
+Sentinel/src`); the narrative Markdown (#57 READMEs, `docs/architecture/`)
+renders on GitHub. Doxygen HTML is gitignored + published by CI (never committed
+to source). See [[reference_doxygen]].
 
 **THIS SESSION (2026-07-27):**
 - **#53 Doxygen backfill — DONE (merged `90c42dc`, tag
