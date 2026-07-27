@@ -27,7 +27,7 @@
 ///          === The 36-byte invariant ===
 ///
 ///          The \ref sentinel::record_store template stores one fixed-size
-///          \c RecordT. Mixing differently-sized records in one log is not
+///          \c RecordType. Mixing differently-sized records in one log is not
 ///          supported, so EVERY typed view MUST stay exactly 36 bytes. Adding a
 ///          field to a typed view means removing the same number of bytes from
 ///          its \c reserved padding. The per-view \c static_assert enforces it

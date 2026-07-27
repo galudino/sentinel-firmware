@@ -24,13 +24,14 @@
 ///          === On-flash record layout ===
 ///
 ///          Every record is stored in a fixed-size *slot*. The slot begins
-///          with an 8-byte header followed by the caller's \c RecordT payload:
+///          with an 8-byte header followed by the caller's \c RecordType
+///          payload:
 ///
 ///          \code{.unparsed}
 ///          offset 0  : status   (1 byte)  0xFF empty / 0xA5 valid / 0x5A dead
 ///          offset 1  : reserved (3 bytes) padding -> 4-byte align
 ///          offset 4  : sequence (4 bytes) monotonic absolute record index
-///          offset 8  : payload  (sizeof(RecordT) bytes)
+///          offset 8  : payload  (sizeof(RecordType) bytes)
 ///          \endcode
 ///
 ///          The slot size is the smallest power of two that holds the 8-byte
@@ -93,7 +94,7 @@
 
 namespace sentinel {
 
-template <typename RecordT, typename Transport>
+template <typename RecordType, typename Transport>
 class record_store;
 
 } // namespace sentinel
@@ -101,7 +102,7 @@ class record_store;
 ///
 /// \brief Flash-backed circular record store.
 ///
-/// \tparam RecordT   The caller's fixed-size record payload type. Must be
+/// \tparam RecordType   The caller's fixed-size record payload type. Must be
 ///                   trivially copyable, a multiple of 4 bytes in size, and
 ///                   small enough that the 8-byte slot header plus the payload
 ///                   fit within one 256-byte page (i.e. sizeof <= 248).
@@ -109,14 +110,14 @@ class record_store;
 ///                   parameterised over (e.g.
 ///                   \c sentinel::cyhal_spi_bus_transport).
 ///
-template <typename RecordT, typename Transport>
+template <typename RecordType, typename Transport>
 class sentinel::record_store {
-    static_assert(std::is_trivially_copyable_v<RecordT>,
-                  "RecordT must be trivially copyable to live on flash");
-    static_assert(sizeof(RecordT) % 4 == 0,
-                  "RecordT must be a multiple of 4 bytes");
-    static_assert(sizeof(RecordT) <= 248,
-                  "8-byte slot header + RecordT must fit in one 256 B page");
+    static_assert(std::is_trivially_copyable_v<RecordType>,
+                  "RecordType must be trivially copyable to live on flash");
+    static_assert(sizeof(RecordType) % 4 == 0,
+                  "RecordType must be a multiple of 4 bytes");
+    static_assert(sizeof(RecordType) <= 248,
+                  "8-byte slot header + RecordType must fit in one 256 B page");
 
     // Declared first so the static data member SLOT_SIZE (whose initializer
     // is parsed immediately, not in the complete-class context) can call it.
@@ -169,8 +170,8 @@ public:
     static constexpr uint32_t OFFSET_PAYLOAD = 8u;  ///< Payload field offset.
 
     /// Size of a single record slot on flash (power-of-two padded).
-    static constexpr uint32_t SLOT_SIZE =
-        next_power_of_two(HEADER_SIZE + static_cast<uint32_t>(sizeof(RecordT)));
+    static constexpr uint32_t SLOT_SIZE = next_power_of_two(
+        HEADER_SIZE + static_cast<uint32_t>(sizeof(RecordType)));
 
     static_assert(SLOT_SIZE <= 256u,
                   "slot must fit within a single 256 B page");
@@ -343,7 +344,7 @@ public:
     /// \param record The record to store.
     /// \return \c true on success; \c false on error (see \ref last_error()).
     ///
-    bool append(const RecordT &record) noexcept {
+    bool append(const RecordType &record) noexcept {
         if (!m_initialized) {
             m_last_error = err::not_initialized;
             return false;
@@ -375,7 +376,7 @@ public:
     /// \return \c true on success; \c false if \p index is out of range, the
     ///         slot is unexpectedly not valid, or a transport error occurs.
     ///
-    bool read(uint32_t index, RecordT *out) const noexcept {
+    bool read(uint32_t index, RecordType *out) const noexcept {
         if (!m_initialized) {
             m_last_error = err::not_initialized;
             return false;
@@ -386,7 +387,7 @@ public:
         }
 
         const auto slot = index % m_capacity;
-        auto raw = std::array<uint8_t, HEADER_SIZE + sizeof(RecordT)>{};
+        auto raw = std::array<uint8_t, HEADER_SIZE + sizeof(RecordType)>{};
         if (!m_flash.read_data(slot_address(slot),
                                sentinel::make_span(raw.data(), raw.size()))) {
             m_last_error = err::flash_failure;
@@ -398,7 +399,7 @@ public:
             return false;
         }
 
-        std::memcpy(out, raw.data() + OFFSET_PAYLOAD, sizeof(RecordT));
+        std::memcpy(out, raw.data() + OFFSET_PAYLOAD, sizeof(RecordType));
         m_last_error = err::ok;
         return true;
     }
@@ -422,7 +423,7 @@ public:
     /// \param record The record whose payload is written (uncommitted).
     /// \return \c true on success; \c false on error (see \ref last_error()).
     ///
-    bool append_uncommitted_for_test(const RecordT &record) noexcept {
+    bool append_uncommitted_for_test(const RecordType &record) noexcept {
         if (!m_initialized) {
             m_last_error = err::not_initialized;
             return false;
@@ -673,10 +674,10 @@ private:
     /// \param record   Record payload to write.
     /// \return \c true on success; \c false on a flash program failure.
     bool write_payload(uint32_t slot, uint32_t sequence,
-                       const RecordT &record) noexcept {
-        auto buffer = std::array<uint8_t, 4 + sizeof(RecordT)>{};
+                       const RecordType &record) noexcept {
+        auto buffer = std::array<uint8_t, 4 + sizeof(RecordType)>{};
         std::memcpy(buffer.data(), &sequence, sizeof(sequence));
-        std::memcpy(buffer.data() + 4, &record, sizeof(RecordT));
+        std::memcpy(buffer.data() + 4, &record, sizeof(RecordType));
 
         const auto addr = slot_address(slot) + OFFSET_SEQUENCE;
         if (!m_flash.page_program(
