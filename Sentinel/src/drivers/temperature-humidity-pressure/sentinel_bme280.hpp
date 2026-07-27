@@ -71,6 +71,8 @@ extern "C" {
 #include "sentinel_byte_transport.hpp"
 #include "sentinel_utilities.hpp"
 
+#include <algorithm>
+#include <array>
 #include <cstdint>
 #include <optional>
 #include <type_traits>
@@ -140,9 +142,11 @@ public:
     ///
     /// \brief Construct BME280 driver and initialize sensor
     ///
-    /// \details Wires the Bosch \c bme280_dev structure to this transport's
-    ///          \c bosch_read / \c bosch_write / \c bosch_delay statics,
-    ///          performs \c bme280_init() to read factory calibration, issues
+    /// \details Wires the Bosch \c bme280_dev structure to this driver's own
+    ///          \c bosch_read / \c bosch_write / \c bosch_delay adapter statics
+    ///          (which frame register access over the transport's
+    ///          vendor-agnostic byte I/O), performs \c bme280_init() to read
+    ///          factory calibration, issues
     ///          a soft reset, and applies the default configuration described
     ///          in the file header.
     ///
@@ -169,9 +173,9 @@ public:
             m_device.intf = BME280_SPI_INTF;
         }
 
-        m_device.read = Transport::bosch_read;
-        m_device.write = Transport::bosch_write;
-        m_device.delay_us = Transport::bosch_delay;
+        m_device.read = &bme280::bosch_read;
+        m_device.write = &bme280::bosch_write;
+        m_device.delay_us = &bme280::bosch_delay;
         m_device.intf_ptr = &bus;
 
         // Each helper below sets m_last_error; the constructor short-circuits
@@ -593,6 +597,103 @@ private:
             BME280_SEL_FILTER | BME280_SEL_STANDBY);
 
         return set_sensor_settings(settings_sel, settings);
+    }
+
+    // =====================================================================
+    // Bosch Sensortec C-driver adapter (function-pointer ABI)
+    // =====================================================================
+    //
+    // These statics implement the Bosch \c bme280_dev read/write/delay
+    // callback ABI. They live in the driver (not the transport) so the
+    // transports stay vendor-agnostic byte-movers: the adapter knows the
+    // BME280's register-framing convention, then forwards the actual bytes
+    // to the transport's generic read/write/write_read/delay_us. \c intf_ptr
+    // is the transport instance (\c &m_bus, set in the constructor); each
+    // static casts it back to \c Transport* and branches the framing on the
+    // compile-time \ref is_i2c / \ref is_spi tag.
+
+    ///
+    /// \brief Bosch read callback: read \p length bytes starting at
+    ///        \p reg_addr into \p reg_data.
+    ///
+    /// \details I²C frames a register-pointer write followed by a
+    ///          repeated-start read; SPI sets the address MSB (read
+    ///          direction, \c reg_addr | 0x80) then clocks the response.
+    ///
+    /// \param reg_addr Starting register address to read from.
+    /// \param reg_data Destination buffer.
+    /// \param length   Number of bytes to read.
+    /// \param intf_ptr Transport instance (a \c Transport*).
+    /// \return \c 0 on success, \c -1 on transport failure (Bosch ABI).
+    ///
+    static int8_t bosch_read(uint8_t reg_addr, uint8_t *reg_data,
+                             uint32_t length, void *intf_ptr) noexcept {
+        auto *self = static_cast<Transport *>(intf_ptr);
+
+        if constexpr (is_i2c) {
+            auto rc = self->write_read(&reg_addr, sizeof(reg_addr), reg_data,
+                                       length, /*timeout_on_write=*/100,
+                                       /*timeout_on_read=*/100,
+                                       /*send_stop_on_write=*/false,
+                                       /*send_stop_on_read=*/true);
+            return rc == CY_RSLT_SUCCESS ? int8_t{0} : int8_t{-1};
+        } else {
+            auto cmd = static_cast<uint8_t>(reg_addr | 0x80);
+            return static_cast<int8_t>(
+                self->write_read(&cmd, sizeof(cmd), reg_data, length));
+        }
+    }
+
+    ///
+    /// \brief Bosch write callback: write \p length bytes of \p reg_data
+    ///        starting at \p reg_addr.
+    ///
+    /// \details Both protocols emit \c [reg_addr, data...] in one contiguous
+    ///          transfer; SPI clears the address MSB (write direction,
+    ///          \c reg_addr & 0x7F). The 256-byte scratch is comfortably
+    ///          above any BME280 write payload; oversized transfers fail
+    ///          rather than overflow.
+    ///
+    /// \param reg_addr Starting register address to write.
+    /// \param reg_data Source buffer.
+    /// \param length   Number of bytes to write.
+    /// \param intf_ptr Transport instance (a \c Transport*).
+    /// \return \c 0 on success, \c -1 on oversized payload or transport
+    ///         failure (Bosch ABI).
+    ///
+    static int8_t bosch_write(uint8_t reg_addr, const uint8_t *reg_data,
+                              uint32_t length, void *intf_ptr) noexcept {
+        auto *self = static_cast<Transport *>(intf_ptr);
+
+        auto buffer = std::array<uint8_t, 256>{};
+        if (length + 1 > buffer.size()) {
+            return -1;
+        }
+        std::copy(reg_data, reg_data + length, buffer.data() + 1);
+
+        if constexpr (is_i2c) {
+            buffer[0] = reg_addr;
+            auto rc = self->write(buffer.data(), length + 1,
+                                  /*timeout_ms=*/100, /*send_stop=*/true);
+            return rc == CY_RSLT_SUCCESS ? int8_t{0} : int8_t{-1};
+        } else {
+            buffer[0] = static_cast<uint8_t>(reg_addr & 0x7F);
+            return static_cast<int8_t>(self->write(buffer.data(), length + 1));
+        }
+    }
+
+    ///
+    /// \brief Bosch delay callback: busy-wait \p period microseconds.
+    ///
+    /// \details Forwards to the transport's microsecond delay; no bus access
+    ///          is involved.
+    ///
+    /// \param period   Delay duration in microseconds.
+    /// \param intf_ptr Transport instance (a \c Transport*).
+    ///
+    static void bosch_delay(uint32_t period, void *intf_ptr) noexcept {
+        auto *self = static_cast<Transport *>(intf_ptr);
+        self->delay_us(period);
     }
 
     Transport &m_bus;              ///< Non-owning reference to the transport.
