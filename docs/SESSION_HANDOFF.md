@@ -99,6 +99,24 @@ to source). See [[reference_doxygen]].
   Backlog.** The exhaustive destructive testbench stays a separate app
   (decision #15); #59 is the safe, live-unit "more involved POST".
 
+**⚠️ RECURRED 2026-07-27 (post-#65 bench):** the marginal SPI-flash connection is
+back — W25Q128 3/5 (`erase_program_read` "post-erase not blank, last_err=0";
+`security_register_round_trip` byte mismatch) + record_store 0/7 (garbage
+head/tail from the init scan; read `-4`). **Not a code regression:** #65 never
+touched the flash path (W25Q128/record_store run over `cyhal_spi_bus_transport`,
+untouched; the direct `cyhal_spi_transport` #65 edited is instantiated nowhere),
+and **BME280 passed 4/4 on the wire — #65 AC #4 SIGNED OFF**. Physical signature
+confirmed: (a) RAM-backed `system_event_log` **8/8** = record_store logic is fine,
+only the flash instance fails; (b) corruption **moves every run** (security byte 0
+then byte 11 = single-bit flip 0x67→0x77; record_store tail 15/2/128); (c) SPI
+HAL returns success (`last_err=0`) but data is wrong; (d) short transactions pass
+(JEDEC/SR1/power-down), long/multi-byte ones corrupt. **Now fails on both reset
+AND reflash** → not a power-up/ready sequencing gap → degraded physical contact.
+**RESOLVED same day → 47/47, zero code change:** moved the SPI **VCC/GND jumpers to
+different sockets on the same power rail** — the prior sockets were **worn** (loose
+grip). Root cause confirmed = breadboard socket contact, not the rail/leads/
+decoupling. (So #65 AC #4 stands signed off; the flash suite is green again.)
+
 **⚠️ BENCH RELIABILITY WATCH — marginal SPI (flash) connection.** The testbench
 first came up with **5 failures** (W25Q128 `erase_program_read` + 4 flash-backed
 `record_store` tests: `read -4`/`count=0`), then — with **zero code change**,
