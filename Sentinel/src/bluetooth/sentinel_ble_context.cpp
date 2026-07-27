@@ -102,18 +102,14 @@ wiced_result_t ble_context::stack_initialize() noexcept {
 }
 
 wiced_bt_gatt_status_t ble_context::connection_event_handler(
-    wiced_bt_gatt_connection_status_t *connection_status) {
+    const wiced_bt_gatt_connection_status_t &connection_status) {
     auto status = wiced_bt_gatt_status_e::WICED_BT_GATT_ERROR;
     auto result = wiced_result_t::WICED_BT_ERROR;
 
-    if (connection_status == nullptr) {
-        return status;
-    }
+    if (connection_status.connected) {
+        m_connection_id = connection_status.conn_id;
 
-    if (connection_status->connected) {
-        m_connection_id = connection_status->conn_id;
-
-        std::copy_n(connection_status->bd_addr, BD_ADDR_LEN,
+        std::copy_n(connection_status.bd_addr, BD_ADDR_LEN,
                     m_peer_address.begin());
 
         m_connection_state = state::connected;
@@ -191,14 +187,14 @@ cy_rslt_t ble_context::ota_agent_initialize() noexcept {
 
 wiced_bt_gatt_status_t
 ble_context::ota_agent_write_handler(wiced_bt_gatt_event_data_t *event_data,
-                                     uint16_t *error_handle) noexcept {
+                                     uint16_t &error_handle) noexcept {
     auto *write_request = &event_data->attribute_request.data.write_req;
 
     cy_rslt_t result = cy_en_rslt_type_t::CY_RSLT_TYPE_ERROR;
 
     auto gatt_status = wiced_bt_gatt_status_e::WICED_BT_GATT_SUCCESS;
 
-    *error_handle = write_request->handle;
+    error_handle = write_request->handle;
 
     CY_ASSERT((event_data != nullptr) && (write_request != nullptr));
 
@@ -339,7 +335,6 @@ wiced_bt_dev_status_t ble_context::stack_management_callback(
     wiced_bt_management_evt_data_t *event_data) noexcept {
     auto result = wiced_result_t::WICED_BT_ERROR;
     wiced_bt_device_address_t device_address{};
-    wiced_bt_ble_advert_mode_t *advertisement_mode = nullptr;
     wiced_bt_dev_encryption_status_t *encryption_status = nullptr;
 
     switch (event) {
@@ -426,9 +421,8 @@ wiced_bt_dev_status_t ble_context::stack_management_callback(
         break;
 
     case wiced_bt_management_evt_e::BTM_BLE_ADVERT_STATE_CHANGED_EVT:
-        advertisement_mode = &event_data->ble_advert_state_changed;
-
-        ble_context_object.set_advertising_mode(advertisement_mode);
+        ble_context_object.set_advertising_mode(
+            event_data->ble_advert_state_changed);
         ble_context_object.update_advertising_led();
 
         result = wiced_result_t::WICED_BT_SUCCESS;

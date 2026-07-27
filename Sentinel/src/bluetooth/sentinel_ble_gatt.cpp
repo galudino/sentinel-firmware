@@ -146,11 +146,11 @@ wiced_bt_gatt_status_t sentinel::ble_gatt_event_callback(
     switch (event) {
     case wiced_bt_gatt_evt_t::GATT_CONNECTION_STATUS_EVT:
         status = ble_context_object.connection_event_handler(
-            &event_data->connection_status);
+            event_data->connection_status);
         break;
 
     case wiced_bt_gatt_evt_t::GATT_ATTRIBUTE_REQUEST_EVT:
-        status = ble_gatt_event_handler(event_data, &error_handle);
+        status = ble_gatt_event_handler(event_data, error_handle);
 
         if (status != wiced_bt_gatt_status_e::WICED_BT_GATT_SUCCESS) {
             wiced_bt_gatt_server_send_error_rsp(attr_request->conn_id,
@@ -193,7 +193,7 @@ wiced_bt_gatt_status_t sentinel::ble_gatt_event_callback(
 
 wiced_bt_gatt_status_t
 sentinel::ble_gatt_event_handler(wiced_bt_gatt_event_data_t *event_data,
-                                 uint16_t *error_handle) noexcept {
+                                 uint16_t &error_handle) noexcept {
     auto status = wiced_bt_gatt_status_t{};
     auto *attr_request = &event_data->attribute_request;
 
@@ -281,13 +281,13 @@ sentinel::ble_gatt_event_handler(wiced_bt_gatt_event_data_t *event_data,
 wiced_bt_gatt_status_t sentinel::ble_gatt_request_read_handler(
     uint16_t connection_id, wiced_bt_gatt_opcode_t opcode,
     wiced_bt_gatt_read_t *read_request, uint16_t length_requested,
-    uint16_t *error_handle) noexcept {
+    uint16_t &error_handle) noexcept {
     auto *attribute = static_cast<gatt_db_lookup_table_t *>(nullptr);
     auto attr_length_to_copy = uint16_t{};
     auto length_to_send = uint16_t{};
     auto *attribute_data = static_cast<uint8_t *>(nullptr);
 
-    *error_handle = read_request->handle;
+    error_handle = read_request->handle;
 
     // Refresh paged Snapshot History / System Event Log values from their
     // record stores just before responding (#6). A no-op for every other
@@ -316,7 +316,7 @@ wiced_bt_gatt_status_t sentinel::ble_gatt_request_read_handler(
 wiced_bt_gatt_status_t sentinel::ble_gatt_request_read_by_type_handler(
     uint16_t connection_id, wiced_bt_gatt_opcode_t opcode,
     wiced_bt_gatt_read_by_type_t *read_request, uint16_t length_requested,
-    uint16_t *error_handle) noexcept {
+    uint16_t &error_handle) noexcept {
     gatt_db_lookup_table_t *attribute = nullptr;
 
     auto last_handle = uint16_t{};
@@ -334,7 +334,7 @@ wiced_bt_gatt_status_t sentinel::ble_gatt_request_read_by_type_handler(
     }
 
     while (true) {
-        *error_handle = attr_handle;
+        error_handle = attr_handle;
         last_handle = attr_handle;
 
         attr_handle = wiced_bt_gatt_find_handle_by_type(
@@ -379,7 +379,7 @@ wiced_bt_gatt_status_t sentinel::ble_gatt_request_read_by_type_handler(
 wiced_bt_gatt_status_t sentinel::ble_gatt_request_read_multi_handler(
     uint16_t connection_id, wiced_bt_gatt_opcode_t opcode,
     wiced_bt_gatt_read_multiple_req_t *read_multiple_request,
-    uint16_t length_requested, uint16_t *error_handle) noexcept {
+    uint16_t length_requested, uint16_t &error_handle) noexcept {
     auto *attribute = static_cast<gatt_db_lookup_table_t *>(nullptr);
 
     auto *response = static_cast<uint8_t *>(std::malloc(length_requested));
@@ -389,7 +389,7 @@ wiced_bt_gatt_status_t sentinel::ble_gatt_request_read_multi_handler(
 
     auto used = 0;
 
-    *error_handle = handle;
+    error_handle = handle;
 
     if (response == nullptr) {
         return wiced_bt_gatt_status_e::WICED_BT_GATT_INVALID_HANDLE;
@@ -398,7 +398,7 @@ wiced_bt_gatt_status_t sentinel::ble_gatt_request_read_multi_handler(
     for (auto i = 0; i < read_multiple_request->num_handles; i++) {
         handle = wiced_bt_gatt_get_handle_from_stream(
             read_multiple_request->p_handle_stream, i);
-        *error_handle = handle;
+        error_handle = handle;
 
         if ((attribute = ble_gatt_db_find_by_handle(handle)) == nullptr) {
             std::free(response);
@@ -431,10 +431,10 @@ wiced_bt_gatt_status_t sentinel::ble_gatt_request_read_multi_handler(
 
 wiced_bt_gatt_status_t
 sentinel::ble_gatt_command_write_handler(wiced_bt_gatt_event_data_t *event_data,
-                                         uint16_t *error_handle) noexcept {
+                                         uint16_t &error_handle) noexcept {
     auto *write_request = &event_data->attribute_request.data.write_req;
 
-    *error_handle = write_request->handle;
+    error_handle = write_request->handle;
 
     CY_ASSERT((event_data != nullptr) && (write_request != nullptr));
 
