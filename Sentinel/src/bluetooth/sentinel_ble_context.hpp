@@ -125,17 +125,15 @@ public:
     /// restarts advertising on disconnection. Updates the advertising LED to
     /// reflect the current state.
     ///
-    /// \param connection_status Pointer to connection status structure
-    /// containing
-    ///        connection state, connection ID, and peer address
+    /// \param connection_status Reference to the connection status structure
+    ///        containing connection state, connection ID, and peer address.
     ///
     /// \return wiced_bt_gatt_status_t WICED_BT_GATT_SUCCESS if handled
-    /// successfully,
-    ///         WICED_BT_GATT_ERROR if connection_status is null. Assertion
-    ///         triggered if advertising restart fails after disconnection.
+    ///         successfully. Assertion triggered if advertising restart fails
+    ///         after disconnection.
     ///
     wiced_bt_gatt_status_t connection_event_handler(
-        wiced_bt_gatt_connection_status_t *connection_status);
+        const wiced_bt_gatt_connection_status_t &connection_status);
 
     ///
     /// \brief Update advertising LED based on current state
@@ -154,13 +152,12 @@ public:
     ///
     /// \brief Set advertising/connection state
     ///
-    /// \param advertisement_mode Pointer to advertisement mode
+    /// \param advertisement_mode The current advertisement mode.
     ///
     void set_advertising_mode(
-        wiced_bt_ble_advert_mode_t *advertisement_mode) noexcept {
+        wiced_bt_ble_advert_mode_t advertisement_mode) noexcept {
         m_connection_state =
-            *advertisement_mode ==
-                    wiced_bt_ble_advert_mode_e::BTM_BLE_ADVERT_OFF
+            advertisement_mode == wiced_bt_ble_advert_mode_e::BTM_BLE_ADVERT_OFF
                 ? (m_connection_id == 0 ? state::disconnected_not_advertising
                                         : state::connected)
                 : state::disconnected_and_advertising;
@@ -188,7 +185,8 @@ public:
     ///
     /// \param event_data Pointer to GATT event data containing write request
     /// details
-    /// \param error_handle Pointer to error handle, set to the attribute handle
+    /// \param error_handle Reference to error handle, set to the attribute
+    /// handle
     ///        that caused an error for error reporting
     ///
     /// \return wiced_bt_gatt_status_t WICED_BT_GATT_SUCCESS if handled
@@ -198,7 +196,7 @@ public:
     ///
     wiced_bt_gatt_status_t
     ota_agent_write_handler(wiced_bt_gatt_event_data_t *event_data,
-                            uint16_t *error_handle) noexcept;
+                            uint16_t &error_handle) noexcept;
 
     ///
     /// \brief Handle OTA operation confirmation
