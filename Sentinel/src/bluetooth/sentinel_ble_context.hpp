@@ -287,6 +287,12 @@ private:
         m_connection_state = state::disconnected_not_advertising;
 
         m_mtu = 23; // Default MTU before negotiation
+
+        // OTA control-point CCCD (notify/indicate flags). Initialized once here
+        // at stack bring-up; thereafter it is owned by the client's CCCD write
+        // and must survive until the PREPARE command reads it (see the note in
+        // ota_value_initialize()).
+        m_ota_config_descriptor = {};
     }
 
     ///
@@ -302,7 +308,14 @@ private:
         m_connection_type = cy_ota_connection_t::CY_OTA_CONNECTION_BLE;
         m_reboot_at_end = true;
 
-        m_ota_config_descriptor = {};
+        // NOTE: m_ota_config_descriptor is intentionally NOT reset here. The
+        // client enables the control-point CCCD (notify/indicate) BEFORE it
+        // writes the PREPARE command, and this function runs at the *start* of
+        // PREPARE (via ota_agent_initialize()). Resetting it here clobbered the
+        // descriptor the client just set, so cy_ota_ble_download_prepare()
+        // received 0x0, its prepare-response indication failed ("Unknown BT
+        // descriptor 0x0" -> 0x8787), and the OTA aborted at 0% (#63). It is
+        // initialized once at stack bring-up in default_value_initialize().
 
         // OTA Agent parameters - used for ALL transport types
         m_ota_agent_params = {
