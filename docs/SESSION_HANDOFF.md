@@ -20,11 +20,28 @@ than letting them accumulate here.
 
 ---
 
-**Last updated:** 2026-07-27 (session: **#53 FULLY DONE + CLOSED** — Doxygen
-backfill (0 warnings) + end-of-Phase-I formatting/convention sweep; docs.yml CI
-added; #58–#64 filed). Earlier: #56 + #49 on-bench signed off + closed;
-#6/#45/#55 GATT, #38, #51 merged. **NEXT: #57 per-directory README fan-out, then
-promote `develop → main`; OTA DFU validation (#63) is the Phase I finale.**
+**Last updated:** 2026-07-27 (session: **#65 DONE** — Bosch C-driver adapter
+moved out of the transports into the bme280 driver; **#57 per-directory README
+fan-out** in progress; then promote `develop → main`). Earlier: **#53 FULLY DONE
++ CLOSED** — Doxygen backfill (0 warnings) + end-of-Phase-I formatting/convention
+sweep; docs.yml CI added; #58–#64 filed. #56 + #49 on-bench signed off + closed;
+#6/#45/#55 GATT, #38, #51 merged. **NEXT: OTA DFU validation (#63) is the Phase I
+finale.**
+
+**#65 (this session — merged `develop`, tag `65-bosch-adapter-history`; issue
+closed):** the `byte_transport` CRTP base + all three CYHAL transports carried
+static `bosch_read`/`bosch_write`/`bosch_delay` (Bosch Sensortec function-pointer
+ABI) — an inverted dependency (reusable transport depending on a sensor-specific
+vendor lib). Moved the **entire** adapter into `bme280<Transport>` as private
+statics that cast `intf_ptr` back to `Transport*` and branch the register framing
+on the compile-time `is_i2c`/`is_spi` tag over the transport's generic
+`read`/`write`/`write_read`/`delay_us`. Transports are now vendor-agnostic
+byte-movers — **`grep bosch` under `transport/` is empty**. Wire framing preserved
+byte-for-byte on the bme280 I²C bus-transport path (net −201 LOC: one adapter
+replaces four duplicated copies). **Builds:** testbench release + firmware release
+both link + OTA-sign clean. **On-bench BME280 re-verification PENDING** (AC #4 —
+this changes the bytes on the wire: chip-id 0x60, soft-reset, settings round-trip,
+a plausible T/H/P sample).
 
 **#53 sweep (this session, merged `5cdb265`, tag `53-format-sweep-history`):**
 `clang-format -i` across `Sentinel/src`; reviewer rules — `RecordT`→`RecordType`,
