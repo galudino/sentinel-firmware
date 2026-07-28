@@ -20,10 +20,55 @@ than letting them accumulate here.
 
 ---
 
-**Last updated:** 2026-07-27 (session: **#63 OTA DFU VALIDATED — Phase I
-finale DONE + CLOSED**; #65 + #57 also done + promoted). Earlier this session:
-#65 Bosch adapter → bme280, #57 per-dir READMEs, #53 Doxygen+sweep, #56/#49
-flash, #6/#45/#55 GATT, #38/#51. **Phase I MVP OTA path is working end-to-end.**
+**Last updated:** 2026-07-27 (late) — **PHASE I WRAPPED; repo is PUBLIC.**
+This session: #63 OTA DFU validated + closed (3 bugs, see below), #65 Bosch
+adapter, #57 READMEs, #53 Doxygen+sweep, #56/#49 flash, #6/#45/#55 GATT, #38/#51.
+**Phase I milestone CLOSED (33/33 issues done); board clean (0 closed-but-not-Done).**
+
+**⏭️ PICK UP HERE (next session):**
+1. **Promote + push:** `develop` is **ahead of `main`** by the v1.0.0 versioning
+   commit (`a16d232`) + this handoff. `git checkout main && git merge --no-ff
+   develop && git checkout develop`, then `git push origin develop main`.
+   (`develop`/`main` were reconciled to `04dc5a7` earlier this session; a stray
+   run of #63 commits had landed on `main` directly — now both had all fixes.)
+2. **Stand up #60 CI** (build firmware+testbench, publish `.bin`/combined `.hex`
+   + signed OTA image as artifacts) using the **version wiring** below. Then #61
+   (clang-format + doxygen-0-warnings gates).
+3. **#65 AC #4** bench re-verify still pending (BME280 on the wire). **#66**
+   (migrate ota-update → v4.x, retire our patch) = Phase II.
+
+**Versioning (DONE this session, `a16d232`):** default firmware version bumped
+**0.0.0.1 → 1.0.0.0** (public Phase I MVP). `major.minor.patch` are **human-owned**
+(bump per the `sentinel_firmware_version.hpp` guidelines: major=overhaul,
+minor=related-feature-set, patch=single feature/fix); **`build` is CI-owned.**
+`firmware_version::build()` was widened `uint8_t → uint16_t` (it silently truncated
+the 16-bit build); `device_snapshot.firmware_build` (uint16) is now full-width.
+
+**CI version wiring (sketch, for #60) — build number = commit count, NOT 0/1:**
+```yaml
+# In the firmware build job, before building:
+- id: ver
+  run: echo "build=$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
+# Pass to the build (Makefile OTA_APP_VERSION_* are `?=`, so env overrides win):
+env:
+  OTA_APP_VERSION_BUILD: ${{ steps.ver.outputs.build }}
+  # OTA_APP_VERSION_MAJOR/MINOR/PATCH: taken from Sentinel/Makefile defaults
+  #   (1.0.0) — humans bump those in the Makefile (or move to a VERSION file/tag).
+```
+`git rev-list --count HEAD` is stateless + monotonic (a few hundred now, safe in
+the uint16 field for years). It is **your commit count**, so it does not "start at
+0 or 1" — it's whatever HEAD's count is. If you want it to *reset per release*,
+use `git rev-list --count <last-version-tag>..HEAD` (0 right after you tag
+`v1.0.0`). Recommended: total count. **imgtool build is uint32** (huge headroom);
+the on-device `firmware_version` build is uint16 — keep the CI build < 65535
+(commit-count easily does).
+
+**GitHub Actions / Pages (FIXED this session):** all prior Actions runs failed at
+the **Deploy-to-Pages** step because Pages was never enabled (was gated on the
+repo being public — #62). Now public → enabled Pages with **source = GitHub
+Actions** (`POST /repos/.../pages -f build_type=workflow`); re-ran the Docs
+workflow → **success**. Doxygen site live at
+**https://galudino.github.io/sentinel-firmware/**. #62 can be closed.
 
 **#63 — OTA DFU (BLE MCUBoot) VALIDATED + CLOSED.** Firmware OTA'd over BLE
 (AIROC `btsdk-peer-apps-ota` iOS host) → MCUBoot swap → new image booted
