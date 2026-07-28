@@ -63,9 +63,8 @@ inline void set_serial_number(uint32_t serial) noexcept {
 ///        major, minor, patch, build[2]).
 /// \param v Firmware version to encode into the characteristic.
 inline void set_firmware_version(const sentinel::firmware_version &v) noexcept {
-    // build() truncates to 8 bits in the current firmware_version API; array()
-    // carries the full 16-bit build, matching the 5-byte wire struct (#6).
-    const auto build = v.array()[3];
+    // build() returns the full 16-bit value, matching the 5-byte wire struct (#6).
+    const auto build = v.build();
     uint8_t buf[5] = {v.major(), v.minor(), v.patch(),
                       static_cast<uint8_t>(build & 0xFFu),
                       static_cast<uint8_t>((build >> 8) & 0xFFu)};
