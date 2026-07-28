@@ -92,8 +92,8 @@ public:
     constexpr uint8_t patch() const { return m_patch; }
 
     /// \brief Get build version component
-    /// \return Build version number (0-255)
-    constexpr uint8_t build() const { return m_build; }
+    /// \return Build version number (0-65535)
+    constexpr uint16_t build() const { return m_build; }
 
     ///
     /// \brief Get version as null-terminated C string
