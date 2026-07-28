@@ -34,8 +34,14 @@ adapter, #57 READMEs, #53 Doxygen+sweep, #56/#49 flash, #6/#45/#55 GATT, #38/#51
 2. **Stand up #60 CI** (build firmware+testbench, publish `.bin`/combined `.hex`
    + signed OTA image as artifacts) using the **version wiring** below. Then #61
    (clang-format + doxygen-0-warnings gates).
-3. **#65 AC #4** bench re-verify still pending (BME280 on the wire). **#66**
-   (migrate ota-update → v4.x, retire our patch) = Phase II.
+3. **#66** (migrate ota-update → v4.x, retire our patch) = Phase II. (#65 AC #4
+   — BME280 on the wire — was signed off during the flash-flake bench, 4/4;
+   #65 is closed. Nothing else is left from Phase I.)
+
+**🧊 FREEZE:** `sentinel-firmware` is a stable public **v1.0.0** and is being held
+as-is while `sentinel-client` is the active work. **Do not touch the firmware
+except for a genuinely critical fix** (build-breaker, security, or a bug that
+blocks the client). All 25/2/2 open issues are Phase II/III/IV — future, not now.
 
 **Versioning (DONE this session, `a16d232`):** default firmware version bumped
 **0.0.0.1 → 1.0.0.0** (public Phase I MVP). `major.minor.patch` are **human-owned**
