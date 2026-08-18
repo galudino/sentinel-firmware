@@ -20,6 +20,32 @@ than letting them accumulate here.
 
 ---
 
+**Last updated:** 2026-08-18 — **#67 BLE advertising fix landed on `develop`
+(the sanctioned break in the freeze — it blocks the client), and CI #60 scoped.**
+
+- **`d1408d9` #67 — service-filtered discovery:** the board was undiscoverable by
+  an iOS `scanForPeripherals(withServices:)` filtered on a Sentinel service — the
+  advertisement only carried the 16-bit Battery UUID (0x180F), none of the custom
+  128-bit service UUIDs. Fix (`design.cybt` + regenerated `cycfg_gap.c`, which is
+  a gitignored build product): advertise **Flags + the System 128-bit UUID**
+  (`11A3488D-…-F166`) in the **primary** packet, move the Complete Local Name to a
+  new **scan-response** packet, drop the dead **Appearance** (0x0000); primary-packet
+  budget 35 → 21 B. `sentinel_ble_context.cpp`: added
+  `wiced_bt_ble_set_raw_scan_response_data(...)` in `ble_start_advertising()`
+  (disconnect re-advertise was already wired). **Regen is headless** —
+  `bt-configurator/bt-configurator-cli -c src/design.cybt -o src/GeneratedSource`
+  (no GUI; round-trips byte-for-byte). Version stays 1.0.0. Builds (link OK; the
+  imgtool `click` sign step fails benignly locally). **⏭️ Remaining: on-bench
+  iOS/nRF service-filtered discovery check on the System UUID.** Client side was
+  narrowed to scan the System UUID only (client `develop` `6a9314f`).
+- **CI #60 (Phase II) — scoped, still deferred:** confirmed CI publishes **no**
+  firmware releases today (only the Pages/Doxygen workflow). Full design notes +
+  the toolchain-provisioning blocker (only the Infineon-account-gated MTB *tools
+  package* is non-automatable; ARM GCC, getlibs, signing venv are public) +
+  artifact policy (**build Debug+Release, publish Release only**) are cataloged in
+  a comment on #60. Runner choice (hosted-Linux-with-seeded-tarball vs
+  self-hosted) is the open decision there.
+
 **Last updated:** 2026-07-27 (late) — **PHASE I WRAPPED; repo is PUBLIC.**
 This session: #63 OTA DFU validated + closed (3 bugs, see below), #65 Bosch
 adapter, #57 READMEs, #53 Doxygen+sweep, #56/#49 flash, #6/#45/#55 GATT, #38/#51.

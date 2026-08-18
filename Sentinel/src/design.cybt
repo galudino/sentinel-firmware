@@ -3269,12 +3269,13 @@
                 <AdvertisementPacket>
                     <Property id="AdFlags" value="true"/>
                     <Property id="DiscoveryMode" value="General"/>
+                    <Property id="AdServiceUuid" value="true"/>
+                    <Property id="ServiceUuid" value="{f84adea3-5e3a-472a-aa86-e9a8d4ee6f31}"/>
+                </AdvertisementPacket>
+                <ScanResponsePacket>
                     <Property id="AdLocalName" value="true"/>
                     <Property id="LocalNameType" value="Complete"/>
-                    <Property id="AdServiceUuid" value="true"/>
-                    <Property id="ServiceUuid" value="{66984d87-8206-44ca-ac8d-2a7ea4ab45f4}"/>
-                    <Property id="AdAppearance" value="true"/>
-                </AdvertisementPacket>
+                </ScanResponsePacket>
             </PeripheralConfiguration>
         </PeripheralConfigurations>
         <SecurityConfigurations>
