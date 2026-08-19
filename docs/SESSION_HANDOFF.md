@@ -20,6 +20,41 @@ than letting them accumulate here.
 
 ---
 
+**Last updated:** 2026-08-19 — **1.0.1 cut: record-store resilience + build-script
+fixes.** First patch on the public 1.0.0 baseline. Squash-merged to `develop` and
+`main`; version bumped in `Sentinel/Makefile` (`OTA_APP_VERSION_PATCH=1`; BUILD
+stays CI-owned). Testbench **48/48 on hardware**.
+
+- **`record_store` resilience (root-cause guard for the snapshot count underflow).**
+  The device reported a garbage snapshot count (`4294967252` = a `uint32` −44):
+  `initialize_full_scan()` trusted a slot that read `STATUS_VALID` over an erased
+  `0xFFFFFFFF` sequence, so `head = max_seq + 1` overflowed to 0 and `count()`
+  underflowed. Fix in `sentinel_record_store.hpp`: (1) a **format descriptor** in
+  each region's last sector (magic + layout version + slot/record size) — on boot
+  a missing/mismatched descriptor means stale/foreign flash, so the region is
+  **reformatted** (`erase_all` now stamps the descriptor) instead of scanned; (2)
+  the scan **skips `0xFFFFFFFF` sequences**; (3) `count()` is **clamped to
+  capacity**. Costs one sector of capacity per region; first boot on 1.0.1
+  reformats both stores once (heals the corrupted snapshot region). Tests: the
+  record-store scratch region went 2→3 sectors; all record-store cases pass.
+- **The corruption's *proximate* cause was marginal SPI wiring**, not firmware —
+  the W25Q128 erase was intermittently failing/garbling on the breadboard (erase
+  is the highest-current op; reads/register-writes passed). Re-seating the SPI
+  power/ground fixed the bench (48/48). Added a **read-only `protection_diagnostic`**
+  to the W25Q128 testbench (dumps SR1/2/3 + WEL-after-WREN) that ruled out flash
+  write-protection during the hunt — kept as a permanent flash-health probe. See
+  [`architecture/hardware-bench.md`](architecture/hardware-bench.md).
+- **Build-script fixes (`Sentinel/scripts/`).** The two **testbench** combine
+  scripts looked in `third_party/` (underscore) while MCUBootApp builds to
+  `third-party/` (hyphen) → `srec_cat … No such file`. Fixed both, and hardened
+  the whole 14-script build pipeline: `#!/usr/bin/env bash` + `set -eo pipefail`
+  (genuine failures now abort instead of silently falling through to a misleading
+  combine error), and the mcuboot toolchain path is now env-overridable
+  (`MCUBOOT_GCC_PATH`, `$HOME` default) for CI. Verified end-to-end: the full
+  `build-combined-…-testbench-release.sh` produces the combined image, exit 0.
+
+---
+
 **Last updated:** 2026-08-18 — **#67 BLE advertising fix landed on `develop`
 (the sanctioned break in the freeze — it blocks the client), and CI #60 scoped.**
 
