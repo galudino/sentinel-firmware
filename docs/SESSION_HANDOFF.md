@@ -20,10 +20,20 @@ than letting them accumulate here.
 
 ---
 
-**Last updated:** 2026-08-19 — **1.0.1 cut: record-store resilience + build-script
-fixes.** First patch on the public 1.0.0 baseline. Squash-merged to `develop` and
-`main`; version bumped in `Sentinel/Makefile` (`OTA_APP_VERSION_PATCH=1`; BUILD
-stays CI-owned). Testbench **48/48 on hardware**.
+**Last updated:** 2026-08-19 — **1.0.1 cut + RELEASED: record-store resilience +
+build-script fixes.** First patch on the public 1.0.0 baseline. Squash-merged to
+`develop` and `main`, tagged **`v1.0.1`**, and published as a **[GitHub Release](https://github.com/galudino/sentinel-firmware/releases/tag/v1.0.1)**
+with 4 signed assets (combined MCUBoot+app hex, OTA `.bin`, `.hex`, `.elf`). Version
+bumped in `Sentinel/Makefile` (`OTA_APP_VERSION_PATCH=1`; BUILD stays CI-owned).
+Testbench **48/48 on hardware**. The client bundles the 1.0.1 `.bin` as stock
+firmware (+ a `255.255.255-test` image built via `OTA_APP_VERSION_*=255` override).
+**Firmware is FROZEN again** (public stable release; touch only for critical fixes).
+
+> **Bench note:** a stray uncommitted VSCode drag moved `src/testbench/` →
+> `src/test/testbench/`, which silently **broke the `TESTBENCH=0` firmware app
+> build** (`multiple definition of sentinel::create_orchestrator` — the moved
+> orchestrator leaked into the app build). It was reversed; if the app build ever
+> fails that way again, check for stray sources under `src/`.
 
 - **`record_store` resilience (root-cause guard for the snapshot count underflow).**
   The device reported a garbage snapshot count (`4294967252` = a `uint32` −44):
