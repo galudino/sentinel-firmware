@@ -73,9 +73,12 @@ static_assert(sizeof(test_record) % 4 == 0, "test_record must be 4-aligned");
 using store_t =
     sentinel::record_store<test_record, sentinel::cyhal_spi_bus_transport>;
 
-/// Scratch region: two sectors near the top of flash, clear of 0xFFF000.
+/// Scratch region near the top of flash, clear of 0xFFF000. Three sectors: two
+/// slot-bearing sectors (256 records) plus one reserved for the store's format
+/// descriptor (last sector), so the wrap/recycle tests still exercise two slot
+/// sectors after the descriptor reservation.
 constexpr uint32_t kRegionOffset = 0xF00000u;
-constexpr uint32_t kRegionSize = 2u * flash_t::SECTOR_SIZE_BYTES; ///< 8 KiB.
+constexpr uint32_t kRegionSize = 3u * flash_t::SECTOR_SIZE_BYTES; ///< 12 KiB.
 
 ///
 /// \brief Yield long enough for the BLE debug ring buffer to drain.

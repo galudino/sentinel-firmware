@@ -134,6 +134,12 @@ struct fixture {
     /// \return \c true if release yields the expected device ID and a
     ///         subsequent JEDEC read matches a known-good entry.
     bool power_down_release() noexcept;
+    /// \brief READ-ONLY diagnostic: dump SR1/SR2/SR3, decode the protection
+    ///        bits (BP/TB/SEC/SRP0/CMP/WPS), and confirm WEL latches after a
+    ///        Write Enable. Explains a "sector_erase succeeds but region not
+    ///        blank" symptom (a protected sector clears WEL without erasing).
+    /// \return \c true always (informational — the value is in the log).
+    bool protection_diagnostic() noexcept;
 };
 
 } // namespace
@@ -466,12 +472,90 @@ bool fixture::power_down_release() noexcept {
 }
 
 // ============================================================================
+// fixture::protection_diagnostic
+// ============================================================================
+
+bool fixture::protection_diagnostic() noexcept {
+    auto flash = w25q128_t(w25q128_bus, sentinel::resource::flash_device_mutex);
+    logi("W25Q128 protection_diagnostic: driver constructed");
+    yield_for_debug_drain(200);
+
+    const auto sr1 = flash.read_status_register_1();
+    const auto sr2 = flash.read_status_register_2();
+    const auto sr3 = flash.read_status_register_3();
+    if (!sr1 || !sr2 || !sr3) {
+        loge("protection_diagnostic FAIL: SR read error (sr1=%d sr2=%d sr3=%d)",
+             static_cast<int>(sr1.has_value()),
+             static_cast<int>(sr2.has_value()),
+             static_cast<int>(sr3.has_value()));
+        return false;
+    }
+    logi("protection_diagnostic: SR1=0x%02X SR2=0x%02X SR3=0x%02X",
+         static_cast<int>(*sr1), static_cast<int>(*sr2),
+         static_cast<int>(*sr3));
+
+    using sr1_t = w25q128_t::status_register_1;
+    using sr2_t = w25q128_t::status_register_2;
+    using sr3_t = w25q128_t::status_register_3;
+    const auto bp = static_cast<unsigned>((*sr1 >> sr1_t::BP0_BIT) & 0x7u);
+    const auto tb = static_cast<unsigned>((*sr1 >> sr1_t::TB_BIT) & 1u);
+    const auto sec = static_cast<unsigned>((*sr1 >> sr1_t::SEC_BIT) & 1u);
+    const auto srp0 = static_cast<unsigned>((*sr1 >> sr1_t::SRP0_BIT) & 1u);
+    const auto cmp = static_cast<unsigned>((*sr2 >> sr2_t::CMP_BIT) & 1u);
+    const auto wps = static_cast<unsigned>((*sr3 >> sr3_t::WPS_BIT) & 1u);
+    logi("protection_diagnostic: SR1 BP=%u TB=%u SEC=%u SRP0=%u | SR2 CMP=%u | "
+         "SR3 WPS=%u",
+         bp, tb, sec, srp0, cmp, wps);
+
+    // The two states that silently swallow erase/program on this part:
+    if (wps != 0u) {
+        logw("protection_diagnostic: WPS=1 -> individual block locks; all blocks "
+             "power-on LOCKED until Global Block Unlock (0x98). This is the most "
+             "likely cause of erase-succeeds-but-not-blank.");
+    }
+    if (cmp != 0u) {
+        logw("protection_diagnostic: CMP=1 -> protection complemented; with BP=0 "
+             "this locks the whole array.");
+    }
+    if (bp != 0u) {
+        logw("protection_diagnostic: BP=%u -> a block-protect range is active.",
+             bp);
+    }
+    if (wps == 0u && cmp == 0u && bp == 0u) {
+        logi("protection_diagnostic: no array protection set in SR bits (erase "
+             "should not be blocked by protection).");
+    }
+
+    // Does WEL actually latch after a Write Enable? Erase/program require it.
+    if (!flash.write_enable()) {
+        loge("protection_diagnostic: write_enable() failed err=%d",
+             static_cast<int>(flash.last_error()));
+        return false;
+    }
+    const auto wel = flash.is_write_enabled();
+    if (!wel) {
+        loge("protection_diagnostic: WEL readback error");
+        return false;
+    }
+    logi("protection_diagnostic: WEL after WREN = %u (expect 1)",
+         static_cast<unsigned>(*wel));
+
+    logi("protection_diagnostic done (informational)");
+    return true;
+}
+
+// ============================================================================
 // sentinel::test::w25q128::run_all
 // ============================================================================
 
 sentinel::test::tally sentinel::test::w25q128::run_all() noexcept {
     auto fx = fixture{};
     auto t = sentinel::test::tally{};
+
+    // Run FIRST so it captures the chip's pristine power-on protection state,
+    // before status_register_round_trip touches SR1.
+    t.record(fx.protection_diagnostic());
+    yield_for_debug_drain(200);
 
     t.record(fx.presence_check());
     yield_for_debug_drain(200);

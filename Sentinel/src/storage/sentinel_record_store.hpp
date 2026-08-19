@@ -75,6 +75,23 @@
 ///          is naturally serialized. Wrap appends in a FreeRTOS mutex only if
 ///          real contention appears.
 ///
+///          === Format descriptor (stale/foreign-flash guard) ===
+///
+///          The recovery scan trusts on-flash bytes to be records this exact
+///          store layout wrote. Foreign or differently-laid-out data — e.g. a
+///          region reused across a firmware whose \c RecordType size changed, or
+///          uninitialized flash — can present a slot that reads \c STATUS_VALID
+///          over an erased (0xFFFFFFFF) sequence, which would recover \c head as
+///          \c max(sequence)+1 == 0 and underflow \ref count(). To prevent that,
+///          the region's **last sector** is reserved for a small descriptor
+///          (magic + layout version + slot/record size). \ref initialize()
+///          validates it first; a missing/mismatched descriptor means the region
+///          is not ours, so it is reformatted (\ref erase_all(), which also
+///          stamps the descriptor) rather than scanned. Two defensive guards back
+///          this up: the scan skips any \c 0xFFFFFFFF sequence, and \ref count()
+///          is clamped to \ref capacity(). Reserving the descriptor sector costs
+///          one sector of capacity and requires a region of at least two sectors.
+///
 /// \author  galudino
 /// \date    2026-06-28
 /// \version 1.0 - Flash-backed circular record store (firmware #33)
@@ -183,6 +200,23 @@ public:
     static constexpr uint8_t STATUS_INVALID = 0x5Au; ///< Reserved for future
                                                      ///< logical delete.
 
+    // ---- Region format descriptor (root-cause guard against stale/foreign
+    //      flash). The LAST sector of the region carries a signature written by
+    //      this exact store layout. On boot, a missing/mismatched signature means
+    //      the region was formatted by a different layout/firmware (or holds
+    //      uninitialized/foreign flash), so it is reformatted rather than scanned
+    //      — scanning bytes we did not write can misread a status/sequence and
+    //      corrupt head/tail (e.g. a 0xFFFFFFFF "sequence" overflowing head).
+
+    /// Magic marking a region formatted by this store ("SRSf" little-endian).
+    static constexpr uint32_t FORMAT_MAGIC = 0x53525366u;
+    /// On-flash layout version — bump on any breaking slot/header change.
+    static constexpr uint16_t FORMAT_VERSION = 1u;
+    /// Descriptor byte length (magic + version + slot_size + record_size + pad).
+    static constexpr uint32_t DESCRIPTOR_SIZE = 12u;
+    /// Erased-flash sequence value; never a legitimately written sequence.
+    static constexpr uint32_t ERASED_SEQUENCE = 0xFFFFFFFFu;
+
     // =====================================================================
     // Construction
     // =====================================================================
@@ -205,7 +239,10 @@ public:
                  uint32_t region_size_bytes) noexcept
         : m_flash(flash), m_region_offset(region_offset_bytes),
           m_sector_count(region_size_bytes / SECTOR_SIZE),
-          m_capacity(m_sector_count * RECORDS_PER_SECTOR) {}
+          // The last sector is reserved for the format descriptor, so the
+          // slot-bearing capacity is one sector short of the raw region. The
+          // region must therefore be at least two sectors.
+          m_capacity((m_sector_count - 1u) * RECORDS_PER_SECTOR) {}
 
     record_store(const record_store &) = delete;
     record_store &operator=(const record_store &) = delete;
@@ -229,7 +266,13 @@ public:
 
     /// Number of valid records currently stored: \c head - \c tail.
     /// \return Current record count.
-    uint32_t count() const noexcept { return m_head - m_tail; }
+    uint32_t count() const noexcept {
+        // A wrapped store's live count is bounded by capacity by definition;
+        // clamp defensively so a recovery hiccup can never report a garbage
+        // (underflowed) count.
+        const auto raw = m_head - m_tail;
+        return raw > m_capacity ? m_capacity : raw;
+    }
 
     /// Absolute index where the next appended record will land.
     /// \return \ref m_head.
@@ -280,6 +323,18 @@ public:
     /// \return \c true on success; \c false on a transport failure.
     ///
     bool initialize() noexcept {
+        // Root-cause guard: only trust a region this exact store layout
+        // formatted. A missing/mismatched descriptor means the region holds
+        // stale/foreign or differently-laid-out data — reformat instead of
+        // scanning it (a garbage slot can otherwise poison head/tail).
+        auto descriptor_ok = false;
+        if (!descriptor_matches(&descriptor_ok)) {
+            return false; // flash read error (m_last_error set)
+        }
+        if (!descriptor_ok) {
+            return erase_all(); // wipe + stamp a fresh descriptor; empty store
+        }
+
         auto header = std::array<uint8_t, HEADER_SIZE>{};
         if (!read_slot_header(0u, header.data())) {
             return false; // m_last_error set by helper
@@ -316,6 +371,11 @@ public:
                 m_last_error = err::flash_failure;
                 return false;
             }
+        }
+        // Stamp the format descriptor so the next initialize() recognizes the
+        // region as ours (and does not reformat it again).
+        if (!write_descriptor()) {
+            return false; // m_last_error set by helper
         }
         m_head = 0u;
         m_tail = 0u;
@@ -484,6 +544,65 @@ private:
     }
 
     // =====================================================================
+    // Region format descriptor (last sector)
+    // =====================================================================
+
+    /// Number of slot-bearing sectors (the region minus its descriptor sector).
+    uint32_t slot_sector_count() const noexcept { return m_sector_count - 1u; }
+
+    /// Byte address of the region's format descriptor (its last sector).
+    uint32_t descriptor_address() const noexcept {
+        return m_region_offset + slot_sector_count() * SECTOR_SIZE;
+    }
+
+    /// \brief Check whether the descriptor sector carries this store's exact
+    ///        format signature (magic + version + slot/record sizes).
+    /// \param out_ok Set \c true iff the signature matches.
+    /// \return \c true on success; \c false on a transport failure.
+    bool descriptor_matches(bool *out_ok) noexcept {
+        auto buf = std::array<uint8_t, DESCRIPTOR_SIZE>{};
+        if (!m_flash.read_data(descriptor_address(),
+                               sentinel::make_span(buf.data(), buf.size()))) {
+            m_last_error = err::flash_failure;
+            return false;
+        }
+        auto magic = uint32_t{0};
+        auto version = uint16_t{0};
+        auto slot_size = uint16_t{0};
+        auto record_size = uint16_t{0};
+        std::memcpy(&magic, buf.data() + 0u, sizeof(magic));
+        std::memcpy(&version, buf.data() + 4u, sizeof(version));
+        std::memcpy(&slot_size, buf.data() + 6u, sizeof(slot_size));
+        std::memcpy(&record_size, buf.data() + 8u, sizeof(record_size));
+        *out_ok = (magic == FORMAT_MAGIC && version == FORMAT_VERSION &&
+                   slot_size == static_cast<uint16_t>(SLOT_SIZE) &&
+                   record_size == static_cast<uint16_t>(sizeof(RecordType)));
+        return true;
+    }
+
+    /// \brief Program the format descriptor into the (already-erased) descriptor
+    ///        sector. Called by \ref erase_all() after erasing the region.
+    /// \return \c true on success; \c false on a flash program failure.
+    bool write_descriptor() noexcept {
+        auto buf = std::array<uint8_t, DESCRIPTOR_SIZE>{};
+        const auto magic = FORMAT_MAGIC;
+        const auto version = FORMAT_VERSION;
+        const auto slot_size = static_cast<uint16_t>(SLOT_SIZE);
+        const auto record_size = static_cast<uint16_t>(sizeof(RecordType));
+        std::memcpy(buf.data() + 0u, &magic, sizeof(magic));
+        std::memcpy(buf.data() + 4u, &version, sizeof(version));
+        std::memcpy(buf.data() + 6u, &slot_size, sizeof(slot_size));
+        std::memcpy(buf.data() + 8u, &record_size, sizeof(record_size));
+        if (!m_flash.page_program(
+                descriptor_address(),
+                sentinel::make_cspan(buf.data(), buf.size()))) {
+            m_last_error = err::flash_failure;
+            return false;
+        }
+        return true;
+    }
+
+    // =====================================================================
     // Initialize internals (#49)
     // =====================================================================
 
@@ -516,6 +635,14 @@ private:
             }
 
             auto seq = load_sequence(header.data());
+            // A VALID status over an erased (all-ones) sequence is contradictory
+            // — a real sequence counts up from 0 and never reaches 0xFFFFFFFF.
+            // Trusting it as max_seq would overflow head (max_seq + 1 == 0) and
+            // underflow count(). Skip it rather than let one garbage slot poison
+            // recovery.
+            if (seq == ERASED_SEQUENCE) {
+                continue;
+            }
             if (!have_any) {
                 min_seq = seq;
                 max_seq = seq;
@@ -596,7 +723,7 @@ private:
     /// \return \c true on success; \c false on a transport failure.
     ///
     bool region_is_blank(bool *out_blank) noexcept {
-        for (auto s = uint32_t{0}; s < m_sector_count; s++) {
+        for (auto s = uint32_t{0}; s < slot_sector_count(); s++) {
             auto status = uint8_t{};
             if (!read_slot_status(s * RECORDS_PER_SECTOR, &status)) {
                 return false;
