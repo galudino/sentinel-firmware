@@ -54,13 +54,15 @@ TESTBENCH=0
 #
 # export APP_VERSION_MAJOR=2
 #
-# Public Phase I baseline is 1.0.0 (first public, MVP-complete release).
+# Public Phase I baseline was 1.0.0 (first public, MVP-complete release); 1.0.1
+# is the first patch — record-store resilience to stale/foreign flash + build
+# script fixes.
 # MAJOR.MINOR.PATCH are human-owned (bump per docs guidelines); BUILD is
 # CI-owned — CI overrides OTA_APP_VERSION_BUILD with `git rev-list --count HEAD`
 # for a monotonic, OTA-safe build number. Local dev builds default to build 0.
 OTA_APP_VERSION_MAJOR?=1
 OTA_APP_VERSION_MINOR?=0
-OTA_APP_VERSION_PATCH?=0
+OTA_APP_VERSION_PATCH?=1
 OTA_APP_VERSION_BUILD?=0
 APP_BUILD_VERSION=$(OTA_APP_VERSION_MAJOR).$(OTA_APP_VERSION_MINOR).$(OTA_APP_VERSION_PATCH)+$(OTA_APP_VERSION_BUILD)
 
