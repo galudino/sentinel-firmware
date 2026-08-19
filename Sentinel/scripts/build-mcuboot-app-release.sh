@@ -1,5 +1,5 @@
-#!/bin/sh
-
+#!/usr/bin/env bash
+set -eo pipefail
 ##
 ## USAGE:
 ## Invoke while in the Sentinel directory.
@@ -37,9 +37,8 @@ function try_copy_hex_file() {
 function main() {
     local command_line_argument=$1
 
-    local username_string=$(whoami)
 
-    local toolchain_path_string="/Users/$username_string/Applications/mtb-gcc-arm-eabi/11.3.1/gcc"
+    local toolchain_path_string="${MCUBOOT_GCC_PATH:-$HOME/Applications/mtb-gcc-arm-eabi/11.3.1/gcc}"
     local gcc_path_string="$toolchain_path_string"
     local cc_string="$gcc_path_string/bin/arm-none-eabi-gcc"
 

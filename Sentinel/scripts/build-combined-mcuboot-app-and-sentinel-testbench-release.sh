@@ -1,5 +1,5 @@
-#!/bin/sh
-
+#!/usr/bin/env bash
+set -eo pipefail
 ##
 ## USAGE:
 ## Invoke while in the Sentinel directory.
