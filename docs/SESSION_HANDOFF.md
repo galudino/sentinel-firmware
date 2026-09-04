@@ -20,7 +20,47 @@ than letting them accumulate here.
 
 ---
 
-**Last updated:** 2026-08-19 — **1.0.1 cut + RELEASED: record-store resilience +
+**Last updated:** 2026-09-04 (session, `release/1.0.2` opened). **1.0.2.0 release
+branch `release/1.0.2` off `develop`** accumulates the remaining Phase I firmware
+work → will tag + squash-merge to `develop` and `main` as **1.0.2.0** when the
+batch is done (bump `Makefile` `OTA_APP_VERSION_PATCH=2` at finalization; build
+still signs `1.0.1+0` today). Two fixes landed on the branch so far, **both
+compile+link clean (app + testbench), both still need on-device validation:**
+
+- **#72 — paged GATT block reads returned `INVALID_OFFSET` on blob reads**
+  (`ce7d0d8`). `before_read()` refilled the record block from the live circular
+  store on *every* ATT read, including CoreBluetooth's Read Blob continuations, so
+  a multi-payload block shifted mid-read (→ `WICED_BT_GATT_INVALID_OFFSET`, or a
+  block stitched from two store states). Fix: thread `read_request->offset` into
+  `before_read` and refill only when `offset == 0`. **Test on hardware:** Logs tab
+  loads the 8000+ event log with no "offset is invalid"; Home Climate
+  Readings/Trends + RTC populate from Snapshot History.
+- **#69 — Device Readiness (boot/POST state) on the System service** (`36ee693`).
+  New 2-byte `[state, failedSubsystem]` R/Notify characteristic
+  (`D3E542A5-3476-4A48-B4F5-1D0D0699DB28`), added to `design.cybt` (GeneratedSource
+  regenerates via `make build`'s `bt-configurator-cli` step — it is gitignored, so
+  only `design.cybt` is tracked). `diagnostics::device_readiness` enum;
+  `gatt::system::{set,notify,publish}_readiness`; boot orchestrator publishes
+  booting → post_running → ready/degraded(subsystem). POST-duration audit (AC):
+  POST is already sub-100 ms, so no optimization needed. **Test on hardware:** the
+  client #38 (branch `38-device-readiness-gate`) consumes it — connect mid-boot and
+  watch Home gate on readiness. Board: #72/#69 → In Review / Phase I, sub-issues of
+  #4.
+
+**Still queued on `release/1.0.2` (not started):** #71 OTA DFU interruption
+resilience, #68 RTC SQW ~12×/s spam. New issues that surface → file under Phase I,
+sub-issue of #4.
+
+> **cybt regen note:** editing `Sentinel/src/design.cybt` (e.g. adding a
+> characteristic) and running `make build` triggers the configurator's
+> `bt-configurator-cli` code-gen step, which regenerates `GeneratedSource/` and
+> renumbers handles automatically. The standalone `bt-configurator` GUI binary
+> won't code-gen headless on macOS (only the `cocoa` Qt plugin; `--output-dir`
+> writes nothing). Use `make build`.
+
+---
+
+**Prior:** 2026-08-19 — **1.0.1 cut + RELEASED: record-store resilience +
 build-script fixes.** First patch on the public 1.0.0 baseline. Squash-merged to
 `develop` and `main`, tagged **`v1.0.1`**, and published as a **[GitHub Release](https://github.com/galudino/sentinel-firmware/releases/tag/v1.0.1)**
 with 4 signed assets (combined MCUBoot+app hex, OTA `.bin`, `.hex`, `.elf`). Version
