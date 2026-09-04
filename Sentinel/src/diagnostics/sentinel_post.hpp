@@ -107,6 +107,24 @@ enum class post_subsystem : uint8_t {
 };
 
 ///
+/// \brief Coarse device-readiness state published over the System GATT service
+///        (#69), byte 0 of the \c Device Readiness characteristic.
+///
+/// \details Lets a central that connects while the device is still booting know
+///          when sensors are live, instead of reading stale/zero characteristics
+///          during the pre-POST flash scans. Byte 1 of the characteristic
+///          carries the failing \ref post_subsystem id when \c degraded (0
+///          otherwise). Append-only wire contract, mirrored 1:1 by the iOS
+///          client.
+///
+enum class device_readiness : uint8_t {
+    booting = 0x00,      ///< Pre-POST: building context / scanning flash stores.
+    post_running = 0x01, ///< POST probes are executing.
+    ready = 0x02,        ///< POST completed; all subsystems passed, sensors live.
+    degraded = 0x03,     ///< POST reported a failure (see the subsystem id byte).
+};
+
+///
 /// \brief Outcome of a single subsystem probe.
 ///
 /// \details Like \ref sentinel::diagnostics::post_subsystem, these are an

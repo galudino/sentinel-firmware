@@ -164,6 +164,11 @@ void boot_orchestrator::run() {
 
     logi("boot: starting sequence");
 
+    // Device Readiness starts at `booting` (#69): the BLE stack is connectable
+    // before sensors are up, so a central connecting during the multi-second
+    // flash scans below reads this state instead of stale/zero sensor chars.
+    sentinel::gatt::system::set_readiness(diag::device_readiness::booting, 0);
+
     // ---- 1. Build the shared device context + scan the flash stores. ----
     // First touch of context() constructs the drivers here, post-scheduler, so
     // the BME280 calibration read goes through the running I²C arbiter. The two
@@ -213,6 +218,10 @@ void boot_orchestrator::run() {
     // value only if that path somehow has not completed.
     const auto gatt_db_ok =
         sentinel::ble_context_object.gatt_db_ok() || m_gatt_db_ok;
+    // Readiness → post_running just before the probes; notifies a mid-boot
+    // central that connected during the flash scans (#69).
+    sentinel::gatt::system::publish_readiness(
+        diag::device_readiness::post_running, 0);
     const auto summary =
         diag::post::run(ctx.bme, ctx.rtc, ctx.flash, ctx.event_store,
                         m_ble_stack_ok, gatt_db_ok);
@@ -225,6 +234,12 @@ void boot_orchestrator::run() {
     logi("---- [ POST ] done in %u ms: %s ----", post_ms,
          summary.all_passed ? "all subsystems passed" : "failures recorded");
     ctx.post_last_status = first_failure_id(summary);
+    // Readiness → ready / degraded(subsystem); the transition a mid-POST central
+    // is waiting on (#69). post_last_status is 0 when all passed.
+    sentinel::gatt::system::publish_readiness(
+        summary.all_passed ? diag::device_readiness::ready
+                           : diag::device_readiness::degraded,
+        ctx.post_last_status);
     diag::post::record_results(ctx.event_log(), summary); // enqueues records
 
     // ---- 3. Start the event-log drain task. ----
