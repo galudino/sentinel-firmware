@@ -291,8 +291,10 @@ wiced_bt_gatt_status_t sentinel::ble_gatt_request_read_handler(
 
     // Refresh paged Snapshot History / System Event Log values from their
     // record stores just before responding (#6). A no-op for every other
-    // handle.
-    sentinel::gatt::paged::before_read(read_request->handle);
+    // handle. The offset gates block refills so a multi-payload block stays
+    // stable across ATT Read Blob continuations (#72).
+    sentinel::gatt::paged::before_read(read_request->handle,
+                                       read_request->offset);
 
     if ((attribute = ble_gatt_db_find_by_handle(read_request->handle)) ==
         nullptr) {

@@ -140,9 +140,21 @@ inline void refresh_event_count() noexcept {
 ///          handles. Record Count is recomputed from the store; Record Block is
 ///          filled from the current Index cursor.
 ///
-/// \param handle GATT-DB value handle about to be read.
+///          A Record Block larger than one ATT payload is delivered by
+///          CoreBluetooth as an initial read at \c offset 0 followed by ATT
+///          Read Blob continuations at higher offsets. The block must therefore
+///          be filled exactly once, at the start of that sequence (\c offset
+///          == 0), and left untouched for the continuations — otherwise the
+///          circular store advances between reads, \c cur_len shrinks below the
+///          blob offset (→ \c WICED_BT_GATT_INVALID_OFFSET), and even a
+///          non-erroring block is stitched from two store states (#72). Record
+///          Count is a single 4-byte read (always \c offset 0), so it is
+///          refreshed unconditionally.
 ///
-inline void before_read(uint16_t handle) noexcept {
+/// \param handle GATT-DB value handle about to be read.
+/// \param offset ATT read offset; non-zero marks a Read Blob continuation.
+///
+inline void before_read(uint16_t handle, uint16_t offset) noexcept {
     if (!resource::context_ready()) {
         return;
     }
@@ -153,17 +165,21 @@ inline void before_read(uint16_t handle) noexcept {
         set_count(ctx.snapshot_store, handle);
         break;
     case HDLC_SNAPSHOT_HISTORY_RECORD_BLOCK_VALUE:
-        fill_block<sentinel::telemetry::device_snapshot>(
-            ctx.snapshot_store, read_u32_le(app_snapshot_history_index), handle,
-            MAX_LEN_SNAPSHOT_HISTORY_RECORD_BLOCK);
+        if (offset == 0) {
+            fill_block<sentinel::telemetry::device_snapshot>(
+                ctx.snapshot_store, read_u32_le(app_snapshot_history_index),
+                handle, MAX_LEN_SNAPSHOT_HISTORY_RECORD_BLOCK);
+        }
         break;
     case HDLC_SYSTEM_EVENT_LOG_RECORD_COUNT_VALUE:
         set_count(ctx.event_store, handle);
         break;
     case HDLC_SYSTEM_EVENT_LOG_RECORD_BLOCK_VALUE:
-        fill_block<sentinel::diagnostics::system_event_record>(
-            ctx.event_store, read_u32_le(app_system_event_log_index), handle,
-            MAX_LEN_SYSTEM_EVENT_LOG_RECORD_BLOCK);
+        if (offset == 0) {
+            fill_block<sentinel::diagnostics::system_event_record>(
+                ctx.event_store, read_u32_le(app_system_event_log_index),
+                handle, MAX_LEN_SYSTEM_EVENT_LOG_RECORD_BLOCK);
+        }
         break;
     default:
         break;
