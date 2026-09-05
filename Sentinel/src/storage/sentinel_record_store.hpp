@@ -79,18 +79,22 @@
 ///
 ///          The recovery scan trusts on-flash bytes to be records this exact
 ///          store layout wrote. Foreign or differently-laid-out data — e.g. a
-///          region reused across a firmware whose \c RecordType size changed, or
-///          uninitialized flash — can present a slot that reads \c STATUS_VALID
-///          over an erased (0xFFFFFFFF) sequence, which would recover \c head as
-///          \c max(sequence)+1 == 0 and underflow \ref count(). To prevent that,
-///          the region's **last sector** is reserved for a small descriptor
-///          (magic + layout version + slot/record size). \ref initialize()
-///          validates it first; a missing/mismatched descriptor means the region
-///          is not ours, so it is reformatted (\ref erase_all(), which also
-///          stamps the descriptor) rather than scanned. Two defensive guards back
-///          this up: the scan skips any \c 0xFFFFFFFF sequence, and \ref count()
-///          is clamped to \ref capacity(). Reserving the descriptor sector costs
-///          one sector of capacity and requires a region of at least two sectors.
+///          region reused across a firmware whose \c RecordType size changed,
+///          or uninitialized flash — can present a slot that reads \c
+///          STATUS_VALID over an erased (0xFFFFFFFF) sequence, which would
+///          recover \c head as
+///          \c max(sequence)+1 == 0 and underflow the record count (\ref
+///          sentinel::record_store::count). To prevent that, the region's
+///          **last sector** is reserved for a small descriptor (magic + layout
+///          version + slot/record size), validated first by \ref
+///          sentinel::record_store::initialize; a missing/mismatched descriptor
+///          means the region is not ours, so it is reformatted (\ref
+///          sentinel::record_store::erase_all, which also stamps the
+///          descriptor) rather than scanned. Two defensive guards back this up:
+///          the scan skips any \c 0xFFFFFFFF sequence, and the count is clamped
+///          to \ref sentinel::record_store::capacity. Reserving the descriptor
+///          sector costs one sector of capacity and needs a region of >= two
+///          sectors.
 ///
 /// \author  galudino
 /// \date    2026-06-28
@@ -202,17 +206,19 @@ public:
 
     // ---- Region format descriptor (root-cause guard against stale/foreign
     //      flash). The LAST sector of the region carries a signature written by
-    //      this exact store layout. On boot, a missing/mismatched signature means
-    //      the region was formatted by a different layout/firmware (or holds
-    //      uninitialized/foreign flash), so it is reformatted rather than scanned
-    //      — scanning bytes we did not write can misread a status/sequence and
-    //      corrupt head/tail (e.g. a 0xFFFFFFFF "sequence" overflowing head).
+    //      this exact store layout. On boot, a missing/mismatched signature
+    //      means the region was formatted by a different layout/firmware (or
+    //      holds uninitialized/foreign flash), so it is reformatted rather than
+    //      scanned — scanning bytes we did not write can misread a
+    //      status/sequence and corrupt head/tail (e.g. a 0xFFFFFFFF "sequence"
+    //      overflowing head).
 
     /// Magic marking a region formatted by this store ("SRSf" little-endian).
     static constexpr uint32_t FORMAT_MAGIC = 0x53525366u;
     /// On-flash layout version — bump on any breaking slot/header change.
     static constexpr uint16_t FORMAT_VERSION = 1u;
-    /// Descriptor byte length (magic + version + slot_size + record_size + pad).
+    /// Descriptor byte length (magic + version + slot_size + record_size +
+    /// pad).
     static constexpr uint32_t DESCRIPTOR_SIZE = 12u;
     /// Erased-flash sequence value; never a legitimately written sequence.
     static constexpr uint32_t ERASED_SEQUENCE = 0xFFFFFFFFu;
@@ -548,9 +554,11 @@ private:
     // =====================================================================
 
     /// Number of slot-bearing sectors (the region minus its descriptor sector).
+    /// \return Count of sectors available for records.
     uint32_t slot_sector_count() const noexcept { return m_sector_count - 1u; }
 
     /// Byte address of the region's format descriptor (its last sector).
+    /// \return Flash byte offset of the descriptor sector.
     uint32_t descriptor_address() const noexcept {
         return m_region_offset + slot_sector_count() * SECTOR_SIZE;
     }
@@ -580,7 +588,8 @@ private:
         return true;
     }
 
-    /// \brief Program the format descriptor into the (already-erased) descriptor
+    /// \brief Program the format descriptor into the (already-erased)
+    /// descriptor
     ///        sector. Called by \ref erase_all() after erasing the region.
     /// \return \c true on success; \c false on a flash program failure.
     bool write_descriptor() noexcept {
@@ -635,11 +644,11 @@ private:
             }
 
             auto seq = load_sequence(header.data());
-            // A VALID status over an erased (all-ones) sequence is contradictory
-            // — a real sequence counts up from 0 and never reaches 0xFFFFFFFF.
-            // Trusting it as max_seq would overflow head (max_seq + 1 == 0) and
-            // underflow count(). Skip it rather than let one garbage slot poison
-            // recovery.
+            // A VALID status over an erased (all-ones) sequence is
+            // contradictory — a real sequence counts up from 0 and never
+            // reaches 0xFFFFFFFF. Trusting it as max_seq would overflow head
+            // (max_seq + 1 == 0) and underflow count(). Skip it rather than let
+            // one garbage slot poison recovery.
             if (seq == ERASED_SEQUENCE) {
                 continue;
             }
