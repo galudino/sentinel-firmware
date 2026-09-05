@@ -59,11 +59,17 @@ TESTBENCH=0
 # script fixes.
 # MAJOR.MINOR.PATCH are human-owned (bump per docs guidelines); BUILD is
 # CI-owned — CI overrides OTA_APP_VERSION_BUILD with `git rev-list --count HEAD`
-# for a monotonic, OTA-safe build number. Local dev builds default to build 0.
+# for a monotonic, OTA-safe build number. A tagged official release is stamped
+# BUILD=0; a non-zero BUILD marks a development / release-candidate image.
+# INTERIM (until CI #60): this 1.0.2 candidate carries BUILD = the commit count
+# (`git rev-list --count HEAD`) by hand, so the running image is identifiable as
+# a candidate rather than the 1.0.1.0 release. The *maturity* label (release /
+# candidate / WIP) itself is exposed over GATT (see the Firmware Build Info
+# characteristic), which is the clean signal the client reads.
 OTA_APP_VERSION_MAJOR?=1
 OTA_APP_VERSION_MINOR?=0
-OTA_APP_VERSION_PATCH?=1
-OTA_APP_VERSION_BUILD?=0
+OTA_APP_VERSION_PATCH?=2
+OTA_APP_VERSION_BUILD?=92
 APP_BUILD_VERSION=$(OTA_APP_VERSION_MAJOR).$(OTA_APP_VERSION_MINOR).$(OTA_APP_VERSION_PATCH)+$(OTA_APP_VERSION_BUILD)
 
 # Name of application (used to derive name of final linked file).
