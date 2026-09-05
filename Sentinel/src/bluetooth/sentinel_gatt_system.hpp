@@ -64,7 +64,8 @@ inline void set_serial_number(uint32_t serial) noexcept {
 ///        major, minor, patch, build[2]).
 /// \param v Firmware version to encode into the characteristic.
 inline void set_firmware_version(const sentinel::firmware_version &v) noexcept {
-    // build() returns the full 16-bit value, matching the 5-byte wire struct (#6).
+    // build() returns the full 16-bit value, matching the 5-byte wire struct
+    // (#6).
     const auto build = v.build();
     uint8_t buf[5] = {v.major(), v.minor(), v.patch(),
                       static_cast<uint8_t>(build & 0xFFu),
@@ -130,7 +131,7 @@ inline void publish_cpu_temperature(int16_t centi_c) noexcept {
     }
 }
 
-// ---- Device Readiness (R/Notify) — boot/POST state + failed subsystem (#69) --
+// ---- Device Readiness (R/Notify) — boot/POST state + subsystem (#69) -------
 
 /// \brief \c true while a central has subscribed to Device Readiness
 /// notifications.
@@ -144,8 +145,9 @@ inline bool device_readiness_notifications_enabled() noexcept {
 /// \brief Write the Device Readiness characteristic: \c [state, subsystem].
 ///
 /// \param state Coarse boot/POST state.
-/// \param failed_subsystem Failing \ref sentinel::diagnostics::post_subsystem id
-///        when \p state is \c degraded; \c 0 otherwise.
+/// \param failed_subsystem Failing subsystem id (\ref
+///        sentinel::diagnostics::post_subsystem) when \p state is \c degraded;
+///        \c 0 otherwise.
 ///
 inline void set_readiness(sentinel::diagnostics::device_readiness state,
                           uint8_t failed_subsystem) noexcept {

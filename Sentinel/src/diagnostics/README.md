@@ -8,7 +8,7 @@ happened, as typed records.
 |---|---|
 | **Key types** | `diagnostics::post`, `diagnostics::system_event_log<Store>`, `diagnostics::system_event` |
 | **Files** | [`sentinel_post.hpp`](sentinel_post.hpp) · [`sentinel_system_event.hpp`](sentinel_system_event.hpp) · [`sentinel_system_event_log.hpp`](sentinel_system_event_log.hpp) |
-| **Issues** | #35 (POST), #34 (System Event Log) |
+| **Issues** | #35 (POST), #34 (System Event Log), #69 (device readiness) |
 
 ## POST — `post::run(...)`
 
@@ -22,6 +22,11 @@ const auto summary = sentinel::diagnostics::post::run(bme, rtc, flash,
                                                       /* ...other subsystems */);
 // summary carries a post_subsystem_result per post_subsystem
 ```
+
+`sentinel_post.hpp` also defines `device_readiness` (`booting` → `post_running` →
+`ready` / `degraded`), published by the boot orchestrator on the System service's
+Device Readiness characteristic (#69) so a central connecting mid-boot can gate
+its UI instead of reading stale/zero sensor values.
 
 ## System Event Log — `system_event_log<Store>`
 

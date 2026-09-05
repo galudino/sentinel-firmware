@@ -26,6 +26,12 @@ The orchestrator runs once, in order:
    snapshot-stream, battery, cpu-die-temp.
 6. `vTaskDelete(self)`.
 
+Throughout, the orchestrator publishes **device readiness** on the System GATT
+service (#69): `booting` at entry, `post_running` before the probes, then
+`ready` / `degraded(subsystem)` once POST completes — so a central that connects
+mid-boot (the BLE stack is connectable before sensors are up) can gate its UI on
+the `→ ready` notification instead of reading stale/zero characteristics.
+
 A BLE-stack failure does **not** hard-assert — POST records it and boot proceeds
 degraded (decision #12).
 

@@ -234,8 +234,8 @@ void boot_orchestrator::run() {
     logi("---- [ POST ] done in %u ms: %s ----", post_ms,
          summary.all_passed ? "all subsystems passed" : "failures recorded");
     ctx.post_last_status = first_failure_id(summary);
-    // Readiness → ready / degraded(subsystem); the transition a mid-POST central
-    // is waiting on (#69). post_last_status is 0 when all passed.
+    // Readiness → ready / degraded(subsystem); the transition a mid-POST
+    // central is waiting on (#69). post_last_status is 0 when all passed.
     sentinel::gatt::system::publish_readiness(
         summary.all_passed ? diag::device_readiness::ready
                            : diag::device_readiness::degraded,
