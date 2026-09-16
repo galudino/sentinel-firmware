@@ -3398,8 +3398,8 @@
                     <Property id="HostHighAdvTimeout" value="60"/>
                     <Property id="HostLowAdvIntervalMin" value="1280"/>
                     <Property id="HostLowAdvIntervalMax" value="1280"/>
-                    <Property id="HostLowAdvTimeoutEnabled" value="true"/>
-                    <Property id="HostLowAdvTimeout" value="60"/>
+                    <Property id="HostLowAdvTimeoutEnabled" value="false"/>
+                    <Property id="HostLowAdvTimeout" value="0"/>
                     <Property id="HostHighDirAdvIntervalMin" value="250"/>
                     <Property id="HostHighDirAdvIntervalMax" value="500"/>
                     <Property id="HostLowDirAdvIntervalMin" value="30"/>
