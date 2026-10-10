@@ -70,6 +70,17 @@ OTA_APP_VERSION_MAJOR?=1
 OTA_APP_VERSION_MINOR?=0
 OTA_APP_VERSION_PATCH?=2
 OTA_APP_VERSION_BUILD?=92
+
+# Build channel — the *maturity* of this image, exposed over GATT as byte 0 of
+# the System service's Firmware Build Info characteristic (fw#73):
+#   wip (default) — work-in-progress development image
+#   rc            — release candidate
+#   release       — official tagged release (set at the release cut)
+# Override on the command line or via the environment, e.g.
+#   make build SENTINEL_BUILD_CHANNEL=rc
+# The other two Build Info bytes need no setting here: config follows
+# CONFIG (Debug|Release) and variant follows TESTBENCH.
+SENTINEL_BUILD_CHANNEL?=wip
 APP_BUILD_VERSION=$(OTA_APP_VERSION_MAJOR).$(OTA_APP_VERSION_MINOR).$(OTA_APP_VERSION_PATCH)+$(OTA_APP_VERSION_BUILD)
 
 # Name of application (used to derive name of final linked file).
@@ -209,6 +220,21 @@ ifeq ($(CONFIG), Debug)
     DEFINES+=DEBUG_CONFIG=1
 else ifeq ($(CONFIG), Release)
     DEFINES+=RELEASE_CONFIG=1
+endif
+
+###############################################################################
+#
+# Build channel (fw#73) — numeric values mirror sentinel::build_channel
+#
+###############################################################################
+ifeq ($(SENTINEL_BUILD_CHANNEL), release)
+    DEFINES+=SENTINEL_BUILD_CHANNEL=0
+else ifeq ($(SENTINEL_BUILD_CHANNEL), rc)
+    DEFINES+=SENTINEL_BUILD_CHANNEL=1
+else ifeq ($(SENTINEL_BUILD_CHANNEL), wip)
+    DEFINES+=SENTINEL_BUILD_CHANNEL=2
+else
+    $(error SENTINEL_BUILD_CHANNEL must be one of: release, rc, wip (got '$(SENTINEL_BUILD_CHANNEL)'))
 endif
 
 ###############################################################################

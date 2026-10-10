@@ -5,7 +5,8 @@
 /// \details Thin \c sentinel::gatt::system seam over the generated \c System
 ///          service value arrays: Serial Number (R/W device-identity key),
 ///          Firmware Version (R, 5-byte packed), Request Bootloader Mode (W),
-///          and Platform ID (R, \ref sentinel::platform_id). Like the rest of
+///          Platform ID (R, \ref sentinel::platform_id), and Firmware Build
+///          Info (R, \ref sentinel::build_info — fw#73). Like the rest of
 ///          the \c sentinel::gatt::\<svc\> layer these are \c inline + \c
 ///          noexcept (the values are \c extern GATT-DB globals, not constant
 ///          expressions) and keep the generated \c app_system_* / \c
@@ -30,6 +31,7 @@ extern "C" {
 
 #include "sentinel_ble_context.hpp"
 #include "sentinel_ble_gatt.hpp"
+#include "sentinel_build_info.hpp"
 #include "sentinel_firmware_version.hpp"
 #include "sentinel_platform_id.hpp"
 #include "sentinel_post.hpp"
@@ -84,6 +86,25 @@ inline void set_platform_id(sentinel::platform_id p) noexcept {
 /// \return The device's \ref sentinel::platform_id.
 inline sentinel::platform_id platform_id() noexcept {
     return static_cast<sentinel::platform_id>(app_system_platform_id[0]);
+}
+
+// ---- Firmware Build Info (R) — [channel, config, variant] (fw#73) -----------
+
+///
+/// \brief Set the Firmware Build Info characteristic: <tt>[channel, config,
+///        variant]</tt>.
+///
+/// \details All three fields are compile-time constants, so this is seeded
+///          once at boot and never notified.
+///
+/// \param info Build identity to encode into the characteristic.
+///
+inline void set_build_info(const sentinel::build_info &info) noexcept {
+    uint8_t buf[3] = {sentinel::to_underlying(info.channel),
+                      sentinel::to_underlying(info.config),
+                      sentinel::to_underlying(info.variant)};
+    ble_gatt_db_set_value(HDLC_SYSTEM_FIRMWARE_BUILD_INFO_VALUE, buf,
+                          static_cast<uint16_t>(sizeof(buf)));
 }
 
 // ---- CPU Temperature (R/Notify) — PSoC 6 on-die temperature, 0.01 °C -------

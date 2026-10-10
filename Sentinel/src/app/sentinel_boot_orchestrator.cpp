@@ -262,12 +262,20 @@ void boot_orchestrator::run() {
         const auto platform = sentinel::current_platform_id();
         gsys::set_firmware_version(sentinel::current_firmware_version);
         gsys::set_platform_id(platform);
+        gsys::set_build_info(sentinel::current_build_info);
         sentinel::gatt::dis::populate(platform,
                                       sentinel::current_firmware_version,
                                       gsys::serial_number());
         logi("boot: GATT identity seeded (platform=%u, serial=%lu)",
              static_cast<unsigned>(sentinel::to_underlying(platform)),
              static_cast<unsigned long>(gsys::serial_number()));
+        logi("boot: build info (channel=%u, config=%u, variant=%u)",
+             static_cast<unsigned>(sentinel::to_underlying(
+                 sentinel::current_build_info.channel)),
+             static_cast<unsigned>(sentinel::to_underlying(
+                 sentinel::current_build_info.config)),
+             static_cast<unsigned>(sentinel::to_underlying(
+                 sentinel::current_build_info.variant)));
     }
 
     // ---- 4b. Bring up the on-die temperature sensor (#6). ----
