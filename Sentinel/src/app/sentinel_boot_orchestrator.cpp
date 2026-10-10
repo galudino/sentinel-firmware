@@ -181,6 +181,17 @@ void boot_orchestrator::run() {
     logi("boot: device context built (BME280 init err=%d)",
          static_cast<int>(ctx.bme.last_error()));
 
+    // Seed the clock from the battery-backed DS3231 now (#74), so POST, the
+    // boot-lifecycle event records, and the first snapshot are stamped with
+    // real time rather than epoch 0. rtc_service (started in step 4) keeps it
+    // fresh from here; on a read failure the clock stays 0 and boot continues.
+    if (task::rtc_service::instance().seed_time()) {
+        logi("boot: clock seeded from DS3231");
+    } else {
+        loge("boot: DS3231 clock seed failed (err=%d); boot records stamped 0",
+             static_cast<int>(ctx.rtc.last_error()));
+    }
+
     logi("boot: scanning event-log region (%u slots)...",
          static_cast<unsigned>(ctx.event_store.capacity()));
     const auto event_ok = ctx.event_store.initialize();

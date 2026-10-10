@@ -135,6 +135,24 @@ uint32_t rtc_service::last_unix_time() const noexcept {
     return m_last_unix_seconds;
 }
 
+bool rtc_service::seed_time() noexcept {
+    auto &rtc = sentinel::resource::context().rtc;
+
+    auto now = rtc.time();
+    if (!now) {
+        return false;
+    }
+
+    auto unix = ds3231_t::datetime::to_unix_time(*now);
+    if (!unix) {
+        return false;
+    }
+
+    m_last_unix_seconds = *unix;
+    sentinel::gatt::ds3231::set_unix_time(*unix);
+    return true;
+}
+
 int16_t rtc_service::last_temperature_centi_c() const noexcept {
     return m_last_temperature_centi;
 }
@@ -215,8 +233,14 @@ void rtc_service::run() {
 
     logi("rtc_service: 1 Hz SQW armed (falling-edge IRQ on P6_3)");
 
+    // Second of the last tick acted on (#68). The SQW line is open-drain; a
+    // noisy edge can re-fire the falling-edge IRQ within one RTC second, so
+    // everything past the (idempotent) time latch is gated on the second
+    // actually changing — a true 1 Hz heartbeat regardless of line noise.
+    auto last_second = std::optional<uint8_t>{};
+
     while (true) {
-        // Block until the next SQW falling edge (one per second).
+        // Block until the next SQW falling edge (nominally one per second).
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
         auto now = rtc.time();
@@ -234,6 +258,12 @@ void rtc_service::run() {
             // Refresh the Unix Time GATT read value at 1 Hz (#6; no notify).
             sentinel::gatt::ds3231::set_unix_time(*unix);
         }
+
+        // Spurious intra-second edge: nothing new to do this second (#68).
+        if (last_second && *last_second == now->second) {
+            continue;
+        }
+        last_second = now->second;
 
         // Throttle logging to HEARTBEAT_LOG_PERIOD_SECONDS; the time latch
         // above always runs at 1 Hz regardless. Temperature is only read here,

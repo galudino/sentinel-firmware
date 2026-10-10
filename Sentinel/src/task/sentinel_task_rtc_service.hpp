@@ -81,10 +81,28 @@ public:
     BaseType_t task_create() noexcept;
 
     ///
+    /// \brief Seed the latched time with one synchronous DS3231 read (#74).
+    ///
+    /// \details Called once by the boot orchestrator right after the device
+    ///          context is built — before POST, the boot-lifecycle event
+    ///          records, and the first snapshot — so those carry the real
+    ///          battery-backed time instead of epoch 0. The task (started
+    ///          later) then keeps the latch fresh at 1 Hz. Must not be called
+    ///          once the task is running (the task is the latch's sole writer
+    ///          from then on).
+    ///
+    /// \return \c true if the time was read and latched; \c false if the
+    ///         DS3231 read failed (the latch stays 0 — boot continues and
+    ///         records are stamped 0, as before).
+    ///
+    bool seed_time() noexcept;
+
+    ///
     /// \brief Most recent Unix timestamp latched on a 1 Hz SQW tick.
     ///
-    /// \return Seconds since 1970-01-01 UTC as of the last tick, or \c 0 before
-    ///         the first tick (or if the RTC time was unreadable). Backed by a
+    /// \return Seconds since 1970-01-01 UTC as of the last tick (or the boot
+    ///         \ref seed_time), or \c 0 before either (or if the RTC time was
+    ///         unreadable). Backed by a
     ///         32-bit aligned value, so the read is atomic on Cortex-M without
     ///         a lock.
     ///
