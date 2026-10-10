@@ -14,6 +14,13 @@
 ///          (\c record_store::erase_all erases every sector — far too slow for
 ///          the BT callback).
 ///
+///          Record Count is also \b notify-capable (#75): the writers call
+///          \ref sentinel::gatt::paged::publish_snapshot_count /
+///          \ref sentinel::gatt::paged::publish_event_count whenever a store's
+///          count changes (append or clear), so a subscribed central re-reads
+///          on change instead of polling. The payload is the fixed 4-byte
+///          count; coalescing a fast cadence is the client's job.
+///
 ///          The record stores use \b absolute indices in <tt>[tail, head)</tt>;
 ///          this maps the client's relative cursor via
 ///          <tt>tail_index() + cursor</tt>. Because the stores are circular the
@@ -37,6 +44,7 @@ extern "C" {
 }
 #pragma GCC diagnostic pop
 
+#include "sentinel_ble_context.hpp"
 #include "sentinel_ble_gatt.hpp"
 #include "sentinel_device_context.hpp"
 #include "sentinel_device_snapshot.hpp"
@@ -116,7 +124,7 @@ inline void fill_block(const Store &store, uint32_t cursor,
     ble_gatt_db_set_value(block_handle, buf, static_cast<uint16_t>(bytes));
 }
 
-/// \brief Refresh the Snapshot History Record Count (used after a clear).
+/// \brief Refresh the Snapshot History Record Count from the store.
 inline void refresh_snapshot_count() noexcept {
     if (resource::context_ready()) {
         set_count(resource::context().snapshot_store,
@@ -124,11 +132,85 @@ inline void refresh_snapshot_count() noexcept {
     }
 }
 
-/// \brief Refresh the System Event Log Record Count (used after a clear).
+/// \brief Refresh the System Event Log Record Count from the store.
 inline void refresh_event_count() noexcept {
     if (resource::context_ready()) {
         set_count(resource::context().event_store,
                   HDLC_SYSTEM_EVENT_LOG_RECORD_COUNT_VALUE);
+    }
+}
+
+// ---- Record Count (R/Notify) — push on count change (#75) ------------------
+
+/// \brief \c true while a central has subscribed to Snapshot History Record
+///        Count notifications.
+/// \return \c true if the CCCD notification bit is set.
+inline bool snapshot_count_notifications_enabled() noexcept {
+    return app_snapshot_history_record_count_client_char_config[0] &
+           wiced_bt_gatt_client_char_config_e::GATT_CLIENT_CONFIG_NOTIFICATION;
+}
+
+/// \brief \c true while a central has subscribed to System Event Log Record
+///        Count notifications.
+/// \return \c true if the CCCD notification bit is set.
+inline bool event_count_notifications_enabled() noexcept {
+    return app_system_event_log_record_count_client_char_config[0] &
+           wiced_bt_gatt_client_char_config_e::GATT_CLIENT_CONFIG_NOTIFICATION;
+}
+
+/// \brief Notify the connected central with the current Snapshot History
+///        Record Count value.
+/// \param connection_id BLE connection to notify.
+/// \return \c wiced_bt_gatt_status_t result of the notification send.
+inline wiced_bt_gatt_status_t
+notify_snapshot_count(uint16_t connection_id) noexcept {
+    return wiced_bt_gatt_server_send_notification(
+        connection_id, HDLC_SNAPSHOT_HISTORY_RECORD_COUNT_VALUE,
+        app_snapshot_history_record_count_len,
+        app_snapshot_history_record_count, nullptr);
+}
+
+/// \brief Notify the connected central with the current System Event Log
+///        Record Count value.
+/// \param connection_id BLE connection to notify.
+/// \return \c wiced_bt_gatt_status_t result of the notification send.
+inline wiced_bt_gatt_status_t
+notify_event_count(uint16_t connection_id) noexcept {
+    return wiced_bt_gatt_server_send_notification(
+        connection_id, HDLC_SYSTEM_EVENT_LOG_RECORD_COUNT_VALUE,
+        app_system_event_log_record_count_len,
+        app_system_event_log_record_count, nullptr);
+}
+
+///
+/// \brief Publish the Snapshot History Record Count: refresh the read value
+///        and notify a subscribed central (mirrors the sensor-char publish
+///        pattern). Call after the store's count changes (append / clear).
+///
+inline void publish_snapshot_count() noexcept {
+    if (!resource::context_ready()) {
+        return;
+    }
+    refresh_snapshot_count();
+    if (sentinel::ble_context_object.connected() &&
+        snapshot_count_notifications_enabled()) {
+        notify_snapshot_count(sentinel::ble_context_object.connection_id());
+    }
+}
+
+///
+/// \brief Publish the System Event Log Record Count: refresh the read value
+///        and notify a subscribed central. Call after the store's count
+///        changes (append / clear).
+///
+inline void publish_event_count() noexcept {
+    if (!resource::context_ready()) {
+        return;
+    }
+    refresh_event_count();
+    if (sentinel::ble_context_object.connected() &&
+        event_count_notifications_enabled()) {
+        notify_event_count(sentinel::ble_context_object.connection_id());
     }
 }
 

@@ -29,6 +29,7 @@ extern "C" {
 #include "sentinel_debug_print.hpp"
 #include "sentinel_device_context.hpp"
 #include "sentinel_device_snapshot.hpp"
+#include "sentinel_gatt_paged.hpp"
 #include "sentinel_task_snapshot_persistence.hpp"
 
 #include <cstdint>
@@ -113,6 +114,13 @@ bool snapshot_persistence_task::capture_now() noexcept {
     logi("snapshot_persistence: captured #%u (store count=%u)",
          static_cast<unsigned>(m_capture_count),
          static_cast<unsigned>(store().count()));
+
+    // Push the new Record Count to a subscribed central (#75). Production
+    // (context-store) path only — a bound test store is not the one the GATT
+    // characteristic reports.
+    if (m_store == nullptr) {
+        sentinel::gatt::paged::publish_snapshot_count();
+    }
 
     // Heartbeat only on the production (context-store) path: it references the
     // shared event log, which pairs with the context store — not a bound test

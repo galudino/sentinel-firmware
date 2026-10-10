@@ -84,7 +84,7 @@ void ble_maintenance_task::run() {
         if ((bits & BIT_CLEAR_SNAPSHOTS) && resource::context_ready()) {
             logi("ble_maintenance: clearing snapshot history...");
             if (resource::context().snapshot_store.erase_all()) {
-                sentinel::gatt::paged::refresh_snapshot_count();
+                sentinel::gatt::paged::publish_snapshot_count();
                 logi("ble_maintenance: snapshot history cleared");
             } else {
                 loge("ble_maintenance: snapshot history erase failed");
@@ -94,7 +94,7 @@ void ble_maintenance_task::run() {
         if ((bits & BIT_CLEAR_EVENTS) && resource::context_ready()) {
             logi("ble_maintenance: clearing event log...");
             if (resource::context().event_store.erase_all()) {
-                sentinel::gatt::paged::refresh_event_count();
+                sentinel::gatt::paged::publish_event_count();
                 logi("ble_maintenance: event log cleared");
             } else {
                 loge("ble_maintenance: event log erase failed");

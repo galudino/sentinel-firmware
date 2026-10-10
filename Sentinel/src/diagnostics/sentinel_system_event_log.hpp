@@ -103,6 +103,9 @@ public:
     /// "Unix seconds now, or 0 if the clock is not yet available."
     using now_unix_fn = uint32_t (*)();
 
+    /// "A queued record was just appended to the store" (drain-task context).
+    using appended_fn = void (*)();
+
     ///
     /// \brief Per-store-type singleton accessor.
     ///
@@ -147,6 +150,22 @@ public:
 
         m_initialized = true;
         return true;
+    }
+
+    ///
+    /// \brief Bind a hook invoked after each queued record is persisted.
+    ///
+    /// \details Runs in the drain context (the drain task, or the caller of
+    ///          \ref drain_pending()) right after a successful store
+    ///          \c append(). Keeps this layer transport-agnostic: the app binds
+    ///          the BLE Record Count push here (#75). The boot-sequence records
+    ///          are appended before any central can be subscribed and do not
+    ///          fire the hook.
+    ///
+    /// \param on_appended Hook to invoke, or \c nullptr to unbind.
+    ///
+    void set_appended_hook(appended_fn on_appended) noexcept {
+        m_on_appended = on_appended;
     }
 
     // =====================================================================
@@ -519,6 +538,7 @@ public:
         while (xQueueReceive(m_queue, &rec, 0) == pdTRUE) {
             if (m_store->append(rec)) {
                 ++drained;
+                notify_appended();
             }
         }
         return drained;
@@ -531,8 +551,9 @@ public:
         run_boot_sequence();
         for (;;) {
             auto rec = system_event_record{};
-            if (xQueueReceive(m_queue, &rec, portMAX_DELAY) == pdTRUE) {
-                m_store->append(rec);
+            if (xQueueReceive(m_queue, &rec, portMAX_DELAY) == pdTRUE &&
+                m_store->append(rec)) {
+                notify_appended();
             }
         }
     }
@@ -560,6 +581,13 @@ private:
         return m_now != nullptr ? m_now() : 0u;
     }
 
+    /// \brief Invoke the appended hook, if one is bound.
+    void notify_appended() const noexcept {
+        if (m_on_appended != nullptr) {
+            m_on_appended();
+        }
+    }
+
     /// memcpy a typed view into the untyped record the store stores.
     /// \param t Typed record view to convert; must be exactly 36 bytes.
     /// \return The equivalent untyped \ref system_event_record.
@@ -574,6 +602,7 @@ private:
 
     Store *m_store{nullptr};        ///< Non-owning backing store.
     now_unix_fn m_now{nullptr};     ///< Clock callback, or \c nullptr.
+    appended_fn m_on_appended{nullptr}; ///< Post-append hook, or \c nullptr.
     QueueHandle_t m_queue{nullptr}; ///< Non-blocking staging queue.
     bool m_initialized{false};      ///< Set once \ref initialize() runs.
 };

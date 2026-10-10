@@ -43,6 +43,7 @@ extern "C" {
 #include "sentinel_debug_print.hpp"
 #include "sentinel_device_context.hpp"
 #include "sentinel_gatt_dis.hpp"
+#include "sentinel_gatt_paged.hpp"
 #include "sentinel_gatt_snapshot_stream.hpp"
 #include "sentinel_gatt_system.hpp"
 #include "sentinel_orchestrator_entry.hpp"
@@ -245,7 +246,10 @@ void boot_orchestrator::run() {
     // ---- 3. Start the event-log drain task. ----
     // Its run() executes run_boot_sequence() (boot-lifecycle records) first,
     // then block-drains the POST records enqueued above. See the file header on
-    // ordering.
+    // ordering. Each drained record pushes the Record Count to a subscribed
+    // central (#75) — bound here so the event log stays BLE-agnostic.
+    ctx.event_log().set_appended_hook(
+        [] { sentinel::gatt::paged::publish_event_count(); });
     start_task("event log", ctx.event_log().task_create());
 
     // ---- 4a. Seed the System service + Device Information Service (#6/#45).
