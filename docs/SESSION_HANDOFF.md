@@ -62,6 +62,10 @@ paged reads) is **deferred** — not blocking 1.0.2. New issues that surface →
 under Phase I, sub-issue of #4. Other Phase I not in the 1.0.2 scope: #73 (expose
 firmware build info on the System service).
 
+**Next session — start with #75** (Record-Count notify; unblocks client #43), then
+**#74** (RTC epoch-0), **#68** (SQW spam), **#71** (OTA resilience). Validate +
+close **#79** on the next flash alongside.
+
 > **cybt regen note:** editing `Sentinel/src/design.cybt` (e.g. adding a
 > characteristic) and running `make build` triggers the configurator's
 > `bt-configurator-cli` code-gen step, which regenerates `GeneratedSource/` and
