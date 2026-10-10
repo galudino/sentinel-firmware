@@ -60,12 +60,14 @@ Read-only; SIG-named automatically.
 | Serial Number | R/W | read; write `uint32` LE (e.g. `0A 00 00 00`); re-read; re-read **DIS Serial** | readback matches; DIS Serial mirrors (`0000000A`) |
 | Firmware Version | R | read 5 B | `major, minor, patch, build_lo, build_hi` = `00 00 00 01 00` |
 | Platform ID | R | read `uint8` | `0x01` (cyble_416045) |
+| Firmware Build Info | R | read 3 B | `channel, config, variant` — e.g. `02 00 00` (wip · release config · app); `01`/`00` in byte 0 for an rc / release cut (#73) |
 | CPU Temperature | R/Notify | read `int16`/100 °C; subscribe | plausible die temp (≈ambient + a few °C); notifies ~2 s (#55) |
 | Request Bootloader Mode | W | *(last)* write `0x01` | device resets into MCUBoot (serial shows the reset) |
 
 - [ ] Serial R/W + DIS mirror
 - [ ] Firmware Version bytes
 - [ ] Platform ID `0x01`
+- [ ] Firmware Build Info bytes match the build (`SENTINEL_BUILD_CHANNEL`, `CONFIG`) (#73)
 - [ ] CPU Temperature read + notify, physically plausible (#55)
 - [ ] Request Bootloader Mode reboots
 
@@ -111,12 +113,16 @@ Paged protocol: read **Record Count** → write **Index** (relative cursor `0..c
 
 **Snapshot History** (records = `device_snapshot`, 80 B; block ≤ 6 records / 480 B):
 - [ ] Record Count reads a `uint32` (grows over time as lane-1 persists, ~5 min).
+- [ ] Subscribe to Record Count → a notification (new `uint32`) on each persisted
+  snapshot, and on Clear Store (#75).
 - [ ] Write Index `0`, read Record Block → whole `device_snapshot` records.
 - [ ] Write **Clear Store** `0x01` → count returns to 0 (async erase; serial:
   `ble_maintenance: snapshot history cleared`).
 
 **System Event Log** (records = `system_event_record`, 36 B; block ≤ 14 / 504 B):
 - [ ] Record Count `uint32` (boot/POST events already present).
+- [ ] Subscribe to Record Count → a notification on each logged event (e.g.
+  disconnect/reconnect, then the snapshot heartbeat) and on Clear Store (#75).
 - [ ] Index + Record Block walk returns 36-B event records (header 8 B + data 28 B).
 - [ ] Clear Store `0x01` → count 0 (serial: `ble_maintenance: event log cleared`).
 

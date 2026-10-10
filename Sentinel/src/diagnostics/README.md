@@ -40,6 +40,10 @@ log.initialize(store, now_unix_fn);
 log.record_boot_complete(fw_version, /* ... */);  // typed helpers append the right record
 ```
 
+The log is transport-agnostic: `set_appended_hook(fn)` binds a callback fired
+after each queued record is persisted — the app uses it to push the BLE Record
+Count (#75).
+
 `system_event` is the event-type enum; the per-type record structs
 (`boot_lifecycle_record`, `fault_record`, `post_result_record`,
 `snapshot_event_record`, …) live in [`sentinel_system_event.hpp`](sentinel_system_event.hpp).

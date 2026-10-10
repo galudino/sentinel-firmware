@@ -20,18 +20,61 @@ than letting them accumulate here.
 
 ---
 
-**Last updated:** 2026-10-10. **1.0.2.0 is in progress on `release/1.0.2`** (off
-`develop`), tracking [#78](https://github.com/galudino/sentinel-firmware/issues/78).
-Version is stamped **1.0.2.92** (`34deea6`: `OTA_APP_VERSION_PATCH=2`, `BUILD=92`).
-**No firmware work has landed since 2026-09-17** — the branch tip is still the #79
-advertising commit (`e949f32`); `1.0.2` is **not cut** (no `v1.0.2` tag).
+**Last updated:** 2026-10-10 (late). **1.0.2.0 is in progress on `release/1.0.2`**
+(off `develop`), tracking [#78](https://github.com/galudino/sentinel-firmware/issues/78).
+Version is still stamped **1.0.2.92** (`34deea6`) — **re-stamp `BUILD` before the
+next bench flash / at the cut**. `1.0.2` is **not cut** (no `v1.0.2` tag).
+Phase I firmware is **not locked**: client work may still surface firmware fixes.
 
-**Landed on `release/1.0.2`:** #72 (paged reads) + #69 (device readiness) — both
-on-device validated; **#79** (advertise indefinitely + re-advertise on disconnect,
-`e949f32`) — **committed, still needs on-device validation → then close**; partial
-docs (#53/#57). **Release mechanics still pending:** re-stamp `BUILD`, tag
-`v1.0.2`, cut the GitHub Release with signed assets, sync the client's bundled
-stock firmware (see #78's checklist).
+**All 1.0.2 code is now on the branch; what remains is on-device validation.**
+Both targets build + sign clean (firmware Release, testbench Release);
+`doxygen Doxyfile` = 0 warnings; clang-format sweep re-run (#53); READMEs + the
+nRF Connect checklist refreshed (#57).
+
+**Committed this session — NOT yet validated on hardware (flash, check, close):**
+
+- **#75 — Record Count notify** (`086b3aa`). Both paged Record Count chars are
+  R/Notify with a CCCD (`design.cybt`). `gatt::paged::publish_{snapshot,event}_count`
+  fire on every append and on Clear Store — i.e. **per record, not per value
+  change**, so a full (wrapped) store whose count is pinned at capacity still
+  signals new records. Event log stays BLE-agnostic via
+  `system_event_log::set_appended_hook` (bound in the boot orchestrator; boot-
+  sequence records don't fire it). Audit: no other read-only-dynamic char needs
+  notify. **Bench:** subscribe to each count; watch a notification per persisted
+  snapshot / logged event. Watch the event-log drain task's stack (it now sends
+  the notification; `configMINIMAL_STACK_SIZE * 4`).
+- **#73 — Firmware Build Info** (`5f049c9`). New System char
+  `354E9885-A000-44FA-AB17-7251002BAAB1`, read-only 3 B `[channel, config,
+  variant]`; `sentinel::build_info` (`utilities/sentinel_build_info.hpp`).
+  `SENTINEL_BUILD_CHANNEL?=wip` in the Makefile (`rc` / `release` at a cut —
+  **set `release` for the 1.0.2.0 build**). Blocks client #42 (native
+  blocked-by link set). **Bench:** read `02 00 00` on a default Release app build.
+- **#74 — clock seeded early** + **#68 — second-change gate** (`ac421e7`).
+  `rtc_service::seed_time()` runs right after the device context is built.
+  rtc_service acts once per RTC second. **Bench:** boot log + first event/snapshot
+  records carry real time; testbench shows one heartbeat/s. #68's *root cause*
+  (scope P6[3], read back DS3231 `0x0E`, external pull-up) is still a hardware
+  task — the firmware gate only bounds the symptom.
+- **#79** (advertise indefinitely, `e949f32`) — still awaiting its bench check.
+
+**Handles renumbered** (two CCCDs + one characteristic added) — the client
+discovers by UUID, so only the contract mirror matters: client #43 (count
+notify) and #42 (build info).
+
+**#71 (OTA interruption / power-loss) is hardware-only** — nothing to code. One
+finding recorded on the issue: `Request Bootloader Mode` is **vestigial for
+OTA** (the client defines `requestBootloaderMode()` but never calls it; OTA runs
+in-app and MCUBoot swaps on the post-download reset; the char is just a delayed
+`NVIC_SystemReset`). Keep-or-remove is an open decision (removal is a contract
+change mirrored by the client).
+
+**Next session:** flash the Release app + testbench → validate #75/#73/#74/#68/#79
+→ run the #71 interruption matrix → close issues → cut 1.0.2.0 per #78's
+checklist (re-stamp BUILD, `SENTINEL_BUILD_CHANNEL=release`, tag, squash, GitHub
+Release, sync the client bundle). **#76** (slow paged reads) stays deferred.
+
+**Previously landed + validated on `release/1.0.2`:** #72 (paged reads) + #69
+(device readiness).
 
 The two validated fixes:
 
@@ -54,17 +97,6 @@ The two validated fixes:
   client #38 (branch `38-device-readiness-gate`) consumes it — connect mid-boot and
   watch Home gate on readiness. Board: #72/#69 → In Review / Phase I, sub-issues of
   #4.
-
-**Remaining 1.0.2 constituents (not started — no commits):** #74 (seed RTC early,
-no epoch-0 boot records) · #75 (notify on Record-Count change) · #71 (OTA
-interruption/power-loss resilience) · #68 (RTC SQW ~12×/s spam). **#76** (slow
-paged reads) is **deferred** — not blocking 1.0.2. New issues that surface → file
-under Phase I, sub-issue of #4. Other Phase I not in the 1.0.2 scope: #73 (expose
-firmware build info on the System service).
-
-**Next session — start with #75** (Record-Count notify; unblocks client #43), then
-**#74** (RTC epoch-0), **#68** (SQW spam), **#71** (OTA resilience). Validate +
-close **#79** on the next flash alongside.
 
 > **cybt regen note:** editing `Sentinel/src/design.cybt` (e.g. adding a
 > characteristic) and running `make build` triggers the configurator's

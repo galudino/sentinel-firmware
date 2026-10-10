@@ -37,6 +37,10 @@ sentinel::task::rtc_service::instance().task_create();
 const auto t = sentinel::task::rtc_service::instance().last_unix_time();
 ```
 
+`last_unix_time()` is valid before the task starts: the boot orchestrator calls
+`rtc_service::seed_time()` once (#74). The loop itself acts at most once per RTC
+second, so extra SQW edges on a noisy line collapse into a 1 Hz heartbeat (#68).
+
 ISRs (battery HAL timer, RTC SQW edge) are private `static` members that recover
 the instance from the HAL callback argument — so no file-static task state remains.
 

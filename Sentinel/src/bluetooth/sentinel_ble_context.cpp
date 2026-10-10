@@ -444,8 +444,9 @@ static wiced_bt_gatt_status_t sentinel::ble_start_advertising() {
                                             cy_bt_adv_packet_data);
 
     // #67: advertise the System 128-bit service UUID in the primary packet so a
-    // service-filtered iOS scan can discover the board; carry the Complete Local
-    // Name ("Sentinel") in the scan response, which iOS active-scans and merges.
+    // service-filtered iOS scan can discover the board; carry the Complete
+    // Local Name ("Sentinel") in the scan response, which iOS active-scans and
+    // merges.
     wiced_bt_ble_set_raw_scan_response_data(CY_BT_SCAN_RESP_PACKET_DATA_SIZE,
                                             cy_bt_scan_resp_packet_data);
 

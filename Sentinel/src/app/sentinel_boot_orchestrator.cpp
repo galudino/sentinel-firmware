@@ -281,10 +281,10 @@ void boot_orchestrator::run() {
              static_cast<unsigned>(sentinel::to_underlying(platform)),
              static_cast<unsigned long>(gsys::serial_number()));
         logi("boot: build info (channel=%u, config=%u, variant=%u)",
-             static_cast<unsigned>(sentinel::to_underlying(
-                 sentinel::current_build_info.channel)),
-             static_cast<unsigned>(sentinel::to_underlying(
-                 sentinel::current_build_info.config)),
+             static_cast<unsigned>(
+                 sentinel::to_underlying(sentinel::current_build_info.channel)),
+             static_cast<unsigned>(
+                 sentinel::to_underlying(sentinel::current_build_info.config)),
              static_cast<unsigned>(sentinel::to_underlying(
                  sentinel::current_build_info.variant)));
     }

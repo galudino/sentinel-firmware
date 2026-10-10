@@ -9,7 +9,7 @@ mirror the drivers), and this layer is the single seam between the generated
 |---|---|
 | **Key types** | `ble_context`, `ble_gatt`, and the per-service `gatt::*` accessors |
 | **Stack/context** | [`sentinel_ble_context.hpp`](sentinel_ble_context.hpp) / [`.cpp`](sentinel_ble_context.cpp) · [`sentinel_ble_gatt.hpp`](sentinel_ble_gatt.hpp) / [`.cpp`](sentinel_ble_gatt.cpp) |
-| **Issues** | #6 (GATT catalog), #45 (DIS + Platform ID), #55 (CPU temperature char), #69 (device readiness), #72 (paged blob-read fix) |
+| **Issues** | #6 (GATT catalog), #45 (DIS + Platform ID), #55 (CPU temperature char), #69 (device readiness), #72 (paged blob-read fix), #73 (firmware build info), #75 (Record Count notify) |
 
 ## GATT accessor layer
 
@@ -22,9 +22,9 @@ accessor/mutator pairs, with the notify-sender in the same layer:
 |---|---|---|
 | `gatt::bme280` | [`sentinel_gatt_bme280.hpp`](sentinel_gatt_bme280.hpp) | BME280 ambient sample (packed `bme280_sample`) |
 | `gatt::ds3231` | [`sentinel_gatt_ds3231.hpp`](sentinel_gatt_ds3231.hpp) | DS3231 time (R/W — BLE time-sync), RTC temp, alarms |
-| `gatt::system` | [`sentinel_gatt_system.hpp`](sentinel_gatt_system.hpp) | System service: identity, CPU temperature, device readiness (boot/POST state, R/Notify), bootloader |
+| `gatt::system` | [`sentinel_gatt_system.hpp`](sentinel_gatt_system.hpp) | System service: identity, firmware build info (`[channel, config, variant]`, R), CPU temperature, device readiness (boot/POST state, R/Notify), bootloader |
 | `gatt::snapshot_stream` | [`sentinel_gatt_snapshot_stream.hpp`](sentinel_gatt_snapshot_stream.hpp) | Live snapshot stream (lane 2) + enable char |
-| `gatt::paged` | [`sentinel_gatt_paged.hpp`](sentinel_gatt_paged.hpp) | Paged reads: Snapshot History + System Event Log |
+| `gatt::paged` | [`sentinel_gatt_paged.hpp`](sentinel_gatt_paged.hpp) | Paged reads: Snapshot History + System Event Log; Record Count is R/Notify — `publish_*_count()` pushes on every append/clear (#75) |
 | `gatt::dis` | [`sentinel_gatt_dis.hpp`](sentinel_gatt_dis.hpp) | Device Information Service (0x180A) + Platform ID |
 | `gatt::battery` | [`sentinel_gatt_battery.hpp`](sentinel_gatt_battery.hpp) | Battery Service |
 | `gatt::debug` | [`sentinel_gatt_debug.hpp`](sentinel_gatt_debug.hpp) | Debug output stream |

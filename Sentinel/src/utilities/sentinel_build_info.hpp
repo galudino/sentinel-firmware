@@ -2,7 +2,7 @@
 /// \file    sentinel_build_info.hpp
 /// \brief   Compile-time build identity: channel / config / variant (fw#73)
 ///
-/// \details Complements \ref sentinel::firmware_version: the version says
+/// \details Complements \ref sentinel::firmware_version — the version says
 ///          \e which build is running, \ref sentinel::build_info says \e what
 ///          \e kind — an official release vs a release candidate vs a
 ///          work-in-progress image, a Release vs Debug configuration, and the
@@ -20,7 +20,8 @@
 ///          \b Sources. \c channel comes from the \c SENTINEL_BUILD_CHANNEL
 ///          Makefile variable (\c wip by default; set to \c rc / \c release at
 ///          a candidate / release cut); \c config from the existing
-///          \c RELEASE_CONFIG / \c DEBUG_CONFIG defines (\c CONFIG=Release|Debug);
+///          \c RELEASE_CONFIG / \c DEBUG_CONFIG defines (\c
+///          CONFIG=Release|Debug);
 ///          \c variant from the existing \c SENTINEL_TESTBENCH define.
 ///
 /// \author  galudino

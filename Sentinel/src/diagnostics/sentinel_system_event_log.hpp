@@ -600,11 +600,11 @@ private:
         return out;
     }
 
-    Store *m_store{nullptr};        ///< Non-owning backing store.
-    now_unix_fn m_now{nullptr};     ///< Clock callback, or \c nullptr.
+    Store *m_store{nullptr};            ///< Non-owning backing store.
+    now_unix_fn m_now{nullptr};         ///< Clock callback, or \c nullptr.
     appended_fn m_on_appended{nullptr}; ///< Post-append hook, or \c nullptr.
-    QueueHandle_t m_queue{nullptr}; ///< Non-blocking staging queue.
-    bool m_initialized{false};      ///< Set once \ref initialize() runs.
+    QueueHandle_t m_queue{nullptr};     ///< Non-blocking staging queue.
+    bool m_initialized{false};          ///< Set once \ref initialize() runs.
 };
 
 } // namespace sentinel::diagnostics
