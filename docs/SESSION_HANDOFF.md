@@ -20,12 +20,20 @@ than letting them accumulate here.
 
 ---
 
-**Last updated:** 2026-09-04 (session, `release/1.0.2` opened). **1.0.2.0 release
-branch `release/1.0.2` off `develop`** accumulates the remaining Phase I firmware
-work → will tag + squash-merge to `develop` and `main` as **1.0.2.0** when the
-batch is done (bump `Makefile` `OTA_APP_VERSION_PATCH=2` at finalization; build
-still signs `1.0.1+0` today). Two fixes landed on the branch so far, **both
-compile+link clean (app + testbench), both still need on-device validation:**
+**Last updated:** 2026-10-10. **1.0.2.0 is in progress on `release/1.0.2`** (off
+`develop`), tracking [#78](https://github.com/galudino/sentinel-firmware/issues/78).
+Version is stamped **1.0.2.92** (`34deea6`: `OTA_APP_VERSION_PATCH=2`, `BUILD=92`).
+**No firmware work has landed since 2026-09-17** — the branch tip is still the #79
+advertising commit (`e949f32`); `1.0.2` is **not cut** (no `v1.0.2` tag).
+
+**Landed on `release/1.0.2`:** #72 (paged reads) + #69 (device readiness) — both
+on-device validated; **#79** (advertise indefinitely + re-advertise on disconnect,
+`e949f32`) — **committed, still needs on-device validation → then close**; partial
+docs (#53/#57). **Release mechanics still pending:** re-stamp `BUILD`, tag
+`v1.0.2`, cut the GitHub Release with signed assets, sync the client's bundled
+stock firmware (see #78's checklist).
+
+The two validated fixes:
 
 - **#72 — paged GATT block reads returned `INVALID_OFFSET` on blob reads**
   (`ce7d0d8`). `before_read()` refilled the record block from the live circular
@@ -47,9 +55,12 @@ compile+link clean (app + testbench), both still need on-device validation:**
   watch Home gate on readiness. Board: #72/#69 → In Review / Phase I, sub-issues of
   #4.
 
-**Still queued on `release/1.0.2` (not started):** #71 OTA DFU interruption
-resilience, #68 RTC SQW ~12×/s spam. New issues that surface → file under Phase I,
-sub-issue of #4.
+**Remaining 1.0.2 constituents (not started — no commits):** #74 (seed RTC early,
+no epoch-0 boot records) · #75 (notify on Record-Count change) · #71 (OTA
+interruption/power-loss resilience) · #68 (RTC SQW ~12×/s spam). **#76** (slow
+paged reads) is **deferred** — not blocking 1.0.2. New issues that surface → file
+under Phase I, sub-issue of #4. Other Phase I not in the 1.0.2 scope: #73 (expose
+firmware build info on the System service).
 
 > **cybt regen note:** editing `Sentinel/src/design.cybt` (e.g. adding a
 > characteristic) and running `make build` triggers the configurator's
