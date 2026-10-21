@@ -59,6 +59,10 @@ namespace sentinel::gatt::paged {
 /// \brief Largest Record Block payload (bounded by the GATT DB MaxAttrLength).
 inline constexpr uint16_t BLOCK_SCRATCH = 512;
 
+/// \brief Most unreadable slots one block fill steps past before giving up
+///        (bounds the flash reads done inside the BT-stack read callback).
+inline constexpr uint32_t MAX_SKIPPED_SLOTS = 64;
+
 /// \brief Read a little-endian uint32 from a 4-byte GATT value array.
 /// \param p Pointer to at least 4 bytes, little-endian encoded.
 /// \return The decoded 32-bit value.
@@ -97,6 +101,15 @@ inline void set_count(const Store &store, uint16_t count_handle) noexcept {
 /// characteristic.
 /// \param  block_max   Maximum bytes the characteristic can hold.
 ///
+/// \details An unreadable slot (a torn / uncommitted record, e.g. from a
+///          power or bus fault mid-append) is \e skipped rather than ending
+///          the block (#76): ending it made every slot past the bad one
+///          unreachable, so one torn record hid the rest of the history. The
+///          client advances its cursor by the number of records returned, so
+///          each skipped slot re-delivers one record at the start of the
+///          next block (dedupe by timestamp); the walk always completes. At
+///          most \ref MAX_SKIPPED_SLOTS bad slots are stepped past per fill.
+///
 template <typename Rec, typename Store>
 inline void fill_block(const Store &store, uint32_t cursor,
                        uint16_t block_handle, uint32_t block_max) noexcept {
@@ -107,19 +120,20 @@ inline void fill_block(const Store &store, uint32_t cursor,
     const uint32_t per = block_max / rec;
     const uint32_t cnt = store.count();
 
-    uint32_t n = (cursor < cnt) ? (cnt - cursor) : 0u;
-    if (n > per) {
-        n = per;
-    }
-
     uint32_t bytes = 0;
-    for (uint32_t i = 0; i < n; i++) {
-        auto r = store.read(store.tail_index() + cursor + i);
+    uint32_t filled = 0;
+    uint32_t skipped = 0;
+    for (uint32_t pos = cursor; pos < cnt && filled < per; pos++) {
+        auto r = store.read(store.tail_index() + pos);
         if (!r) {
-            break; // a torn/overwritten slot ends the block early.
+            if (++skipped > MAX_SKIPPED_SLOTS) {
+                break;
+            }
+            continue; // torn slot: step past it (see \details).
         }
         std::memcpy(buf + bytes, &*r, rec);
         bytes += rec;
+        ++filled;
     }
     ble_gatt_db_set_value(block_handle, buf, static_cast<uint16_t>(bytes));
 }

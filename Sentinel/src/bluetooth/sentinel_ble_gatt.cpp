@@ -303,7 +303,10 @@ wiced_bt_gatt_status_t sentinel::ble_gatt_request_read_handler(
 
     attr_length_to_copy = attribute->cur_len;
 
-    if (read_request->offset >= attribute->cur_len) {
+    // Only an offset *past* the value is invalid (ATT: offset == length reads
+    // an empty value). A zero-length value — e.g. a paged Record Block past
+    // the end of a store — must read as empty, not fail at offset 0 (#76).
+    if (read_request->offset > attribute->cur_len) {
         return wiced_bt_gatt_status_e::WICED_BT_GATT_INVALID_OFFSET;
     }
 

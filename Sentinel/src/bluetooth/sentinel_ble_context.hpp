@@ -358,6 +358,17 @@ private:
 
     /// Magic number indicating invalid/uninitialized BLE context state
     static constexpr auto BLE_CONTEXT_TAG_INVALID = uint32_t{0xDEADBEEF};
+
+    /// Preferred connection interval requested on connect (#76): 12 × 1.25 ms
+    /// = 15 ms, the shortest Apple's accessory guidelines allow.
+    static constexpr auto PREFERRED_CONN_INTERVAL = uint16_t{12};
+
+    /// Preferred peripheral latency (connection events the peripheral may
+    /// skip): 0, so every request is answered on the next event.
+    static constexpr auto PREFERRED_CONN_LATENCY = uint16_t{0};
+
+    /// Preferred supervision timeout, in 10 ms units: 5 s.
+    static constexpr auto PREFERRED_SUPERVISION_TIMEOUT = uint16_t{500};
 };
 
 ///

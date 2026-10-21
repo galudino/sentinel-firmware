@@ -113,6 +113,16 @@ wiced_bt_gatt_status_t ble_context::connection_event_handler(
                     m_peer_address.begin());
 
         m_connection_state = state::connected;
+
+        // #76: ask the central for a 15 ms connection interval. Paged reads
+        // and OTA are request/response bound (every Index write and block read
+        // waits out connection events), so the central's default 30 ms+
+        // interval dominated a whole-store walk. 15 ms min == max is within
+        // Apple's accessory guidelines; the central may still refuse.
+        wiced_bt_l2cap_update_ble_conn_params(
+            m_peer_address.data(), PREFERRED_CONN_INTERVAL,
+            PREFERRED_CONN_INTERVAL, PREFERRED_CONN_LATENCY,
+            PREFERRED_SUPERVISION_TIMEOUT);
     } else {
         m_connection_id = 0;
 
