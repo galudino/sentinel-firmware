@@ -108,7 +108,8 @@ inline void set_count(const Store &store, uint16_t count_handle) noexcept {
 ///          client advances its cursor by the number of records returned, so
 ///          each skipped slot re-delivers one record at the start of the
 ///          next block (dedupe by timestamp); the walk always completes. At
-///          most \ref MAX_SKIPPED_SLOTS bad slots are stepped past per fill.
+///          most \ref sentinel::gatt::paged::MAX_SKIPPED_SLOTS bad slots are
+///          stepped past per fill.
 ///
 template <typename Rec, typename Store>
 inline void fill_block(const Store &store, uint32_t cursor,
