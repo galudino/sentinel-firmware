@@ -20,16 +20,35 @@ than letting them accumulate here.
 
 ---
 
-**Last updated:** 2026-10-10 (late). **1.0.2.0 is in progress on `release/1.0.2`**
+**Last updated:** 2026-10-20. **1.0.2.0 is in progress on `release/1.0.2`**
 (off `develop`), tracking [#78](https://github.com/galudino/sentinel-firmware/issues/78).
 Version is still stamped **1.0.2.92** (`34deea6`) — **re-stamp `BUILD` before the
 next bench flash / at the cut**. `1.0.2` is **not cut** (no `v1.0.2` tag).
 Phase I firmware is **not locked**: client work may still surface firmware fixes.
 
 **All 1.0.2 code is now on the branch; what remains is on-device validation.**
-Both targets build + sign clean (firmware Release, testbench Release);
-`doxygen Doxyfile` = 0 warnings; clang-format sweep re-run (#53); READMEs + the
-nRF Connect checklist refreshed (#57).
+`#76` landed this session (`9390933`) — it was written in a prior session but
+left uncommitted in the working tree; build-verified (firmware Release links +
+OTA-signs clean) and committed. firmware Release builds + signs clean;
+`doxygen Doxyfile` = **0 warnings** (re-verified, incl. the #76 files — needed a
+qualified `\ref`, `a28cbde`); clang-format clean across all 114 `src/` files
+(#53); READMEs + the nRF Connect checklist refreshed (#57). **#53 + #57 are
+software-complete; both re-verified against the #76 code.**
+
+- **#76 — large paged reads slow / torn-slot hid history** (`9390933`). Four
+  changes: (1) `resource::configure_spi_clock` reprograms the SCB SPI flash
+  divider from the configurator default (~100 kHz) to **4 MHz** — each flash
+  read is µs not ms; (2) `ble_context` requests a **15 ms** connection interval
+  on connect (central may refuse); (3) `gatt::paged::fill_block` **skips** a
+  torn/unreadable slot (bounded by `MAX_SKIPPED_SLOTS`=64) instead of ending the
+  block — one bad record no longer hides the rest; client dedupes the
+  re-delivered successor by timestamp; (4) `ble_gatt` read at `offset == cur_len`
+  reads empty per ATT, not `INVALID_OFFSET`. **Bench (decisive diagnostic):**
+  rebuild a large store, reset, read `boot: snapshot history ready (ok=1, N
+  records)` — N correct **and** the client's Trends/History populate at scale.
+  ⚠️ **the 100 kHz→4 MHz jump will be far less forgiving of the marginal
+  breadboard SPI wiring** — if flash reads flake, re-seat/shorten SPI wiring
+  before suspecting the code.
 
 **Committed this session — NOT yet validated on hardware (flash, check, close):**
 
@@ -68,10 +87,14 @@ in-app and MCUBoot swaps on the post-download reset; the char is just a delayed
 `NVIC_SystemReset`). Keep-or-remove is an open decision (removal is a contract
 change mirrored by the client).
 
-**Next session:** flash the Release app + testbench → validate #75/#73/#74/#68/#79
-→ run the #71 interruption matrix → close issues → cut 1.0.2.0 per #78's
-checklist (re-stamp BUILD, `SENTINEL_BUILD_CHANNEL=release`, tag, squash, GitHub
-Release, sync the client bundle). **#76** (slow paged reads) stays deferred.
+**Next session (BENCH — critical path):** flash the Release app + testbench →
+validate the whole committed set **#75/#73/#74/#68/#79/#76** → run the **#71**
+interruption/power-loss matrix → decide `requestBootloaderMode` keep-or-remove
+(below) → close issues → cut 1.0.2.0 per #78's checklist (re-stamp BUILD,
+`SENTINEL_BUILD_CHANNEL=release`, tag the pre-squash tip, squash
+`release/1.0.2`→`develop`→`main`, tag `v1.0.2`, GitHub Release with signed
+assets, sync the client bundle). **All software for 1.0.2 is now committed and
+verified — nothing left to code; the release gate is purely on-bench.**
 
 **Previously landed + validated on `release/1.0.2`:** #72 (paged reads) + #69
 (device readiness).
