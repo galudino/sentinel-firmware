@@ -76,21 +76,23 @@ software-complete; both re-verified against the #76 code.**
   task — the firmware gate only bounds the symptom.
 - **#79** (advertise indefinitely, `e949f32`) — still awaiting its bench check.
 
-**Handles renumbered** (two CCCDs + one characteristic added) — the client
-discovers by UUID, so only the contract mirror matters: client #43 (count
-notify) and #42 (build info).
+**Handles renumbered** across this release (two CCCDs + Build Info added for
+#75/#73; Request Bootloader Mode **removed** for #71) — the client discovers by
+UUID, so only the contract mirror matters: client #43 (count notify), #42
+(build info), and the `requestBootloaderMode` removal (below).
 
-**#71 (OTA interruption / power-loss) is hardware-only** — nothing to code. One
-finding recorded on the issue: `Request Bootloader Mode` is **vestigial for
-OTA** (the client defines `requestBootloaderMode()` but never calls it; OTA runs
-in-app and MCUBoot swaps on the post-download reset; the char is just a delayed
-`NVIC_SystemReset`). Keep-or-remove is an open decision (removal is a contract
-change mirrored by the client).
+**#71 (OTA interruption / power-loss) is hardware-only** — nothing left to code.
+**Decision taken 2026-10-20: `Request Bootloader Mode` REMOVED** (`04caed2`) — it
+was vestigial for OTA (the client defined `requestBootloaderMode()` but never
+called it; OTA runs in-app and MCUBoot swaps on the post-download reset; the char
+was just a delayed `NVIC_SystemReset`). Dropped from `design.cybt` + the write
+handler + `ble_maintenance_task`. **Client must mirror the removal** (owner is
+handling it). The rest of #71 is the bench interruption/power-loss matrix.
 
 **Next session (BENCH — critical path):** flash the Release app + testbench →
 validate the whole committed set **#75/#73/#74/#68/#79/#76** → run the **#71**
-interruption/power-loss matrix → decide `requestBootloaderMode` keep-or-remove
-(below) → close issues → cut 1.0.2.0 per #78's checklist (re-stamp BUILD,
+interruption/power-loss matrix → close issues → cut 1.0.2.0 per #78's checklist
+(re-stamp BUILD,
 `SENTINEL_BUILD_CHANNEL=release`, tag the pre-squash tip, squash
 `release/1.0.2`→`develop`→`main`, tag `v1.0.2`, GitHub Release with signed
 assets, sync the client bundle). **All software for 1.0.2 is now committed and
