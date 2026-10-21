@@ -463,20 +463,6 @@ sentinel::ble_gatt_command_write_handler(wiced_bt_gatt_event_data_t *event_data,
         return status;
     }
 
-    case HDLC_SYSTEM_REQUEST_BOOTLOADER_MODE_VALUE: {
-        // Enter the bootloader for OTA DFU (#6): store the write, then request
-        // a deferred reset from the maintenance task (never reset in the BT
-        // callback — the write response must flush first).
-        auto status =
-            ble_gatt_db_set_value(write_request->handle, write_request->p_val,
-                                  write_request->val_len);
-        if (status == wiced_bt_gatt_status_e::WICED_BT_GATT_SUCCESS) {
-            sentinel::task::ble_maintenance_task::instance()
-                .request_bootloader();
-        }
-        return status;
-    }
-
     case HDLC_SNAPSHOT_HISTORY_CLEAR_STORE_VALUE: {
         // Erase the snapshot history store (async — erase_all is multi-second).
         auto status =

@@ -4,7 +4,7 @@
 ///
 /// \details Thin \c sentinel::gatt::system seam over the generated \c System
 ///          service value arrays: Serial Number (R/W device-identity key),
-///          Firmware Version (R, 5-byte packed), Request Bootloader Mode (W),
+///          Firmware Version (R, 5-byte packed),
 ///          Platform ID (R, \ref sentinel::platform_id), and Firmware Build
 ///          Info (R, \ref sentinel::build_info — fw#73). Like the rest of
 ///          the \c sentinel::gatt::\<svc\> layer these are \c inline + \c

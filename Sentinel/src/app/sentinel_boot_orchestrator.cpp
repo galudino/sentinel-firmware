@@ -321,8 +321,8 @@ void boot_orchestrator::run() {
     // AC).
     start_task("cpu die-temp service",
                task::cpu_die_temp_service::instance().task_create());
-    // Async handler for slow BLE-triggered maintenance (store clears + deferred
-    // bootloader reset), kept off the Bluetooth callback (#6).
+    // Async handler for slow BLE-triggered maintenance (flash record-store
+    // clears), kept off the Bluetooth callback (#6).
     start_task("ble maintenance",
                task::ble_maintenance_task::instance().task_create());
 
