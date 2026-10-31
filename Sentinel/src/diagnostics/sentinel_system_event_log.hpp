@@ -251,6 +251,56 @@ public:
     }
 
     ///
+    /// \brief Record a \c rtc_set_from_ble event (the DS3231 clock was set over
+    ///        GATT). Header-only — the new time is observable from the
+    ///        subsequent records' timestamps.
+    ///
+    /// \return \c true if enqueued; \c false otherwise (see \ref record()).
+    ///
+    bool record_rtc_set_from_ble() noexcept {
+        auto r = system_event_record{};
+        r.header.event_type = system_event::rtc_set_from_ble;
+        return record(r);
+    }
+
+    ///
+    /// \brief Record a \c serial_number_set event (the device serial number was
+    ///        written over GATT). Header-only.
+    ///
+    /// \return \c true if enqueued; \c false otherwise (see \ref record()).
+    ///
+    bool record_serial_number_set() noexcept {
+        auto r = system_event_record{};
+        r.header.event_type = system_event::serial_number_set;
+        return record(r);
+    }
+
+    ///
+    /// \brief Record a \c ble_stack_initialized event (the BLE stack reached
+    ///        \c BTM_ENABLED_EVT). Header-only.
+    ///
+    /// \return \c true if enqueued; \c false otherwise (see \ref record()).
+    ///
+    bool record_ble_stack_initialized() noexcept {
+        auto r = system_event_record{};
+        r.header.event_type = system_event::ble_stack_initialized;
+        return record(r);
+    }
+
+    ///
+    /// \brief Record a \c ble_stack_deinitialized event. Header-only. No
+    ///        production path calls \c stack_deinitialize() today, so this
+    ///        fires only if a teardown path is ever added.
+    ///
+    /// \return \c true if enqueued; \c false otherwise (see \ref record()).
+    ///
+    bool record_ble_stack_deinitialized() noexcept {
+        auto r = system_event_record{};
+        r.header.event_type = system_event::ble_stack_deinitialized;
+        return record(r);
+    }
+
+    ///
     /// \brief Record a \c ble_peripheral_connected event.
     ///
     /// \param peer_addr           Peer BD_ADDR (6 bytes).

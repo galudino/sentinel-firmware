@@ -459,6 +459,11 @@ sentinel::ble_gatt_command_write_handler(wiced_bt_gatt_event_data_t *event_data,
         if (status == wiced_bt_gatt_status_e::WICED_BT_GATT_SUCCESS) {
             sentinel::gatt::dis::set_serial_number(
                 sentinel::gatt::system::serial_number());
+            if (sentinel::resource::context_ready()) {
+                sentinel::resource::context()
+                    .event_log()
+                    .record_serial_number_set();
+            }
         }
         return status;
     }
@@ -516,6 +521,7 @@ sentinel::ble_gatt_command_write_handler(wiced_bt_gatt_event_data_t *event_data,
             sentinel::resource::context_ready()) {
             sentinel::resource::context().rtc.set_unix_time(
                 sentinel::gatt::ds3231::unix_time());
+            sentinel::resource::context().event_log().record_rtc_set_from_ble();
         }
         return status;
     }

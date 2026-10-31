@@ -50,6 +50,8 @@ extern "C" {
 #include "sentinel_ble_context.hpp"
 #include "sentinel_ble_gatt.hpp"
 #include "sentinel_cyhal_pwm_signal.hpp"
+#include "sentinel_device_context.hpp"
+#include "sentinel_firmware_version.hpp"
 #include "sentinel_led_pwm.hpp"
 #include "sentinel_pwm_signal.hpp"
 #include "sentinel_resource.hpp"
@@ -123,6 +125,13 @@ wiced_bt_gatt_status_t ble_context::connection_event_handler(
             m_peer_address.data(), PREFERRED_CONN_INTERVAL,
             PREFERRED_CONN_INTERVAL, PREFERRED_CONN_LATENCY,
             PREFERRED_SUPERVISION_TIMEOUT);
+
+        // #80: log the connection. conn_interval / MTU are not yet negotiated
+        // at this point, so they are left 0 (unknown) for now.
+        if (sentinel::resource::context_ready()) {
+            sentinel::resource::context().event_log().record_ble_connected(
+                connection_status.bd_addr, connection_status.addr_type, 0u, 0u);
+        }
     } else {
         m_connection_id = 0;
 
@@ -135,6 +144,13 @@ wiced_bt_gatt_status_t ble_context::connection_event_handler(
         }
 
         m_connection_state = state::disconnected_and_advertising;
+
+        // #80: log the disconnect with the HCI/host reason code.
+        if (sentinel::resource::context_ready()) {
+            sentinel::resource::context().event_log().record_ble_disconnected(
+                connection_status.bd_addr, connection_status.addr_type,
+                static_cast<uint8_t>(connection_status.reason));
+        }
     }
 
     update_advertising_led();
@@ -232,6 +248,20 @@ ble_context::ota_agent_write_handler(wiced_bt_gatt_event_data_t *event_data,
                 return wiced_bt_gatt_status_e::WICED_BT_GATT_ERROR;
             }
 
+            // #80: an OTA download is now starting. The target version is not
+            // known until the image header arrives, so `to` is left 0.0.0.0.
+            // (firmware_update_completed / _reverted need a boot-time swap
+            // detector — staged as a follow-up.)
+            if (sentinel::resource::context_ready()) {
+                sentinel::resource::context()
+                    .event_log()
+                    .record_firmware_update(
+                        sentinel::diagnostics::system_event::
+                            firmware_update_attempted,
+                        sentinel::current_firmware_version,
+                        sentinel::firmware_version(0u, 0u, 0u, 0u), 0u);
+            }
+
             return wiced_bt_gatt_status_e::WICED_BT_GATT_SUCCESS;
 
         case CY_OTA_UPGRADE_COMMAND_DOWNLOAD:
@@ -251,6 +281,17 @@ ble_context::ota_agent_write_handler(wiced_bt_gatt_event_data_t *event_data,
                                                 m_connection_id);
 
             if (result != CY_RSLT_SUCCESS) {
+                // #80: image verification failed — the swap will not happen.
+                if (sentinel::resource::context_ready()) {
+                    sentinel::resource::context()
+                        .event_log()
+                        .record_firmware_update(
+                            sentinel::diagnostics::system_event::
+                                firmware_update_failed,
+                            sentinel::current_firmware_version,
+                            sentinel::firmware_version(0u, 0u, 0u, 0u),
+                            static_cast<uint32_t>(result));
+                }
                 return wiced_bt_gatt_status_e::WICED_BT_GATT_ERROR;
             }
 
@@ -258,6 +299,18 @@ ble_context::ota_agent_write_handler(wiced_bt_gatt_event_data_t *event_data,
 
         case CY_OTA_UPGRADE_COMMAND_ABORT:
             result = cy_ota_ble_download_abort(m_ota_context);
+
+            // #80: the client aborted the OTA before completion.
+            if (sentinel::resource::context_ready()) {
+                sentinel::resource::context()
+                    .event_log()
+                    .record_firmware_update(
+                        sentinel::diagnostics::system_event::
+                            firmware_update_failed,
+                        sentinel::current_firmware_version,
+                        sentinel::firmware_version(0u, 0u, 0u, 0u),
+                        static_cast<uint32_t>(result));
+            }
 
             return wiced_bt_gatt_status_e::WICED_BT_GATT_SUCCESS;
         }
@@ -361,6 +414,14 @@ wiced_bt_dev_status_t ble_context::stack_management_callback(
             }
 
             result = wiced_result_t::WICED_BT_SUCCESS;
+
+            // #80: log that the BLE stack came up. If the event log is not yet
+            // bound (BTM_ENABLED can precede the store bring-up), this no-ops.
+            if (sentinel::resource::context_ready()) {
+                sentinel::resource::context()
+                    .event_log()
+                    .record_ble_stack_initialized();
+            }
         }
         break;
 
