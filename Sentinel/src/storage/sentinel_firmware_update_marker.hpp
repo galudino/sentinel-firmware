@@ -102,8 +102,8 @@ struct firmware_update_marker {
     uint8_t from_build_hi;   ///< Running build, high byte, at attempt (#86).
     uint8_t stage;           ///< Download stage (#71): \ref
                              ///< sentinel::storage::kMarkerStageDownloading,
-                   ///< \ref sentinel::storage::kMarkerStageStaged or \ref
-                   ///< sentinel::storage::kMarkerStageLegacy.
+    ///< \ref sentinel::storage::kMarkerStageStaged or \ref
+    ///< sentinel::storage::kMarkerStageLegacy.
     uint8_t reserved[2]; ///< Reserved / padding for a future field or CRC.
 
     /// \brief The full 16-bit build at attempt (#86).

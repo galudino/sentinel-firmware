@@ -222,17 +222,19 @@ public:
     void ota_cleanup() noexcept;
 
     ///
-    /// \brief Log a failed/interrupted OTA and reset the device to a clean state.
+    /// \brief Log a failed/interrupted OTA and reset the device to a clean
+    /// state.
     ///
     /// \details The deterministic recovery for a *failed* update (signal loss
     ///          mid-download, image verification failure, or an agent start
-    ///          failure): record a \c firmware_update_failed event with \p reason,
-    ///          tear the OTA agent down, then \c NVIC_SystemReset() after a short
-    ///          delay so the log flush and any in-flight BLE indication settle.
-    ///          The reboot brings every task + GATT service back fresh and the
-    ///          board re-advertises — the client then reconnects to a known-good
-    ///          device. A deliberate user *cancel* is NOT a failure and does not
-    ///          reset (it stays connected via \ref ota_cleanup).
+    ///          failure): record a \c firmware_update_failed event with \p
+    ///          reason, tear the OTA agent down, then \c NVIC_SystemReset()
+    ///          after a short delay so the log flush and any in-flight BLE
+    ///          indication settle. The reboot brings every task + GATT service
+    ///          back fresh and the board re-advertises — the client then
+    ///          reconnects to a known-good device. A deliberate user *cancel*
+    ///          is NOT a failure and does not reset (it stays connected via
+    ///          \ref ota_cleanup).
     ///
     /// \param reason The \c firmware_update_record.mcuboot_result reason code
     ///               (\c OTA_FAIL_SIGNAL_LOST / \c OTA_FAIL_VERIFY /
@@ -345,14 +347,14 @@ private:
     static constexpr uint32_t MCUBOOT_HDR_NEEDED = 0x1Cu;
 
     std::array<uint8_t, MCUBOOT_HDR_NEEDED>
-        m_ota_header{};                ///< #86: leading image bytes.
-    uint32_t m_ota_header_len{0};      ///< #86: bytes buffered so far.
-    bool m_ota_attempt_logged{false};  ///< #86: attempted written this OTA.
-    bool m_ota_target_known{false};    ///< #86: target parsed from header.
-    uint8_t m_ota_target_major{0};     ///< #86: target major.
-    uint8_t m_ota_target_minor{0};     ///< #86: target minor.
-    uint8_t m_ota_target_patch{0};     ///< #86: target patch (iv_revision).
-    uint16_t m_ota_target_build{0};    ///< #86: target build (iv_build_num).
+        m_ota_header{};               ///< #86: leading image bytes.
+    uint32_t m_ota_header_len{0};     ///< #86: bytes buffered so far.
+    bool m_ota_attempt_logged{false}; ///< #86: attempted written this OTA.
+    bool m_ota_target_known{false};   ///< #86: target parsed from header.
+    uint8_t m_ota_target_major{0};    ///< #86: target major.
+    uint8_t m_ota_target_minor{0};    ///< #86: target minor.
+    uint8_t m_ota_target_patch{0};    ///< #86: target patch (iv_revision).
+    uint16_t m_ota_target_build{0};   ///< #86: target build (iv_build_num).
 
     uint16_t m_mtu; ///< Negotiated MTU value for BLE notifications (default 23,
                     ///< updated on connection)

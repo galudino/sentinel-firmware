@@ -11,7 +11,18 @@ production and a RAM-backed store as its test double.
 
 Everything durable in the system is a record store: the [System Event Log](../diagnostics/)
 and the [Snapshot History](../telemetry/) are both `record_store`s over distinct
-flash regions.
+flash regions. The one exception is a single fixed record:
+
+| Class | File | Purpose |
+|---|---|---|
+| `firmware_update_marker_store<Transport>` | [`sentinel_firmware_update_marker.hpp`](sentinel_firmware_update_marker.hpp) | 16-byte OTA pending-update marker in its own 4 KiB sector (#81) |
+
+The marker carries an in-flight update across the reset so the next boot can log
+the honest outcome (`completed` / `reverted` / interrupted `failed`). It records
+the running version (full 16-bit build, #86) and a **stage** byte (#71):
+`0xFF` downloading → `0x7F` staged once the image verifies — a bits-only NOR
+program, no erase. A marker still "downloading" at boot means a reset
+interrupted the download.
 
 ## API
 

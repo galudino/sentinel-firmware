@@ -16,6 +16,14 @@ platform's adapters and the drivers above are unchanged.
 | `cyhal_timer` | [`sentinel_cyhal_timer.hpp`](sentinel_cyhal_timer.hpp) | `timer` |
 | `cyhal_gpio_line` | [`sentinel_cyhal_gpio_line.hpp`](sentinel_cyhal_gpio_line.hpp) | `gpio_line` (via `cyhal_gpio_line_context`) |
 
+## Delays
+
+Every transport's `delay_us(uint32_t)` goes through `sentinel::cyhal_delay_us()`
+([`sentinel_cyhal_delay.hpp`](sentinel_cyhal_delay.hpp)): whole milliseconds via
+an RTOS delay (yields) once the scheduler runs, the remainder busy-waited in
+`uint16_t`-sized chunks. `cyhal_system_delay_us()` alone takes a `uint16_t` and
+silently truncated the BME280's 112.8 ms conversion wait to 47 ms (#89).
+
 ## Bus transport vs. direct transport
 
 The two `*_bus_transport` classes don't drive the peripheral inline — they build a
