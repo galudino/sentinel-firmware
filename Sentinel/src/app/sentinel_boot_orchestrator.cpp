@@ -252,7 +252,15 @@ void boot_orchestrator::run() {
     // real time rather than epoch 0. rtc_service (started in step 4) keeps it
     // fresh from here; on a read failure the clock stays 0 and boot continues.
     if (task::rtc_service::instance().seed_time()) {
-        logi("boot: clock seeded from DS3231");
+        if (task::rtc_service::instance().time_valid()) {
+            logi("boot: clock seeded from DS3231");
+        } else {
+            // #94: the DS3231 lost power (no working backup battery) and
+            // restarted at 2000-01-01. Records are stamped 0 until the time
+            // is set over BLE.
+            logw("boot: DS3231 lost its time (oscillator stopped); clock "
+                 "unknown until set over BLE — records stamped 0");
+        }
     } else {
         loge("boot: DS3231 clock seed failed (err=%d); boot records stamped 0",
              static_cast<int>(ctx.rtc.last_error()));

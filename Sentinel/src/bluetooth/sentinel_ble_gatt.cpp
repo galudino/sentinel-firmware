@@ -59,6 +59,7 @@ extern "C" {
 #include "sentinel_task_battery_service.hpp"
 #include "sentinel_task_ble_maintenance.hpp"
 #include "sentinel_task_debug_stream.hpp"
+#include "sentinel_task_rtc_service.hpp"
 #include "sentinel_task_snapshot_stream.hpp"
 #include "sentinel_utilities.hpp"
 
@@ -519,8 +520,13 @@ sentinel::ble_gatt_command_write_handler(wiced_bt_gatt_event_data_t *event_data,
                                   write_request->val_len);
         if (status == wiced_bt_gatt_status_e::WICED_BT_GATT_SUCCESS &&
             sentinel::resource::context_ready()) {
-            sentinel::resource::context().rtc.set_unix_time(
-                sentinel::gatt::ds3231::unix_time());
+            const auto unix_seconds = sentinel::gatt::ds3231::unix_time();
+            if (sentinel::resource::context().rtc.set_unix_time(unix_seconds)) {
+                // #94: the chip now holds a real time — clear the
+                // oscillator-stop flag and trust the clock again.
+                sentinel::task::rtc_service::instance().time_set_from_ble(
+                    unix_seconds);
+            }
             sentinel::resource::context().event_log().record_rtc_set_from_ble();
         }
         return status;

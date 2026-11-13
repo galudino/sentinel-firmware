@@ -138,6 +138,19 @@ uint32_t rtc_service::last_unix_time() const noexcept {
 bool rtc_service::seed_time() noexcept {
     auto &rtc = sentinel::resource::context().rtc;
 
+    // #94: an oscillator stop means the chip lost power without a working
+    // backup battery and restarted at 2000-01-01 — never stamp records with
+    // that. Leave the latch at 0 ("unknown") until a BLE time-set. An
+    // unreadable flag is treated as "stopped" (fail safe).
+    const auto osf = rtc.oscillator_stop_flag();
+    if (!osf || *osf) {
+        m_time_valid = false;
+        m_last_unix_seconds = 0;
+        sentinel::gatt::ds3231::set_unix_time(0);
+        return osf.has_value();
+    }
+    m_time_valid = true;
+
     auto now = rtc.time();
     if (!now) {
         return false;
@@ -159,6 +172,19 @@ int16_t rtc_service::last_temperature_centi_c() const noexcept {
 
 bool rtc_service::has_temperature() const noexcept {
     return m_temperature_known;
+}
+
+bool rtc_service::time_valid() const noexcept { return m_time_valid; }
+
+void rtc_service::time_set_from_ble(uint32_t unix_seconds) noexcept {
+    auto &rtc = sentinel::resource::context().rtc;
+    if (!rtc.clear_oscillator_stop_flag()) {
+        loge("rtc_service: OSF clear failed (err=%d)",
+             static_cast<int>(rtc.last_error()));
+    }
+    m_last_unix_seconds = unix_seconds;
+    m_time_valid = true;
+    sentinel::gatt::ds3231::set_unix_time(unix_seconds);
 }
 
 BaseType_t rtc_service::task_create() noexcept {
@@ -256,8 +282,10 @@ void rtc_service::run() {
 
         // Latch the timestamp first: it is this task's primary product and
         // must not be gated on the best-effort temperature read below.
+        // #94: while the time is untrusted (oscillator stop, not yet set over
+        // BLE) keep the latch and the GATT value at 0 ("unknown").
         auto unix = ds3231_t::datetime::to_unix_time(*now);
-        if (unix) {
+        if (unix && m_time_valid) {
             m_last_unix_seconds = *unix;
             // Refresh the Unix Time GATT read value at 1 Hz (#6; no notify).
             sentinel::gatt::ds3231::set_unix_time(*unix);

@@ -91,11 +91,37 @@ public:
     ///          once the task is running (the task is the latch's sole writer
     ///          from then on).
     ///
-    /// \return \c true if the time was read and latched; \c false if the
-    ///         DS3231 read failed (the latch stays 0 — boot continues and
-    ///         records are stamped 0, as before).
+    ///          #94: if the DS3231's oscillator-stop flag (OSF) is set, the
+    ///          chip lost power without a working backup battery and restarted
+    ///          at its 2000-01-01 default — its time is \e not trusted. The
+    ///          latch then stays 0 ("time unknown") until a BLE time-set
+    ///          (\ref time_set_from_ble) supplies a real time.
+    ///
+    /// \return \c true if the DS3231 was read (see \ref time_valid for
+    ///         whether its time was trusted); \c false if the read failed
+    ///         (the latch stays 0 — boot continues and records are stamped 0).
     ///
     bool seed_time() noexcept;
+
+    ///
+    /// \brief Is the latched time real (#94)?
+    ///
+    /// \return \c false while the DS3231 reports a lost-power oscillator stop
+    ///         and no time has been set since; \ref last_unix_time is then 0.
+    ///
+    bool time_valid() const noexcept;
+
+    ///
+    /// \brief Record a BLE time-set (#94): the DS3231 now holds a real time.
+    ///
+    /// \details Called by the Unix Time write handler after it programs the
+    ///          DS3231. Clears the oscillator-stop flag, marks the time valid
+    ///          and latches \p unix_seconds immediately, so records written
+    ///          before the next 1 Hz tick are already stamped correctly.
+    ///
+    /// \param unix_seconds The time just written to the DS3231.
+    ///
+    void time_set_from_ble(uint32_t unix_seconds) noexcept;
 
     ///
     /// \brief Most recent Unix timestamp latched on a 1 Hz SQW tick.
@@ -169,6 +195,10 @@ private:
 
     /// \c true once \ref m_last_temperature_centi holds a real reading (#89).
     volatile bool m_temperature_known{false};
+
+    /// \c false while the DS3231 time is untrusted after an oscillator stop
+    /// (#94); the tick then leaves \ref m_last_unix_seconds at 0.
+    volatile bool m_time_valid{true};
 
     TaskHandle_t m_handle{nullptr}; ///< FreeRTOS task handle.
 };
