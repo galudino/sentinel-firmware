@@ -549,7 +549,15 @@ SIGN_SCRIPT_FILE_PATH=$(SEARCH_ota-update)/scripts/sign_script.bash
 # MCUBoot must also be modified to skip checking the signature, see README for more details.
 # For signing, use "sign" and key path:
 IMGTOOL_COMMAND_ARG=sign
-CY_SIGNING_KEY_ARG="-k $(MCUBOOT_KEY_DIR)/$(MCUBOOT_KEY_FILE)"
+# fw#85: an overwrite-only bootloader needs only MCUBoot's small overwrite
+# trailer. Without --overwrite-only, imgtool reserves the swap trailer (sized by
+# -M 768 sectors, ~18 KB) in its slot-size check, which the Debug testbench
+# image overflows. sign_script.bash expands this variable unquoted, so the flag
+# rides along with the key argument.
+ifeq ($(USE_OVERWRITE),1)
+    IMGTOOL_EXTRA_ARGS=--overwrite-only
+endif
+CY_SIGNING_KEY_ARG="-k $(MCUBOOT_KEY_DIR)/$(MCUBOOT_KEY_FILE) $(IMGTOOL_EXTRA_ARGS)"
 # IMGTOOL_COMMAND_ARG=create
 # CY_SIGNING_KEY_ARG=" "
 
