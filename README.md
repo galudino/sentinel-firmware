@@ -4,9 +4,11 @@ BLE-connected embedded telemetry and diagnostics platform built on PSoC 6,
 ModusToolbox, and FreeRTOS — with persistent logging, real-time
 `device_snapshot` telemetry, and BLE OTA firmware update over MCUBoot.
 
-> **Status: Phase I complete — public `v1.0.0`.** The Phase I MVP on the
-> Infineon CYBLE-416045 is feature-complete and validated on-bench, including
-> end-to-end OTA DFU. The project began as a C++ rewrite of Infineon's
+> **Status: Phase I — latest release [`v1.0.2`](https://github.com/galudino/sentinel-firmware/releases/tag/v1.0.2)
+> (1.0.2.0).** The Phase I MVP on the Infineon CYBLE-416045 is feature-complete
+> and validated on-bench, including end-to-end OTA DFU and its failure cases
+> (power loss and link loss mid-update). Phase I stays open for critical fixes
+> surfaced by `sentinel-client` integration. The project began as a C++ rewrite of Infineon's
 > [`mtb-example-btstack-freertos-battery-server`](https://github.com/Infineon/mtb-example-btstack-freertos-battery-server)
 > template and has since diverged substantially. Phases II–IV (driver
 > expansion, then Raspberry Pi 5 / POSIX and Nordic nRF5340 ports) are future
@@ -26,10 +28,13 @@ A platform-agnostic embedded firmware that:
   drift-free synchronization.
 - **Persists state to flash** (W25Q128 SPI NOR) — a system event log and a
   rolling history of device-state snapshots, both retrievable later.
-- **Streams live telemetry over BLE** — paired clients can subscribe to live
-  sensor readings, fetch the event log, replay snapshot history, or capture
-  one-off live snapshots during a session.
-- **Supports OTA firmware update** over BLE via MCUBoot.
+- **Streams live telemetry over BLE** — a connected client can subscribe to
+  live sensor readings, fetch the event log, replay snapshot history, or
+  capture one-off live snapshots during a session.
+- **Supports OTA firmware update** over BLE via MCUBoot (overwrite-only
+  upgrades). An interrupted update never bricks the board, and every update's
+  outcome — attempted, completed, failed (with a reason), or reverted — is
+  recorded in the event log.
 - **Targets multiple platforms** — Infineon PSoC 6 BLE today (Phase I),
   Raspberry Pi 5 (POSIX / Linux) in Phase III, and Nordic nRF5340 (Zephyr /
   nRF Connect SDK) in Phase IV, all behind the same platform-agnostic abstractions.
@@ -44,7 +49,7 @@ which platform served the data.
 
 | Phase | Scope | Progress |
 |---|---|---|
-| **I — MVP on Infineon CYBLE-416045** | Environmental sensing, event log, snapshot history, live snapshot stream, OTA DFU | ✅ **Complete — `v1.0.0`** · 33 / 33 issues closed · OTA validated on-bench |
+| **I — MVP on Infineon CYBLE-416045** | Environmental sensing, event log, snapshot history, live snapshot stream, OTA DFU | ✅ **Feature-complete — `v1.0.2`** · 52 issues closed · OTA + interruption cases validated on-bench · open for client-integration fixes |
 | **II — Driver expansion + refinements** | Full driver backlog (chips spanning I²C / SPI / GPIO / PWM / 1-Wire), BME280 SPI mode, CI, refinements to Phase I | Backlog |
 | **III — Raspberry Pi 5 (POSIX) port** | Port the platform-agnostic layer to Raspberry Pi 5 (POSIX / Linux) | Planned |
 | **IV — Nordic nRF5340 port** | Port to Nordic nRF5340 (Zephyr / nRF Connect SDK) | Planned |
@@ -135,7 +140,24 @@ export CY_TOOLS_PATHS=/Applications/ModusToolbox/tools_3.8   # adjust to your in
 # MCUBoot + firmware, combined into one .hex (flash via ModusToolbox Programmer)
 ./scripts/build-mcuboot-app-release.sh nocopy
 ./scripts/combine-mcuboot-app-and-sentinel-firmware-release.sh
+
+# Flash just the app image you last built (the bootloader must already be on the board)
+make qprogram CONFIG=Release
 ```
+
+Version: `OTA_APP_VERSION_MAJOR/MINOR/PATCH/BUILD` in `Sentinel/Makefile`
+(`BUILD=0` = a tagged release; dev images pass the commit count, e.g.
+`OTA_APP_VERSION_BUILD=$(git rev-list --count HEAD)`). The build's maturity is
+`SENTINEL_BUILD_CHANNEL=release|rc|wip` (default `wip`), readable over BLE.
+
+Prebuilt, signed images for each release — the combined MCUBoot + app `.hex`,
+the OTA `.bin`, and the testbench — are attached to the
+[GitHub Releases](https://github.com/galudino/sentinel-firmware/releases).
+
+> **Bootloader note (v1.0.2+):** MCUBoot runs in **overwrite-only** mode (one
+> erase + copy per update instead of swapping through a scratch area). A board
+> coming from 1.0.1 or earlier needs the new bootloader flashed once — use the
+> combined `.hex`.
 
 Open a serial terminal at `/dev/tty.usbmodem*` (macOS) / `/dev/ttyACM*`
 (Linux) / `COMn` (Windows), 115200 8N1, to see boot logs and test output.
@@ -187,7 +209,8 @@ different files. A future repository restructure may flatten this.
   Zephyr drivers (Phase IV, nRF5340).
 - **BLE stack:** AIROC (Cypress / Infineon) Bluetooth LE stack (Phase I);
   BlueZ (Phase III, Pi 5); Zephyr Bluetooth subsystem (Phase IV, nRF5340).
-- **Bootloader / OTA:** MCUBoot signed images, OTA delivery over BLE.
+- **Bootloader / OTA:** MCUBoot signed images (overwrite-only upgrades), OTA
+  delivery over BLE.
 - **Toolchain:** ModusToolbox 3.8 + GCC `arm-none-eabi` 14.2 (MCUBootApp builds
   with 11.3); CMake for the Phase III Linux port.
 - **Persistence:** raw W25Q128 SPI NOR; no filesystem; circular record store
@@ -197,8 +220,7 @@ different files. A future repository restructure may flatten this.
 
 ## Project rules
 
-- **Public.** This repository is public and portfolio-quality (Phase I is
-  closed). Contributions, issues, and external references stay scoped to
+- **Public.** This repository is public and portfolio-quality. Contributions, issues, and external references stay scoped to
   sentinel itself.
 - **Branch workflow.** git-flow style: branch off `develop`, incremental
   commits, tag the pre-squash tip, squash-merge into `develop`, merge `develop`
