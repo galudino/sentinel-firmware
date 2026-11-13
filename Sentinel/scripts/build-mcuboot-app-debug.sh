@@ -45,7 +45,8 @@ function main() {
     local mcuboot_cypress_path_string="third-party/mcuboot/boot/cypress"
     local app_name_string="MCUBootApp"
     local platform_string="PSOC_063_1M"
-    local flash_map_path_string="../../../../psoc63_1m_cm0_int_swap_single.json"
+    # fw#85: OVERWRITE upgrade map (must match the app's OTA_FLASH_MAP in Makefile).
+    local flash_map_path_string="../../../../psoc63_1m_cm0_int_overwrite_single.json"
     local buildcfg_string="Debug"
     local destination_hex_string="$app_name_string"_"$buildcfg_string.hex"
 

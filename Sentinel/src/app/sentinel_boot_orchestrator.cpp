@@ -170,9 +170,11 @@ void resolve_pending_firmware_update(
              from_version.c_str(), running.c_str());
         ctx.event_log().record_firmware_update(step, from_version, running, 0u);
     } else {
-        // Reverted / no swap took effect: the attempted target was never
-        // captured, so `to` is left 0.0.0.0 (mirrors the failed-event
-        // convention).
+        // Reverted / the update did not take: the old image is still running.
+        // Under swap mode this is a MCUBoot rollback; under overwrite mode (#85)
+        // it means MCUBoot rejected the downloaded image and kept the old one.
+        // Either way the attempted target was never captured, so `to` is left
+        // 0.0.0.0 (mirrors the failed-event convention).
         loge("boot: OTA did not take — firmware_reverted (still on %s)",
              running.c_str());
         ctx.event_log().record_firmware_update(

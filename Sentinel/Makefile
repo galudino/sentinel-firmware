@@ -69,7 +69,7 @@ TESTBENCH=0
 OTA_APP_VERSION_MAJOR?=1
 OTA_APP_VERSION_MINOR?=0
 OTA_APP_VERSION_PATCH?=2
-OTA_APP_VERSION_BUILD?=92
+OTA_APP_VERSION_BUILD?=111
 
 # Build channel — the *maturity* of this image, exposed over GATT as byte 0 of
 # the System service's Firmware Build Info characteristic (fw#73):
@@ -332,7 +332,12 @@ else ifeq ($(TARGET), $(filter $(TARGET), APP_CY8CPROTO-063-BLE APP_CYBLE-416045
     OTA_PLATFORM=PSOC_063_1M
     COMPONENTS+=CM0P_BLESS_OTA
     DISABLE_COMPONENTS+=CM0P_BLESS
-    OTA_FLASH_MAP?=$(SEARCH_ota-update)/configs/flashmap/psoc63_1m_cm0_int_swap_single.json
+    # fw#85: OVERWRITE upgrade (project-local flashmap; no scratch/swap-status).
+    # flashmap.py infers overwrite from the absence of scratch/status and emits
+    # USE_OVERWRITE := 1. The MCUBootApp must be rebuilt with the SAME flashmap
+    # (scripts/build-mcuboot-app-*.sh) and re-flashed. The old swap map was
+    # $(SEARCH_ota-update)/configs/flashmap/psoc63_1m_cm0_int_swap_single.json.
+    OTA_FLASH_MAP?=$(CURDIR)/psoc63_1m_cm0_int_overwrite_single.json
 else ifeq ($(TARGET), $(filter $(TARGET), APP_CY8CPROTO-062S3-4343W))
     OTA_PLATFORM=PSOC_062_512K
     OTA_FLASH_MAP?=$(SEARCH_ota-update)/configs/flashmap/psoc62_512k_xip_swap_single.json
