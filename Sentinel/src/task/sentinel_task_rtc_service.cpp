@@ -157,6 +157,10 @@ int16_t rtc_service::last_temperature_centi_c() const noexcept {
     return m_last_temperature_centi;
 }
 
+bool rtc_service::has_temperature() const noexcept {
+    return m_temperature_known;
+}
+
 BaseType_t rtc_service::task_create() noexcept {
     return xTaskCreate(&rtc_service::task_trampoline, "RTC Service Task",
                        (configMINIMAL_STACK_SIZE * 4), this,
@@ -267,8 +271,11 @@ void rtc_service::run() {
 
         // Throttle logging to HEARTBEAT_LOG_PERIOD_SECONDS; the time latch
         // above always runs at 1 Hz regardless. Temperature is only read here,
-        // when a line is actually about to be logged.
-        if (now->second % HEARTBEAT_LOG_PERIOD_SECONDS != 0) {
+        // when a line is actually about to be logged — and once on the first
+        // tick after boot (#89), so the cache never reports a fake 0.00 °C
+        // for up to a minute.
+        if (m_temperature_known &&
+            now->second % HEARTBEAT_LOG_PERIOD_SECONDS != 0) {
             continue;
         }
 
@@ -282,6 +289,7 @@ void rtc_service::run() {
         // Publish the latest temperature for cross-task consumers (the device
         // snapshot #36 reads this cache rather than issuing its own I²C read).
         m_last_temperature_centi = *temp;
+        m_temperature_known = true;
 
         // Publish to the DS3231 RTC Temperature GATT characteristic (#6):
         // refresh the read value and notify a subscribed central.

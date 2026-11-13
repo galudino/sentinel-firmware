@@ -121,6 +121,18 @@ public:
     ///
     int16_t last_temperature_centi_c() const noexcept;
 
+    ///
+    /// \brief Has \ref last_temperature_centi_c been populated by a real read?
+    ///
+    /// \details \c false from boot until the first successful DS3231
+    ///          temperature read, which now happens on the first SQW tick
+    ///          rather than at the first logging boundary (#89). Lets the boot
+    ///          snapshot wait for a real value instead of persisting 0.00 °C.
+    ///
+    /// \return \c true once a temperature has been read since boot.
+    ///
+    bool has_temperature() const noexcept;
+
 private:
     rtc_service() = default;
 
@@ -154,6 +166,9 @@ private:
     /// single-halfword access on Cortex-M, so no lock is needed for the read in
     /// \ref last_temperature_centi_c.
     volatile int16_t m_last_temperature_centi{0};
+
+    /// \c true once \ref m_last_temperature_centi holds a real reading (#89).
+    volatile bool m_temperature_known{false};
 
     TaskHandle_t m_handle{nullptr}; ///< FreeRTOS task handle.
 };
