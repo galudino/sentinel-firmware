@@ -20,6 +20,29 @@ than letting them accumulate here.
 
 ---
 
+**Last updated:** 2026-11-13. **#81 OTA: emit firmware_update_completed / _reverted
+via a boot-time swap-confirm detector — COMMITTED on `release/1.0.2` (`474d9cc`),
+bench-pending.** A truthful `0x05`/`0x07` is only knowable at the *next* boot (after the
+post-download reset + the MCUBoot swap). New `storage::firmware_update_marker` — a fixed
+16-byte record in its own 4 KiB W25Q128 sector (`0x0F0000`, below the event log, outside
+both circular stores; `set`/`load`/`clear`). OTA PREPARE persists the marker (`from` =
+running version; target unknown here, derived at boot). The boot orchestrator resolves it
+right after the flash stores init: a *different* running version →
+`firmware_update_completed` (from→running), the *same* version → `firmware_reverted`;
+then clears it. A clean boot logs neither. `ota_fail_and_reset` (#84) and the user ABORT
+now **clear** the marker — a failure is already logged as `firmware_update_failed`, never
+double-counted as a revert; the success reboot (OTA confirmation handler) leaves it
+intact, so it survives exactly the swap-triggering reset. Decision factored into pure
+`diagnostics::resolve_post_swap_event()` with a 5-case testbench suite (upgrade /
+downgrade / minor / build-only → completed; same-version → reverted). **No GATT contract
+change** (log contents only) — client #54 lights up once `0x05` is emitted. Build-verified
+(testbench links clean; only the known-benign imgtool/`click` signing POSTBUILD is
+unrelated). **Board:** #81 → In Review; #83/#84/#71/#80 → In Review; **#82 (fault family)
+deferred to Phase II** (the compelling faults — thermal/over-current/actuator — need Phase
+II peripherals). **Client is in sync** (`develop` == `main`, both at origin). **Before the
+cut:** build a signed #81 image, bench-validate the completed/reverted events (DFU swap →
+next boot logs `0x05`), then #78 (1.0.2.0 cut).
+
 **Last updated:** 2026-11-13. **#84 OTA: reset to a clean state on a failed/interrupted
 update — COMMITTED on `release/1.0.2` (`64b4db2`), bench-pending.** Follow-up to #83.
 **Bench finding:** a DFU interrupted mid-download (ordinary BLE link drop → client
