@@ -61,15 +61,16 @@ TESTBENCH=0
 # CI-owned — CI overrides OTA_APP_VERSION_BUILD with `git rev-list --count HEAD`
 # for a monotonic, OTA-safe build number. A tagged official release is stamped
 # BUILD=0; a non-zero BUILD marks a development / release-candidate image.
-# INTERIM (until CI #60): this 1.0.2 candidate carries BUILD = the commit count
-# (`git rev-list --count HEAD`) by hand, so the running image is identifiable as
-# a candidate rather than the 1.0.1.0 release. The *maturity* label (release /
+# Stamped BUILD=0 for the tagged 1.0.2.0 release (#78). Until CI (#60), a
+# development image sets BUILD to the commit count by hand
+# (`OTA_APP_VERSION_BUILD=$(git rev-list --count HEAD)` on the make line) so it
+# is distinguishable from the release. The *maturity* label (release /
 # candidate / WIP) itself is exposed over GATT (see the Firmware Build Info
 # characteristic), which is the clean signal the client reads.
 OTA_APP_VERSION_MAJOR?=1
 OTA_APP_VERSION_MINOR?=0
 OTA_APP_VERSION_PATCH?=2
-OTA_APP_VERSION_BUILD?=111
+OTA_APP_VERSION_BUILD?=0
 
 # Build channel — the *maturity* of this image, exposed over GATT as byte 0 of
 # the System service's Firmware Build Info characteristic (fw#73):

@@ -20,7 +20,57 @@ than letting them accumulate here.
 
 ---
 
-**Last updated:** 2026-11-13. **#85 overwrite upgrade — COMMITTED + bench-validated;
+**Last updated:** 2026-11-13. **Firmware 1.0.2.0 RELEASED (#78)** — tagged
+`v1.0.2`, squash-merged `release/1.0.2` → `develop` → `main`; pre-squash history
+at tag `release-1.0.2-history`. GitHub Release v1.0.2 created as a **draft**
+(review + publish). Phase I firmware work is done; the next stretch is
+**client-only** (see "Client follow-ups" below).
+
+Landed in this final stretch (all bench-validated on the CYBLE-416045):
+- **#86** full 16-bit build in event records + real OTA target in `attempted`.
+- **#87** paged reads: a Record Block response longer than **one LL packet
+  (246 B)** arrived corrupted past byte 246 (MTU 517), silently dropping records
+  7–13 of every 14-record page (and 3 of 6 snapshots). Blocks are now capped at
+  `min(MaxAttrLength, MTU-1, 246)`; root cause in the BT stack → **#88 (Phase II)**.
+- **#89** boot snapshot junk (25.1 °C / 91.3 % / 645.6 hPa): `cyhal_system_delay_us`
+  takes `uint16_t`, truncating the BME280's 112.8 ms conversion wait to 47 ms.
+  New `sentinel::cyhal_delay_us()` (RTOS ms + chunked µs) in all CYHAL
+  transports; RTC temp read on first tick; boot snapshot waits for real readings.
+- **#71** OTA interruption matrix: reset/power cut mid-upload → old image boots,
+  logged `failed` reason **5 (interrupted)** via a new marker **stage** byte
+  (`0xFF` downloading → `0x7F` staged; was mis-logged `reverted`); phone BT off
+  mid-upload → `failed` reason 2, clean reset; **power cut during the MCUBoot
+  overwrite → bootloader finishes the copy, new image boots** (no brick).
+- **#94** RTC: the DS3231 restarts at 2000-01-01 on power loss (no working
+  backup battery). Time is trusted only while OSF is clear; untrusted → Unix
+  Time reads **0** and records are stamped 0 until a BLE time-set clears OSF.
+  POST's ds3231 probe **no longer clears OSF** (it used to, so only the first
+  boot after a power loss knew).
+- **#80** shipped as-is; remaining event types tracked in #82, #90–#93, #18.
+- **#53 / #57** end-of-Phase-I sweep: tree clang-format clean, Doxygen 0
+  warnings, READMEs current.
+
+**Bench gotchas learned:** the testbench's `time_sync_from_build` writes the
+build's *local* time into the RTC (the app treats it as UTC) — set the time
+from the client after a testbench run. Pulling USB resets the DS3231 (check its
+coin cell). Switching `TESTBENCH` wipes `build/`; a `qprogram` during a rebuild
+fails with "couldn't open …hex" (harmless, nothing written).
+
+**Client follow-ups (sentinel-client, Phase I):** cl#58 ("Recovering…" hangs —
+unbounded ABORT write in `OTAUploader.recover()`), cl#55 (phone Bluetooth off
+not detected mid-DFU), cl#61 (keep screen awake during DFU), cl#60 (return to
+MainTabView after DFU), cl#62 (auto-set time when Unix Time reads 0), cl#54
+(Logs auto-refresh), plus mirroring fw#86 `*_build_hi` and reason 5.
+
+**Phase II firmware backlog from this release:** #88 (multi-packet BLE
+responses), #82 (fault events), #90–#93 (config / pairing / shutdown /
+runtime-state events), and the HCI 0x28 ("instant passed") disconnects right
+after OTA PREPARE (~2 of 6 DFUs; the 384 KB secondary-slot erase likely stalls
+the link) — not yet filed.
+
+---
+
+**Earlier 2026-11-13:** **#85 overwrite upgrade — COMMITTED + bench-validated;
 #86 full-width versions — COMMITTED, bench-pending.** Both on `release/1.0.2`.
 
 - **#85 (`3805a5c`, `517fc5c`):** MCUBoot switched from swap-using-scratch (~24
@@ -710,34 +760,19 @@ default.
 - **Also merged to `develop`:** **#6 / #45 / #55** — Phase I BLE GATT services,
   Device Information Service + Platform ID, and the PSoC 6 die-temperature
   driver/service (squash `f573cb1`, tag `6-ble-gatt-services-phase-i-history`).
-- **What's next (open, dependency-ordered):**
-  1. **On-bench sign-off of #56 + #49** (both merged to `develop`, board In
-     Review). #56: `erase_program_read` deterministic across many runs.
-     #49: record_store suite 7/7 + empty-region boot-scan <1 s measurement.
-  2. **Review + merge the #53 + #57 docs branches** (`53-doxyfile-doc-infra`,
-     `57-src-readme-docs`) — then continue #57's per-directory README fan-out.
-  3. **End-of-Phase-I `clang-format` sweep (#53)** + **OTA DFU validation with
-     `sentinel-client`** — the Phase I finale.
+- **Released:** **v1.0.2 (1.0.2.0)** on `main` — Phase I firmware complete
+  (#71, #80, #81, #83–#87, #89, #94, #53, #57; see the top entry).
+- **What's next:** the Phase I work moves to **sentinel-client** (cl#54/#55/
+  #58/#60/#61/#62 + the fw#86 mirror). Firmware stays frozen except critical
+  Phase I fixes; Phase II backlog: #88, #82, #90–#93, CI #60.
 
 ---
 
-## Next issues (post #56/#49 merge)
+## Next issues
 
-1. **On-bench sign-off — #56 + #49** (both merged to `develop`, In Review).
-   Flash a testbench build to the GD25Q128/CYBLE-416045 and run:
-   - **#56:** `erase_program_read` deterministically across many consecutive
-     runs (was intermittent). Optionally add a WEL-injection regression test if
-     a fake SPI transport is introduced (AC #3).
-   - **#49:** the record_store suite — 7 tests now incl.
-     `recycle_transient_recovery` — expect 7/7; and confirm the empty-region
-     boot scan is well under 1 s (was ~8.7 s/region).
-2. **#53 — Doxyfile done (branch, review);** the `clang-format -i` +
-   reviewer-rule sweep (`RecordT`→`RecordType`, namespace-nested defs,
-   prefix/postfix, ref-for-mutation) + Doxygen backfill remain the
-   **end-of-Phase-I** task (deferred so it doesn't churn in-flight branches).
-3. **#57 — `src/README.md` anchor done (branch, review);** fan out the
-   per-directory module READMEs from it incrementally.
-4. **OTA DFU validation with `sentinel-client`** — the Phase I finale.
+1. **Client-side DFU robustness** (sentinel-client cl#58, #55, #61, #60, #62).
+2. **Phase II firmware:** #88 (multi-packet BLE responses), the post-PREPARE
+   0x28 disconnects (to file), #82 / #90–#93 (event families), CI #60.
 
 Durable as-built detail lives in `docs/architecture/decisions.md` and the closed
 issues #6 / #45 / #55.
