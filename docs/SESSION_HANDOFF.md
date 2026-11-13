@@ -20,6 +20,29 @@ than letting them accumulate here.
 
 ---
 
+**Last updated:** 2026-11-13. **#84 OTA: reset to a clean state on a failed/interrupted
+update — COMMITTED on `release/1.0.2` (`64b4db2`), bench-pending.** Follow-up to #83.
+**Bench finding:** a DFU interrupted mid-download (ordinary BLE link drop → client
+`operationCancelled`) left the device *alive but in a fragile half-state* (agent
+half-torn-down by #83's disconnect handler, secondary slot erased/open, same boot
+session, re-advertising) that the client could not cleanly reconnect to — it hung on
+"Recovering…". Confirmed this is **not** a #83 regression (serial showed
+`cy_ota_agent_start() DONE`, no "already created") and **not** a downgrade rejection
+(cy_ota has no version check; MCUBoot downgrade-prevention off). **Fix:** new
+`ble_context::ota_fail_and_reset(reason)` (log `firmware_update_failed` → `ota_cleanup`
+→ 1 s guard → `NVIC_SystemReset`) on the three *failure* paths — signal-loss disconnect,
+verify-fail, agent-start-fail — so a fresh boot brings every task + GATT service back.
+A deliberate **user cancel** stays in-place (no reboot; works now that #83 clears the
+agent singleton). Added reason `OTA_FAIL_START = 4`. Build-verified Release (clean; only
+the pre-existing RWX linker warning). **Downstream client half:
+`galudino/sentinel-client#52`** (bound the reconnect so the app never hangs). **The
+`#83`/`#71` 2nd-attempt "OTA context already created!" bug is confirmed FIXED on bench**
+(`edd8bcf`). **Also this session:** built two WIP A/B DFU test images from `edd8bcf`
+(`1.0.2.107-wip` + `51.0.2.107-wip`, major+50) and refreshed the client bundle
+(`galudino/sentinel-client#51`); the `51.0.2.107` swap was validated end-to-end on bench.
+Still open before the cut: re-flash `64b4db2`, bench-validate #84 (interrupt → reboot →
+re-advertise → client reconnects), then #78 (1.0.2.0 cut).
+
 **Last updated:** 2026-10-20. **1.0.2.0 is in progress on `release/1.0.2`**
 (off `develop`), tracking [#78](https://github.com/galudino/sentinel-firmware/issues/78).
 Version is still stamped **1.0.2.92** (`34deea6`) — **re-stamp `BUILD` before the
