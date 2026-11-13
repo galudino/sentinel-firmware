@@ -4,8 +4,9 @@
 ///
 /// \details Thin \c sentinel::gatt::system seam over the generated \c System
 ///          service value arrays: Serial Number (R/W device-identity key),
-///          Firmware Version (R, 5-byte packed), Request Bootloader Mode (W),
-///          and Platform ID (R, \ref sentinel::platform_id). Like the rest of
+///          Firmware Version (R, 5-byte packed),
+///          Platform ID (R, \ref sentinel::platform_id), and Firmware Build
+///          Info (R, \ref sentinel::build_info — fw#73). Like the rest of
 ///          the \c sentinel::gatt::\<svc\> layer these are \c inline + \c
 ///          noexcept (the values are \c extern GATT-DB globals, not constant
 ///          expressions) and keep the generated \c app_system_* / \c
@@ -30,8 +31,10 @@ extern "C" {
 
 #include "sentinel_ble_context.hpp"
 #include "sentinel_ble_gatt.hpp"
+#include "sentinel_build_info.hpp"
 #include "sentinel_firmware_version.hpp"
 #include "sentinel_platform_id.hpp"
+#include "sentinel_post.hpp"
 #include "sentinel_utilities.hpp"
 
 #include <cstdint>
@@ -63,7 +66,8 @@ inline void set_serial_number(uint32_t serial) noexcept {
 ///        major, minor, patch, build[2]).
 /// \param v Firmware version to encode into the characteristic.
 inline void set_firmware_version(const sentinel::firmware_version &v) noexcept {
-    // build() returns the full 16-bit value, matching the 5-byte wire struct (#6).
+    // build() returns the full 16-bit value, matching the 5-byte wire struct
+    // (#6).
     const auto build = v.build();
     uint8_t buf[5] = {v.major(), v.minor(), v.patch(),
                       static_cast<uint8_t>(build & 0xFFu),
@@ -82,6 +86,25 @@ inline void set_platform_id(sentinel::platform_id p) noexcept {
 /// \return The device's \ref sentinel::platform_id.
 inline sentinel::platform_id platform_id() noexcept {
     return static_cast<sentinel::platform_id>(app_system_platform_id[0]);
+}
+
+// ---- Firmware Build Info (R) — [channel, config, variant] (fw#73) -----------
+
+///
+/// \brief Set the Firmware Build Info characteristic: <tt>[channel, config,
+///        variant]</tt>.
+///
+/// \details All three fields are compile-time constants, so this is seeded
+///          once at boot and never notified.
+///
+/// \param info Build identity to encode into the characteristic.
+///
+inline void set_build_info(const sentinel::build_info &info) noexcept {
+    uint8_t buf[3] = {sentinel::to_underlying(info.channel),
+                      sentinel::to_underlying(info.config),
+                      sentinel::to_underlying(info.variant)};
+    ble_gatt_db_set_value(HDLC_SYSTEM_FIRMWARE_BUILD_INFO_VALUE, buf,
+                          static_cast<uint16_t>(sizeof(buf)));
 }
 
 // ---- CPU Temperature (R/Notify) — PSoC 6 on-die temperature, 0.01 °C -------
@@ -126,6 +149,58 @@ inline void publish_cpu_temperature(int16_t centi_c) noexcept {
     if (sentinel::ble_context_object.connected() &&
         cpu_temperature_notifications_enabled()) {
         notify_cpu_temperature(sentinel::ble_context_object.connection_id());
+    }
+}
+
+// ---- Device Readiness (R/Notify) — boot/POST state + subsystem (#69) -------
+
+/// \brief \c true while a central has subscribed to Device Readiness
+/// notifications.
+/// \return \c true if the CCCD notification bit is set.
+inline bool device_readiness_notifications_enabled() noexcept {
+    return app_system_device_readiness_client_char_config[0] &
+           wiced_bt_gatt_client_char_config_e::GATT_CLIENT_CONFIG_NOTIFICATION;
+}
+
+///
+/// \brief Write the Device Readiness characteristic: \c [state, subsystem].
+///
+/// \param state Coarse boot/POST state.
+/// \param failed_subsystem Failing subsystem id (\ref
+///        sentinel::diagnostics::post_subsystem) when \p state is \c degraded;
+///        \c 0 otherwise.
+///
+inline void set_readiness(sentinel::diagnostics::device_readiness state,
+                          uint8_t failed_subsystem) noexcept {
+    uint8_t buf[2] = {sentinel::to_underlying(state), failed_subsystem};
+    ble_gatt_db_set_value(HDLC_SYSTEM_DEVICE_READINESS_VALUE, buf,
+                          static_cast<uint16_t>(sizeof(buf)));
+}
+
+/// \brief Notify the connected central with the current Device Readiness value.
+/// \param connection_id BLE connection to notify.
+/// \return \c wiced_bt_gatt_status_t result of the notification send.
+inline wiced_bt_gatt_status_t
+notify_readiness(uint16_t connection_id) noexcept {
+    return wiced_bt_gatt_server_send_notification(
+        connection_id, HDLC_SYSTEM_DEVICE_READINESS_VALUE,
+        app_system_device_readiness_len, app_system_device_readiness, nullptr);
+}
+
+///
+/// \brief Publish device readiness: refresh the read value and notify a
+///        subscribed central (mirrors the CPU-temperature publish pattern).
+///
+/// \param state Coarse boot/POST state.
+/// \param failed_subsystem Failing subsystem id when \p state is \c degraded,
+///        \c 0 otherwise.
+///
+inline void publish_readiness(sentinel::diagnostics::device_readiness state,
+                              uint8_t failed_subsystem) noexcept {
+    set_readiness(state, failed_subsystem);
+    if (sentinel::ble_context_object.connected() &&
+        device_readiness_notifications_enabled()) {
+        notify_readiness(sentinel::ble_context_object.connection_id());
     }
 }
 

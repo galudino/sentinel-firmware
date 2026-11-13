@@ -50,6 +50,8 @@ extern "C" {
 #include "sentinel_ble_context.hpp"
 #include "sentinel_ble_gatt.hpp"
 #include "sentinel_cyhal_pwm_signal.hpp"
+#include "sentinel_device_context.hpp"
+#include "sentinel_firmware_version.hpp"
 #include "sentinel_led_pwm.hpp"
 #include "sentinel_pwm_signal.hpp"
 #include "sentinel_resource.hpp"
@@ -101,6 +103,17 @@ wiced_result_t ble_context::stack_initialize() noexcept {
     return result;
 }
 
+namespace {
+// Reasons written into firmware_update_record.mcuboot_result for a
+// firmware_update_failed event (#83); defined with the event vocabulary so the
+// boot-time resolver shares them (#71).
+namespace fail = sentinel::diagnostics::ota_fail_reason;
+constexpr uint32_t OTA_FAIL_ABORTED = fail::aborted;         ///< Client ABORT.
+constexpr uint32_t OTA_FAIL_SIGNAL_LOST = fail::signal_lost; ///< Link lost.
+constexpr uint32_t OTA_FAIL_VERIFY = fail::verify;           ///< Verify failed.
+constexpr uint32_t OTA_FAIL_START = fail::start; ///< Agent start failed.
+} // namespace
+
 wiced_bt_gatt_status_t ble_context::connection_event_handler(
     const wiced_bt_gatt_connection_status_t &connection_status) {
     auto status = wiced_bt_gatt_status_e::WICED_BT_GATT_ERROR;
@@ -113,6 +126,23 @@ wiced_bt_gatt_status_t ble_context::connection_event_handler(
                     m_peer_address.begin());
 
         m_connection_state = state::connected;
+
+        // #76: ask the central for a 15 ms connection interval. Paged reads
+        // and OTA are request/response bound (every Index write and block read
+        // waits out connection events), so the central's default 30 ms+
+        // interval dominated a whole-store walk. 15 ms min == max is within
+        // Apple's accessory guidelines; the central may still refuse.
+        wiced_bt_l2cap_update_ble_conn_params(
+            m_peer_address.data(), PREFERRED_CONN_INTERVAL,
+            PREFERRED_CONN_INTERVAL, PREFERRED_CONN_LATENCY,
+            PREFERRED_SUPERVISION_TIMEOUT);
+
+        // #80: log the connection. conn_interval / MTU are not yet negotiated
+        // at this point, so they are left 0 (unknown) for now.
+        if (sentinel::resource::context_ready()) {
+            sentinel::resource::context().event_log().record_ble_connected(
+                connection_status.bd_addr, connection_status.addr_type, 0u, 0u);
+        }
     } else {
         m_connection_id = 0;
 
@@ -125,6 +155,23 @@ wiced_bt_gatt_status_t ble_context::connection_event_handler(
         }
 
         m_connection_state = state::disconnected_and_advertising;
+
+        // #80: log the disconnect with the HCI/host reason code.
+        if (sentinel::resource::context_ready()) {
+            sentinel::resource::context().event_log().record_ble_disconnected(
+                connection_status.bd_addr, connection_status.addr_type,
+                static_cast<uint8_t>(connection_status.reason));
+        }
+
+        // #83/#85: a disconnect while an OTA was in flight (signal loss) leaves
+        // the agent half-alive and the secondary slot mid-erase — the fragile
+        // in-between state the client could not cleanly reconnect to. Log the
+        // failure (reason = signal-lost) and reset to a clean state: a fresh
+        // boot brings every task + GATT service back and re-advertises, so the
+        // client reconnects to a known-good device. Does not return.
+        if (m_ota_context != nullptr) {
+            ota_fail_and_reset(OTA_FAIL_SIGNAL_LOST);
+        }
     }
 
     update_advertising_led();
@@ -171,18 +218,136 @@ cy_rslt_t ble_context::ota_agent_initialize() noexcept {
         return CY_RSLT_OTA_ERROR_BADARG;
     }
 
+    // #83: a prior OTA that was aborted or interrupted (signal loss) may have
+    // left the agent running; tear it down first so cy_ota_agent_start does not
+    // fail with "OTA context already created!".
+    ota_cleanup();
+
     ota_value_initialize();
 
     result = cy_ota_agent_start(&m_ota_network_params, &m_ota_agent_params,
                                 &m_ota_context);
 
     if (result != CY_RSLT_SUCCESS) {
-        while (true) {
-            cy_rtos_delay_milliseconds(10);
-        }
+        // #85: an agent start failure means the update cannot proceed. Rather
+        // than leave the device in an ambiguous half-prepared state, reset to a
+        // clean slate (deterministic recovery). Does not return. (#83 removed
+        // the old infinite while(true) hang here.)
+        m_ota_context = nullptr;
+        ota_fail_and_reset(OTA_FAIL_START);
     }
 
     return result;
+}
+
+void ble_context::ota_cleanup() noexcept {
+    // #83: stop the OTA agent and drop the context so a later PREPARE can start
+    // a fresh one. No-op when no OTA is active.
+    if (m_ota_context != nullptr) {
+        cy_ota_agent_stop(&m_ota_context);
+        m_ota_context = nullptr;
+    }
+}
+
+void ble_context::ota_fail_and_reset(uint32_t reason) noexcept {
+    // #85: deterministic recovery from a *failed* OTA (signal loss, verify
+    // failure, agent start failure). Persist the failure event, tear the agent
+    // down, then reboot so every task + GATT service comes back fresh and the
+    // board re-advertises for the client to reconnect to. A user cancel is not
+    // a failure and never routes here (it stays connected via ota_cleanup()).
+    // #86: attempted first (if the header never arrived), and the failed
+    // record carries the real target when known.
+    ota_log_attempted_once();
+    if (sentinel::resource::context_ready()) {
+        auto &ctx = sentinel::resource::context();
+        ctx.event_log().record_firmware_update(
+            sentinel::diagnostics::system_event::firmware_update_failed,
+            sentinel::current_firmware_version, ota_target_version(), reason);
+
+        // #81: this failure is logged and the board is about to reboot with no
+        // swap pending — drop the pending-update marker so the next boot's
+        // detector does not mistake it for a MCUBoot revert (double-log).
+        ctx.fw_update_marker.clear();
+    }
+
+    ota_cleanup();
+
+    // Let the event-log flush to flash and any in-flight BLE indication settle
+    // before the reset (mirrors the 1 s guard on the success-reboot path).
+    cy_rtos_delay_milliseconds(1000);
+    NVIC_SystemReset();
+}
+
+void ble_context::ota_reset_attempt_state() noexcept {
+    m_ota_header_len = 0u;
+    m_ota_attempt_logged = false;
+    m_ota_target_known = false;
+    m_ota_target_major = 0u;
+    m_ota_target_minor = 0u;
+    m_ota_target_patch = 0u;
+    m_ota_target_build = 0u;
+}
+
+void ble_context::ota_capture_header(const uint8_t *data,
+                                     uint16_t len) noexcept {
+    // Only while an OTA is active and before its attempted record is written
+    // (after that the header has been handled; later writes are image body).
+    if (m_ota_context == nullptr || m_ota_attempt_logged || data == nullptr ||
+        len == 0u) {
+        return;
+    }
+
+    const auto need = MCUBOOT_HDR_NEEDED - m_ota_header_len;
+    const auto take =
+        (static_cast<uint32_t>(len) < need) ? static_cast<uint32_t>(len) : need;
+    std::memcpy(m_ota_header.data() + m_ota_header_len, data, take);
+    m_ota_header_len += take;
+    if (m_ota_header_len < MCUBOOT_HDR_NEEDED) {
+        return; // header split across writes — wait for more
+    }
+
+    // MCUBoot image header: ih_magic (LE u32) at 0; ih_ver at 0x14 =
+    // { u8 iv_major, u8 iv_minor, u16 iv_revision, u32 iv_build_num }.
+    auto magic = uint32_t{0};
+    std::memcpy(&magic, m_ota_header.data(), sizeof(magic));
+    if (magic == MCUBOOT_IMAGE_MAGIC_LE) {
+        const auto *ver = m_ota_header.data() + MCUBOOT_HDR_VER_OFFSET;
+        auto revision = uint16_t{0};
+        auto build = uint32_t{0};
+        std::memcpy(&revision, ver + 2, sizeof(revision));
+        std::memcpy(&build, ver + 4, sizeof(build));
+        m_ota_target_major = ver[0];
+        m_ota_target_minor = ver[1];
+        // firmware_version is u8.u8.u8.u16 — clip the wider MCUBoot fields.
+        m_ota_target_patch =
+            static_cast<uint8_t>(revision > 0xFFu ? 0xFFu : revision);
+        m_ota_target_build =
+            static_cast<uint16_t>(build > 0xFFFFu ? 0xFFFFu : build);
+        m_ota_target_known = true;
+    }
+
+    ota_log_attempted_once();
+}
+
+void ble_context::ota_log_attempted_once() noexcept {
+    if (m_ota_attempt_logged) {
+        return;
+    }
+    m_ota_attempt_logged = true;
+
+    if (sentinel::resource::context_ready()) {
+        sentinel::resource::context().event_log().record_firmware_update(
+            sentinel::diagnostics::system_event::firmware_update_attempted,
+            sentinel::current_firmware_version, ota_target_version(), 0u);
+    }
+}
+
+sentinel::firmware_version ble_context::ota_target_version() const noexcept {
+    if (!m_ota_target_known) {
+        return sentinel::firmware_version(0u, 0u, 0u, 0u);
+    }
+    return sentinel::firmware_version(m_ota_target_major, m_ota_target_minor,
+                                      m_ota_target_patch, m_ota_target_build);
 }
 
 wiced_bt_gatt_status_t
@@ -208,6 +373,10 @@ ble_context::ota_agent_write_handler(wiced_bt_gatt_event_data_t *event_data,
     case HDLC_OTA_FW_UPGRADE_SERVICE_OTA_UPGRADE_CONTROL_POINT_VALUE:
         switch (write_request->p_val[0]) {
         case CY_OTA_UPGRADE_COMMAND_PREPARE_DOWNLOAD:
+            // #86: fresh per-OTA bookkeeping before anything can fail, so an
+            // agent-start failure still logs attempted → failed.
+            ota_reset_attempt_state();
+
             // Call application-level OTA initialization
             result = ota_agent_initialize();
 
@@ -220,6 +389,21 @@ ble_context::ota_agent_write_handler(wiced_bt_gatt_event_data_t *event_data,
 
             if (result != CY_RSLT_SUCCESS) {
                 return wiced_bt_gatt_status_e::WICED_BT_GATT_ERROR;
+            }
+
+            // #81: persist a durable pending-update marker so the next boot's
+            // swap-confirm detector can emit firmware_update_completed /
+            // _reverted honestly. The marker survives the success reboot and is
+            // cleared on any failure (ota_fail_and_reset) or user abort.
+            // #86: the firmware_update_attempted record is no longer written
+            // here — the target is unknown until the image header arrives, so
+            // ota_capture_header() writes it with the real target (or a
+            // failure path writes it first if no header ever arrives).
+            if (sentinel::resource::context_ready()) {
+                const auto &v = sentinel::current_firmware_version;
+                sentinel::resource::context().fw_update_marker.set(
+                    v.major(), v.minor(), v.patch(), v.build(),
+                    sentinel::resource::now_unix_seconds());
             }
 
             return wiced_bt_gatt_status_e::WICED_BT_GATT_SUCCESS;
@@ -241,7 +425,11 @@ ble_context::ota_agent_write_handler(wiced_bt_gatt_event_data_t *event_data,
                                                 m_connection_id);
 
             if (result != CY_RSLT_SUCCESS) {
-                return wiced_bt_gatt_status_e::WICED_BT_GATT_ERROR;
+                // #80/#83/#85: image verification failed — the swap will not
+                // happen (the lib already sent the BAD indication to the
+                // client). Log it (reason = verify-failed) and reset to a clean
+                // state so the board returns fully usable. Does not return.
+                ota_fail_and_reset(OTA_FAIL_VERIFY);
             }
 
             return gatt_status;
@@ -249,12 +437,33 @@ ble_context::ota_agent_write_handler(wiced_bt_gatt_event_data_t *event_data,
         case CY_OTA_UPGRADE_COMMAND_ABORT:
             result = cy_ota_ble_download_abort(m_ota_context);
 
+            // #80/#83: the client aborted the OTA. Log it (reason = aborted)
+            // and tear the agent down so a retry starts clean.
+            // #86: attempted first (if the header never arrived), and the
+            // failed record carries the real target when known.
+            ota_log_attempted_once();
+            if (sentinel::resource::context_ready()) {
+                auto &ctx = sentinel::resource::context();
+                ctx.event_log().record_firmware_update(
+                    sentinel::diagnostics::system_event::firmware_update_failed,
+                    sentinel::current_firmware_version, ota_target_version(),
+                    OTA_FAIL_ABORTED);
+
+                // #81: a user cancel leaves nothing pending across a reset —
+                // drop the marker so the next boot logs neither completed nor
+                // reverted.
+                ctx.fw_update_marker.clear();
+            }
+            ota_cleanup();
+
             return wiced_bt_gatt_status_e::WICED_BT_GATT_SUCCESS;
         }
 
         break;
 
     case HDLC_OTA_FW_UPGRADE_SERVICE_OTA_UPGRADE_DATA_VALUE:
+        // #86: peek the leading image bytes for the MCUBoot header's version.
+        ota_capture_header(write_request->p_val, write_request->val_len);
         result = cy_ota_ble_download_write(m_ota_context, event_data);
         return (result == CY_RSLT_SUCCESS)
                    ? wiced_bt_gatt_status_e::WICED_BT_GATT_SUCCESS
@@ -273,10 +482,16 @@ void ble_context::ota_agent_confirmation_handler() noexcept {
 
     if (ota_lib_state == cy_ota_agent_state_t::CY_OTA_STATE_OTA_COMPLETE &&
         m_reboot_at_end) {
+        ota_log_attempted_once(); // #86: no-op unless the header never parsed
+        // #71: the image verified and is staged — a reset from here on is the
+        // planned swap, not an interrupted download.
+        if (sentinel::resource::context_ready()) {
+            sentinel::resource::context().fw_update_marker.mark_staged();
+        }
         cy_rtos_delay_milliseconds(1000);
         NVIC_SystemReset();
     } else {
-        cy_ota_agent_stop(&m_ota_context);
+        ota_cleanup(); // #83: stop + null the context (was stop-only)
     }
 }
 
@@ -351,6 +566,14 @@ wiced_bt_dev_status_t ble_context::stack_management_callback(
             }
 
             result = wiced_result_t::WICED_BT_SUCCESS;
+
+            // #80: log that the BLE stack came up. If the event log is not yet
+            // bound (BTM_ENABLED can precede the store bring-up), this no-ops.
+            if (sentinel::resource::context_ready()) {
+                sentinel::resource::context()
+                    .event_log()
+                    .record_ble_stack_initialized();
+            }
         }
         break;
 
@@ -444,8 +667,9 @@ static wiced_bt_gatt_status_t sentinel::ble_start_advertising() {
                                             cy_bt_adv_packet_data);
 
     // #67: advertise the System 128-bit service UUID in the primary packet so a
-    // service-filtered iOS scan can discover the board; carry the Complete Local
-    // Name ("Sentinel") in the scan response, which iOS active-scans and merges.
+    // service-filtered iOS scan can discover the board; carry the Complete
+    // Local Name ("Sentinel") in the scan response, which iOS active-scans and
+    // merges.
     wiced_bt_ble_set_raw_scan_response_data(CY_BT_SCAN_RESP_PACKET_DATA_SIZE,
                                             cy_bt_scan_resp_packet_data);
 

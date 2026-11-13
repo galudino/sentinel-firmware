@@ -53,6 +53,7 @@ extern "C" {
 #pragma GCC diagnostic pop
 
 #include "sentinel_byte_transport.hpp"
+#include "sentinel_cyhal_delay.hpp"
 #include "sentinel_span.hpp"
 #include "sentinel_task_i2c_bus.hpp"
 #include "sentinel_utilities.hpp"
@@ -300,12 +301,13 @@ public:
     }
 
     ///
-    /// \brief Delay execution (microseconds, busy-wait via CYHAL).
+    /// \brief Delay execution (microseconds, full 32-bit range — see
+    ///        \ref sentinel::cyhal_delay_us).
     /// \param microseconds Delay duration in microseconds.
     /// \return \c CY_RSLT_SUCCESS (always succeeds).
     ///
     cy_rslt_t delay_us(uint32_t microseconds) noexcept {
-        cyhal_system_delay_us(microseconds);
+        sentinel::cyhal_delay_us(microseconds);
         return CY_RSLT_SUCCESS;
     }
 

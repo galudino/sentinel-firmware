@@ -9,6 +9,7 @@ Small, dependency-light building blocks used across the tree. All header-only.
 | [`sentinel_endianess.hpp`](sentinel_endianess.hpp) | `endianess` enum + byte-order load/store helpers for multi-byte wire fields |
 | [`sentinel_firmware_version.hpp`](sentinel_firmware_version.hpp) | `firmware_version` — compile-time version (`major.minor.patch.build`) |
 | [`sentinel_platform_id.hpp`](sentinel_platform_id.hpp) | `platform_id` / `vendor_id` — machine-stable identity for the GATT/cloud wire |
+| [`sentinel_build_info.hpp`](sentinel_build_info.hpp) | `build_info` — compile-time build identity: `build_channel` (release / rc / wip, from `SENTINEL_BUILD_CHANNEL`), `build_config`, `build_variant` |
 | [`sentinel_build_time.hpp`](sentinel_build_time.hpp) | Compile-time build-timestamp parsers + an RTC-sync helper (seed the clock from `__DATE__`/`__TIME__`) |
 | [`sentinel_utilities.hpp`](sentinel_utilities.hpp) | Misc: `unused(...)` (const-ref variadic), `to_underlying(...)`, etc. |
 

@@ -49,6 +49,7 @@ extern "C" {
 #include "sentinel_test_device_snapshot.hpp"
 #include "sentinel_test_die_temperature.hpp"
 #include "sentinel_test_ds3231.hpp"
+#include "sentinel_test_firmware_update.hpp"
 #include "sentinel_test_post.hpp"
 #include "sentinel_test_record_store.hpp"
 #include "sentinel_test_result.hpp"
@@ -166,6 +167,7 @@ void test_orchestrator::run() {
 
     // RAM / fake-driven suites — independent of any physical bus being present.
     run_group("system_event_log", &sentinel::test::system_event_log::run_all);
+    run_group("firmware_update", &sentinel::test::firmware_update::run_all);
     run_group("device_snapshot", &sentinel::test::device_snapshot::run_all);
     run_group("POST", &sentinel::test::post::run_all);
     run_group("snapshot_stream", &sentinel::test::snapshot_stream::run_all);

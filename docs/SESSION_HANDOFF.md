@@ -20,10 +20,261 @@ than letting them accumulate here.
 
 ---
 
-**Last updated:** 2026-08-19 — **1.0.1 cut: record-store resilience + build-script
-fixes.** First patch on the public 1.0.0 baseline. Squash-merged to `develop` and
-`main`; version bumped in `Sentinel/Makefile` (`OTA_APP_VERSION_PATCH=1`; BUILD
-stays CI-owned). Testbench **48/48 on hardware**.
+**Last updated:** 2026-11-13. **Firmware 1.0.2.0 RELEASED (#78)** — tagged
+`v1.0.2`, squash-merged `release/1.0.2` → `develop` → `main`; pre-squash history
+at tag `release-1.0.2-history`. GitHub Release v1.0.2 created as a **draft**
+(review + publish). Phase I firmware work is done; the next stretch is
+**client-only** (see "Client follow-ups" below).
+
+Landed in this final stretch (all bench-validated on the CYBLE-416045):
+- **#86** full 16-bit build in event records + real OTA target in `attempted`.
+- **#87** paged reads: a Record Block response longer than **one LL packet
+  (246 B)** arrived corrupted past byte 246 (MTU 517), silently dropping records
+  7–13 of every 14-record page (and 3 of 6 snapshots). Blocks are now capped at
+  `min(MaxAttrLength, MTU-1, 246)`; root cause in the BT stack → **#88 (Phase II)**.
+- **#89** boot snapshot junk (25.1 °C / 91.3 % / 645.6 hPa): `cyhal_system_delay_us`
+  takes `uint16_t`, truncating the BME280's 112.8 ms conversion wait to 47 ms.
+  New `sentinel::cyhal_delay_us()` (RTOS ms + chunked µs) in all CYHAL
+  transports; RTC temp read on first tick; boot snapshot waits for real readings.
+- **#71** OTA interruption matrix: reset/power cut mid-upload → old image boots,
+  logged `failed` reason **5 (interrupted)** via a new marker **stage** byte
+  (`0xFF` downloading → `0x7F` staged; was mis-logged `reverted`); phone BT off
+  mid-upload → `failed` reason 2, clean reset; **power cut during the MCUBoot
+  overwrite → bootloader finishes the copy, new image boots** (no brick).
+- **#94** RTC: the DS3231 restarts at 2000-01-01 on power loss (no working
+  backup battery). Time is trusted only while OSF is clear; untrusted → Unix
+  Time reads **0** and records are stamped 0 until a BLE time-set clears OSF.
+  POST's ds3231 probe **no longer clears OSF** (it used to, so only the first
+  boot after a power loss knew).
+- **#80** shipped as-is; remaining event types tracked in #82, #90–#93, #18.
+- **#53 / #57** end-of-Phase-I sweep: tree clang-format clean, Doxygen 0
+  warnings, READMEs current.
+
+**Bench gotchas learned:** the testbench's `time_sync_from_build` writes the
+build's *local* time into the RTC (the app treats it as UTC) — set the time
+from the client after a testbench run. Pulling USB resets the DS3231 (check its
+coin cell). Switching `TESTBENCH` wipes `build/`; a `qprogram` during a rebuild
+fails with "couldn't open …hex" (harmless, nothing written).
+
+**Client follow-ups (sentinel-client, Phase I):** cl#58 ("Recovering…" hangs —
+unbounded ABORT write in `OTAUploader.recover()`), cl#55 (phone Bluetooth off
+not detected mid-DFU), cl#61 (keep screen awake during DFU), cl#60 (return to
+MainTabView after DFU), cl#62 (auto-set time when Unix Time reads 0), cl#54
+(Logs auto-refresh), plus mirroring fw#86 `*_build_hi` and reason 5.
+
+**Phase II firmware backlog from this release:** #88 (multi-packet BLE
+responses), #82 (fault events), #90–#93 (config / pairing / shutdown /
+runtime-state events), and the HCI 0x28 ("instant passed") disconnects right
+after OTA PREPARE (~2 of 6 DFUs; the 384 KB secondary-slot erase likely stalls
+the link) — not yet filed.
+
+---
+
+**Earlier 2026-11-13:** **#85 overwrite upgrade — COMMITTED + bench-validated;
+#86 full-width versions — COMMITTED, bench-pending.** Both on `release/1.0.2`.
+
+- **#85 (`3805a5c`, `517fc5c`):** MCUBoot switched from swap-using-scratch (~24
+  erase/copy passes through a 16 KiB scratch, tens of seconds) to **overwrite-only**
+  (one erase + copy). Project-local flashmap `Sentinel/psoc63_1m_cm0_int_overwrite_single.json`
+  (no scratch/swap-status, same slots); `OTA_FLASH_MAP` + `scripts/build-mcuboot-app-*.sh`
+  point at it; `flashmap.mk` (tracked) regenerated with `USE_OVERWRITE := 1`.
+  **Gotchas:** deleting `flashmap.mk` before a build trips the vendor Makefile's
+  late-include-after-`DEFINES` ordering (`MCUBOOT_IMAGE_NUMBER` expands empty →
+  `sysflash.h` "no left operand") — regenerate it with `flashmap.py` instead.
+  Signing now passes `--overwrite-only` (via `CY_SIGNING_KEY_ARG`); without it the
+  ~18 KB swap trailer made the Debug testbench (0x5d56b) exceed the 0x60000 slot.
+  The **bootloader must be re-flashed** with the overwrite MCUBootApp. Bench:
+  single pass, much faster boot. #81 `reverted` now means "MCUBoot rejected the
+  image" rather than a rollback.
+- **#86 (`258b0fc`):** versions lost the build's high byte (4-byte compact → wraps
+  at build 256; #81 could call 111→367 a revert). Additive fix in the zeroed
+  reserved tails: `boot_lifecycle_record.build_hi`,
+  `firmware_update_record.{from,to}_build_hi`; marker keeps the high byte in its
+  old reserved word (`from_build_full()`); resolver compares full versions.
+  `firmware_update_attempted` is now written when the MCUBoot header's `ih_ver`
+  arrives, so it carries the real target (failures before that still write
+  attempted first). Old records/markers decode unchanged. **Client mirror
+  pending** (combine `*_build_hi`). Testbench + app build/sign clean; Doxygen 0.
+- **Client findings (filed):** post-DFU Logs list is stale because `LogsView` reads
+  once and the fast overwrite reboot lets the app reconnect mid-boot before the
+  boot records drain (cl#54 comment); return-to-scan after a successful DFU (cl#60).
+- **Build note:** switching `TESTBENCH` wipes `build/` (`.last_testbench`) — build
+  the image you want to flash last.
+- **Open:** RTC drifted to 1999 once (DS3231 lost time — unfiled); 51.0.2.111-session
+  records missing from one downgrade-time list (check after cl#54 refresh fix).
+
+**Last updated:** 2026-11-13. **#81 OTA: emit firmware_update_completed / _reverted
+via a boot-time swap-confirm detector — COMMITTED on `release/1.0.2` (`474d9cc`),
+bench-pending.** A truthful `0x05`/`0x07` is only knowable at the *next* boot (after the
+post-download reset + the MCUBoot swap). New `storage::firmware_update_marker` — a fixed
+16-byte record in its own 4 KiB W25Q128 sector (`0x0F0000`, below the event log, outside
+both circular stores; `set`/`load`/`clear`). OTA PREPARE persists the marker (`from` =
+running version; target unknown here, derived at boot). The boot orchestrator resolves it
+right after the flash stores init: a *different* running version →
+`firmware_update_completed` (from→running), the *same* version → `firmware_reverted`;
+then clears it. A clean boot logs neither. `ota_fail_and_reset` (#84) and the user ABORT
+now **clear** the marker — a failure is already logged as `firmware_update_failed`, never
+double-counted as a revert; the success reboot (OTA confirmation handler) leaves it
+intact, so it survives exactly the swap-triggering reset. Decision factored into pure
+`diagnostics::resolve_post_swap_event()` with a 5-case testbench suite (upgrade /
+downgrade / minor / build-only → completed; same-version → reverted). **No GATT contract
+change** (log contents only) — client #54 lights up once `0x05` is emitted. Build-verified
+(testbench links clean; only the known-benign imgtool/`click` signing POSTBUILD is
+unrelated). **Board:** #81 → In Review; #83/#84/#71/#80 → In Review; **#82 (fault family)
+deferred to Phase II** (the compelling faults — thermal/over-current/actuator — need Phase
+II peripherals). **Client is in sync** (`develop` == `main`, both at origin). **Before the
+cut:** build a signed #81 image, bench-validate the completed/reverted events (DFU swap →
+next boot logs `0x05`), then #78 (1.0.2.0 cut).
+
+**Last updated:** 2026-11-13. **#84 OTA: reset to a clean state on a failed/interrupted
+update — COMMITTED on `release/1.0.2` (`64b4db2`), bench-pending.** Follow-up to #83.
+**Bench finding:** a DFU interrupted mid-download (ordinary BLE link drop → client
+`operationCancelled`) left the device *alive but in a fragile half-state* (agent
+half-torn-down by #83's disconnect handler, secondary slot erased/open, same boot
+session, re-advertising) that the client could not cleanly reconnect to — it hung on
+"Recovering…". Confirmed this is **not** a #83 regression (serial showed
+`cy_ota_agent_start() DONE`, no "already created") and **not** a downgrade rejection
+(cy_ota has no version check; MCUBoot downgrade-prevention off). **Fix:** new
+`ble_context::ota_fail_and_reset(reason)` (log `firmware_update_failed` → `ota_cleanup`
+→ 1 s guard → `NVIC_SystemReset`) on the three *failure* paths — signal-loss disconnect,
+verify-fail, agent-start-fail — so a fresh boot brings every task + GATT service back.
+A deliberate **user cancel** stays in-place (no reboot; works now that #83 clears the
+agent singleton). Added reason `OTA_FAIL_START = 4`. Build-verified Release (clean; only
+the pre-existing RWX linker warning). **Downstream client half:
+`galudino/sentinel-client#52`** (bound the reconnect so the app never hangs). **The
+`#83`/`#71` 2nd-attempt "OTA context already created!" bug is confirmed FIXED on bench**
+(`edd8bcf`). **Also this session:** built two WIP A/B DFU test images from `edd8bcf`
+(`1.0.2.107-wip` + `51.0.2.107-wip`, major+50) and refreshed the client bundle
+(`galudino/sentinel-client#51`); the `51.0.2.107` swap was validated end-to-end on bench.
+Still open before the cut: re-flash `64b4db2`, bench-validate #84 (interrupt → reboot →
+re-advertise → client reconnects), then #78 (1.0.2.0 cut).
+
+**Last updated:** 2026-10-20. **1.0.2.0 is in progress on `release/1.0.2`**
+(off `develop`), tracking [#78](https://github.com/galudino/sentinel-firmware/issues/78).
+Version is still stamped **1.0.2.92** (`34deea6`) — **re-stamp `BUILD` before the
+next bench flash / at the cut**. `1.0.2` is **not cut** (no `v1.0.2` tag).
+Phase I firmware is **not locked**: client work may still surface firmware fixes.
+
+**All 1.0.2 code is now on the branch; what remains is on-device validation.**
+`#76` landed this session (`9390933`) — it was written in a prior session but
+left uncommitted in the working tree; build-verified (firmware Release links +
+OTA-signs clean) and committed. firmware Release builds + signs clean;
+`doxygen Doxyfile` = **0 warnings** (re-verified, incl. the #76 files — needed a
+qualified `\ref`, `a28cbde`); clang-format clean across all 114 `src/` files
+(#53); READMEs + the nRF Connect checklist refreshed (#57). **#53 + #57 are
+software-complete; both re-verified against the #76 code.**
+
+- **#76 — large paged reads slow / torn-slot hid history** (`9390933`). Four
+  changes: (1) `resource::configure_spi_clock` reprograms the SCB SPI flash
+  divider from the configurator default (~100 kHz) to **4 MHz** — each flash
+  read is µs not ms; (2) `ble_context` requests a **15 ms** connection interval
+  on connect (central may refuse); (3) `gatt::paged::fill_block` **skips** a
+  torn/unreadable slot (bounded by `MAX_SKIPPED_SLOTS`=64) instead of ending the
+  block — one bad record no longer hides the rest; client dedupes the
+  re-delivered successor by timestamp; (4) `ble_gatt` read at `offset == cur_len`
+  reads empty per ATT, not `INVALID_OFFSET`. **Bench (decisive diagnostic):**
+  rebuild a large store, reset, read `boot: snapshot history ready (ok=1, N
+  records)` — N correct **and** the client's Trends/History populate at scale.
+  ⚠️ **the 100 kHz→4 MHz jump will be far less forgiving of the marginal
+  breadboard SPI wiring** — if flash reads flake, re-seat/shorten SPI wiring
+  before suspecting the code.
+
+**Committed this session — NOT yet validated on hardware (flash, check, close):**
+
+- **#75 — Record Count notify** (`086b3aa`). Both paged Record Count chars are
+  R/Notify with a CCCD (`design.cybt`). `gatt::paged::publish_{snapshot,event}_count`
+  fire on every append and on Clear Store — i.e. **per record, not per value
+  change**, so a full (wrapped) store whose count is pinned at capacity still
+  signals new records. Event log stays BLE-agnostic via
+  `system_event_log::set_appended_hook` (bound in the boot orchestrator; boot-
+  sequence records don't fire it). Audit: no other read-only-dynamic char needs
+  notify. **Bench:** subscribe to each count; watch a notification per persisted
+  snapshot / logged event. Watch the event-log drain task's stack (it now sends
+  the notification; `configMINIMAL_STACK_SIZE * 4`).
+- **#73 — Firmware Build Info** (`5f049c9`). New System char
+  `354E9885-A000-44FA-AB17-7251002BAAB1`, read-only 3 B `[channel, config,
+  variant]`; `sentinel::build_info` (`utilities/sentinel_build_info.hpp`).
+  `SENTINEL_BUILD_CHANNEL?=wip` in the Makefile (`rc` / `release` at a cut —
+  **set `release` for the 1.0.2.0 build**). Blocks client #42 (native
+  blocked-by link set). **Bench:** read `02 00 00` on a default Release app build.
+- **#74 — clock seeded early** + **#68 — second-change gate** (`ac421e7`).
+  `rtc_service::seed_time()` runs right after the device context is built.
+  rtc_service acts once per RTC second. **Bench:** boot log + first event/snapshot
+  records carry real time; testbench shows one heartbeat/s. #68's *root cause*
+  (scope P6[3], read back DS3231 `0x0E`, external pull-up) is still a hardware
+  task — the firmware gate only bounds the symptom.
+- **#79** (advertise indefinitely, `e949f32`) — still awaiting its bench check.
+
+**Handles renumbered** across this release (two CCCDs + Build Info added for
+#75/#73; Request Bootloader Mode **removed** for #71) — the client discovers by
+UUID, so only the contract mirror matters: client #43 (count notify), #42
+(build info), and the `requestBootloaderMode` removal (below).
+
+**#71 (OTA interruption / power-loss) is hardware-only** — nothing left to code.
+**Decision taken 2026-10-20: `Request Bootloader Mode` REMOVED** (`04caed2`) — it
+was vestigial for OTA (the client defined `requestBootloaderMode()` but never
+called it; OTA runs in-app and MCUBoot swaps on the post-download reset; the char
+was just a delayed `NVIC_SystemReset`). Dropped from `design.cybt` + the write
+handler + `ble_maintenance_task`. **Client must mirror the removal** (owner is
+handling it). The rest of #71 is the bench interruption/power-loss matrix.
+
+**Next session (BENCH — critical path):** flash the Release app + testbench →
+validate the whole committed set **#75/#73/#74/#68/#79/#76** → run the **#71**
+interruption/power-loss matrix → close issues → cut 1.0.2.0 per #78's checklist
+(re-stamp BUILD,
+`SENTINEL_BUILD_CHANNEL=release`, tag the pre-squash tip, squash
+`release/1.0.2`→`develop`→`main`, tag `v1.0.2`, GitHub Release with signed
+assets, sync the client bundle). **All software for 1.0.2 is now committed and
+verified — nothing left to code; the release gate is purely on-bench.**
+
+**Previously landed + validated on `release/1.0.2`:** #72 (paged reads) + #69
+(device readiness).
+
+The two validated fixes:
+
+- **#72 — paged GATT block reads returned `INVALID_OFFSET` on blob reads**
+  (`ce7d0d8`). `before_read()` refilled the record block from the live circular
+  store on *every* ATT read, including CoreBluetooth's Read Blob continuations, so
+  a multi-payload block shifted mid-read (→ `WICED_BT_GATT_INVALID_OFFSET`, or a
+  block stitched from two store states). Fix: thread `read_request->offset` into
+  `before_read` and refill only when `offset == 0`. **Test on hardware:** Logs tab
+  loads the 8000+ event log with no "offset is invalid"; Home Climate
+  Readings/Trends + RTC populate from Snapshot History.
+- **#69 — Device Readiness (boot/POST state) on the System service** (`36ee693`).
+  New 2-byte `[state, failedSubsystem]` R/Notify characteristic
+  (`D3E542A5-3476-4A48-B4F5-1D0D0699DB28`), added to `design.cybt` (GeneratedSource
+  regenerates via `make build`'s `bt-configurator-cli` step — it is gitignored, so
+  only `design.cybt` is tracked). `diagnostics::device_readiness` enum;
+  `gatt::system::{set,notify,publish}_readiness`; boot orchestrator publishes
+  booting → post_running → ready/degraded(subsystem). POST-duration audit (AC):
+  POST is already sub-100 ms, so no optimization needed. **Test on hardware:** the
+  client #38 (branch `38-device-readiness-gate`) consumes it — connect mid-boot and
+  watch Home gate on readiness. Board: #72/#69 → In Review / Phase I, sub-issues of
+  #4.
+
+> **cybt regen note:** editing `Sentinel/src/design.cybt` (e.g. adding a
+> characteristic) and running `make build` triggers the configurator's
+> `bt-configurator-cli` code-gen step, which regenerates `GeneratedSource/` and
+> renumbers handles automatically. The standalone `bt-configurator` GUI binary
+> won't code-gen headless on macOS (only the `cocoa` Qt plugin; `--output-dir`
+> writes nothing). Use `make build`.
+
+---
+
+**Prior:** 2026-08-19 — **1.0.1 cut + RELEASED: record-store resilience +
+build-script fixes.** First patch on the public 1.0.0 baseline. Squash-merged to
+`develop` and `main`, tagged **`v1.0.1`**, and published as a **[GitHub Release](https://github.com/galudino/sentinel-firmware/releases/tag/v1.0.1)**
+with 4 signed assets (combined MCUBoot+app hex, OTA `.bin`, `.hex`, `.elf`). Version
+bumped in `Sentinel/Makefile` (`OTA_APP_VERSION_PATCH=1`; BUILD stays CI-owned).
+Testbench **48/48 on hardware**. The client bundles the 1.0.1 `.bin` as stock
+firmware (+ a `255.255.255-test` image built via `OTA_APP_VERSION_*=255` override).
+**Firmware is FROZEN again** (public stable release; touch only for critical fixes).
+
+> **Bench note:** a stray uncommitted VSCode drag moved `src/testbench/` →
+> `src/test/testbench/`, which silently **broke the `TESTBENCH=0` firmware app
+> build** (`multiple definition of sentinel::create_orchestrator` — the moved
+> orchestrator leaked into the app build). It was reversed; if the app build ever
+> fails that way again, check for stray sources under `src/`.
 
 - **`record_store` resilience (root-cause guard for the snapshot count underflow).**
   The device reported a garbage snapshot count (`4294967252` = a `uint32` −44):
@@ -509,34 +760,19 @@ default.
 - **Also merged to `develop`:** **#6 / #45 / #55** — Phase I BLE GATT services,
   Device Information Service + Platform ID, and the PSoC 6 die-temperature
   driver/service (squash `f573cb1`, tag `6-ble-gatt-services-phase-i-history`).
-- **What's next (open, dependency-ordered):**
-  1. **On-bench sign-off of #56 + #49** (both merged to `develop`, board In
-     Review). #56: `erase_program_read` deterministic across many runs.
-     #49: record_store suite 7/7 + empty-region boot-scan <1 s measurement.
-  2. **Review + merge the #53 + #57 docs branches** (`53-doxyfile-doc-infra`,
-     `57-src-readme-docs`) — then continue #57's per-directory README fan-out.
-  3. **End-of-Phase-I `clang-format` sweep (#53)** + **OTA DFU validation with
-     `sentinel-client`** — the Phase I finale.
+- **Released:** **v1.0.2 (1.0.2.0)** on `main` — Phase I firmware complete
+  (#71, #80, #81, #83–#87, #89, #94, #53, #57; see the top entry).
+- **What's next:** the Phase I work moves to **sentinel-client** (cl#54/#55/
+  #58/#60/#61/#62 + the fw#86 mirror). Firmware stays frozen except critical
+  Phase I fixes; Phase II backlog: #88, #82, #90–#93, CI #60.
 
 ---
 
-## Next issues (post #56/#49 merge)
+## Next issues
 
-1. **On-bench sign-off — #56 + #49** (both merged to `develop`, In Review).
-   Flash a testbench build to the GD25Q128/CYBLE-416045 and run:
-   - **#56:** `erase_program_read` deterministically across many consecutive
-     runs (was intermittent). Optionally add a WEL-injection regression test if
-     a fake SPI transport is introduced (AC #3).
-   - **#49:** the record_store suite — 7 tests now incl.
-     `recycle_transient_recovery` — expect 7/7; and confirm the empty-region
-     boot scan is well under 1 s (was ~8.7 s/region).
-2. **#53 — Doxyfile done (branch, review);** the `clang-format -i` +
-   reviewer-rule sweep (`RecordT`→`RecordType`, namespace-nested defs,
-   prefix/postfix, ref-for-mutation) + Doxygen backfill remain the
-   **end-of-Phase-I** task (deferred so it doesn't churn in-flight branches).
-3. **#57 — `src/README.md` anchor done (branch, review);** fan out the
-   per-directory module READMEs from it incrementally.
-4. **OTA DFU validation with `sentinel-client`** — the Phase I finale.
+1. **Client-side DFU robustness** (sentinel-client cl#58, #55, #61, #60, #62).
+2. **Phase II firmware:** #88 (multi-packet BLE responses), the post-PREPARE
+   0x28 disconnects (to file), #82 / #90–#93 (event families), CI #60.
 
 Durable as-built detail lives in `docs/architecture/decisions.md` and the closed
 issues #6 / #45 / #55.

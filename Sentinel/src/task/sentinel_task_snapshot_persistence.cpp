@@ -9,9 +9,10 @@
 ///          \c populate_snapshot() is cache-backed (decision #14) so the only
 ///          bus traffic on this path is the flash write itself, serialized with
 ///          the event-log writer by the shared W25Q128 device mutex (decision
-///          #4). The first capture lands immediately on task start, giving the
-///          history a "first snapshot of this boot" anchor aligned with the
-///          event log's \c boot_complete (issue #38 implementation note).
+///          #4). The first capture lands as soon as the sensor services hold
+///          real readings (bounded wait, #89), giving the history a "first
+///          snapshot of this boot" anchor aligned with the event log's
+///          \c boot_complete (issue #38 implementation note).
 ///
 /// \author  galudino
 /// \date    2026-06-30
@@ -29,6 +30,9 @@ extern "C" {
 #include "sentinel_debug_print.hpp"
 #include "sentinel_device_context.hpp"
 #include "sentinel_device_snapshot.hpp"
+#include "sentinel_gatt_paged.hpp"
+#include "sentinel_task_bme280_service.hpp"
+#include "sentinel_task_rtc_service.hpp"
 #include "sentinel_task_snapshot_persistence.hpp"
 
 #include <cstdint>
@@ -38,6 +42,22 @@ namespace {
 /// \brief Cadence floor. At 1 s the flash wear is still ~20-year endurance
 ///        (issue #38 wear budget); below that only burns flash for no gain.
 constexpr uint32_t MIN_PERIOD_SECONDS = 1;
+
+/// \brief Longest the boot-anchor capture waits for real sensor readings
+///        (#89). The BME280 reads within ~0.2 s and the DS3231 temperature on
+///        the first 1 Hz SQW tick, so this only bounds a missing sensor.
+constexpr uint32_t BOOT_SENSOR_WAIT_MAX_MS = 5000;
+
+/// \brief Poll interval while waiting for the sensors (#89).
+constexpr uint32_t BOOT_SENSOR_POLL_MS = 100;
+
+/// \brief Have both cache-backed sensor services produced a real reading?
+/// \return \c true once the BME280 cache is valid and the DS3231 temperature
+///         has been read since boot.
+bool sensors_ready() noexcept {
+    return sentinel::task::bme280_service::instance().latest().valid &&
+           sentinel::task::rtc_service::instance().has_temperature();
+}
 
 } // namespace
 
@@ -114,6 +134,13 @@ bool snapshot_persistence_task::capture_now() noexcept {
          static_cast<unsigned>(m_capture_count),
          static_cast<unsigned>(store().count()));
 
+    // Push the new Record Count to a subscribed central (#75). Production
+    // (context-store) path only — a bound test store is not the one the GATT
+    // characteristic reports.
+    if (m_store == nullptr) {
+        sentinel::gatt::paged::publish_snapshot_count();
+    }
+
     // Heartbeat only on the production (context-store) path: it references the
     // shared event log, which pairs with the context store — not a bound test
     // store. Gated on context_ready so a pre-orchestrator caller is a no-op.
@@ -143,6 +170,24 @@ void snapshot_persistence_task::task_trampoline(void *task_parameter) {
 void snapshot_persistence_task::run() {
     logi("snapshot_persistence: capturing every %d s",
          static_cast<int>(m_period_seconds));
+
+    // #89: the boot-anchor capture must not race the sensor services. Before
+    // their first real reads, the snapshot carried junk (BME280 reset values,
+    // DS3231 temperature 0.00 °C). Production path only — a bound test store
+    // runs without the services. Bounded so a missing sensor cannot stall
+    // persistence; a timeout captures anyway and says so.
+    if (m_store == nullptr) {
+        auto waited_ms = uint32_t{0};
+        while (!sensors_ready() && waited_ms < BOOT_SENSOR_WAIT_MAX_MS) {
+            vTaskDelay(pdMS_TO_TICKS(BOOT_SENSOR_POLL_MS));
+            waited_ms += BOOT_SENSOR_POLL_MS;
+        }
+        if (!sensors_ready()) {
+            logw("snapshot_persistence: sensors not ready after %u ms; "
+                 "capturing anyway",
+                 static_cast<unsigned>(waited_ms));
+        }
+    }
 
     while (true) {
         // Capture first so the very first snapshot is the boot anchor, then

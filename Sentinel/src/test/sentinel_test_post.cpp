@@ -291,7 +291,8 @@ bool body_w25q128_unknown_jedec(const char **why) {
     return true;
 }
 
-/// \brief A set OSF yields \c fail_self_test and the probe clears the flag.
+/// \brief A set OSF yields \c fail_self_test and the probe leaves the flag set
+///        (#94: only a real BLE time-set may clear it).
 /// \param why Set to a short failure reason when returning \c false.
 /// \return \c true on success.
 bool body_oscillator_stop(const char **why) {
@@ -307,8 +308,8 @@ bool body_oscillator_stop(const char **why) {
         *why = "ds3231 not fail_self_test";
         return false;
     }
-    if (!rtc.cleared) {
-        *why = "OSF not cleared";
+    if (rtc.cleared) {
+        *why = "OSF cleared by POST";
         return false;
     }
     return true;

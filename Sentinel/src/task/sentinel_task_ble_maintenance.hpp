@@ -4,9 +4,9 @@
 ///
 /// \details Performs slow, GATT-write-triggered operations off the Bluetooth
 ///          stack callback: clearing a flash record store
-///          (\c record_store::erase_all erases every sector — multi-second) and
-///          entering the bootloader (a deferred device reset). The GATT write
-///          handler only \e requests the work via a FreeRTOS task notification
+///          (\c record_store::erase_all erases every sector — multi-second).
+///          The GATT write handler only \e requests the work via a FreeRTOS
+///          task notification
 ///          (safe from the BT task context); this task performs it, so the BT
 ///          callback returns promptly and the write response is not stalled.
 ///
@@ -39,7 +39,7 @@ namespace sentinel::task {
 
 ///
 /// \brief Single-owner task that runs slow BLE-triggered maintenance off the
-///        Bluetooth callback (store clears + deferred bootloader reset).
+///        Bluetooth callback (flash record-store clears).
 ///
 /// \note This class is non-copyable and non-movable.
 ///
@@ -70,9 +70,6 @@ public:
     /// \brief Request an erase of the System Event Log store (async).
     void request_clear_events() noexcept;
 
-    /// \brief Request entering the bootloader: a short-delayed device reset.
-    void request_bootloader() noexcept;
-
 private:
     ble_maintenance_task() = default;
 
@@ -84,8 +81,8 @@ private:
     void run();
 
     /// \brief Set a request bit and notify the task.
-    /// \param bit One of the request bits handled by \ref run (e.g. the
-    ///            snapshot-clear, event-clear, or bootloader request bit).
+    /// \param bit One of the request bits handled by \ref run (the
+    ///            snapshot-clear or event-clear request bit).
     void notify(uint32_t bit) noexcept;
 
     TaskHandle_t m_handle{nullptr}; ///< FreeRTOS task handle.

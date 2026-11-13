@@ -26,7 +26,10 @@ extern "C" {
 }
 #pragma GCC diagnostic pop
 
+#include "sentinel_firmware_version.hpp"
+
 #include <array>
+#include <cstdint>
 
 namespace sentinel {
 
@@ -209,6 +212,74 @@ public:
     void ota_agent_confirmation_handler() noexcept;
 
     ///
+    /// \brief Stop the OTA agent and drop the context (#83).
+    ///
+    /// \details Idempotent — safe to call when no OTA is active (no-op). Called
+    ///          on every terminal OTA path (abort, verify-fail, in-flight
+    ///          disconnect, and before a fresh start) so a later PREPARE does
+    ///          not hit "OTA context already created!".
+    ///
+    void ota_cleanup() noexcept;
+
+    ///
+    /// \brief Log a failed/interrupted OTA and reset the device to a clean
+    /// state.
+    ///
+    /// \details The deterministic recovery for a *failed* update (signal loss
+    ///          mid-download, image verification failure, or an agent start
+    ///          failure): record a \c firmware_update_failed event with \p
+    ///          reason, tear the OTA agent down, then \c NVIC_SystemReset()
+    ///          after a short delay so the log flush and any in-flight BLE
+    ///          indication settle. The reboot brings every task + GATT service
+    ///          back fresh and the board re-advertises — the client then
+    ///          reconnects to a known-good device. A deliberate user *cancel*
+    ///          is NOT a failure and does not reset (it stays connected via
+    ///          \ref ota_cleanup).
+    ///
+    /// \param reason The \c firmware_update_record.mcuboot_result reason code
+    ///               (\c OTA_FAIL_SIGNAL_LOST / \c OTA_FAIL_VERIFY /
+    ///               \c OTA_FAIL_START). Does not return.
+    ///
+    [[noreturn]] void ota_fail_and_reset(uint32_t reason) noexcept;
+
+    ///
+    /// \brief Reset the per-OTA attempt bookkeeping (#86) — buffered header
+    ///        bytes, the parsed target version, and the attempted-logged flag.
+    ///        Called at PREPARE, before the agent starts.
+    ///
+    void ota_reset_attempt_state() noexcept;
+
+    ///
+    /// \brief Buffer the leading bytes of the downloaded image until the
+    ///        MCUBoot header's version field is in hand, then parse the target
+    ///        version and write the \c firmware_update_attempted record (#86).
+    ///
+    /// \details Tolerates a header split across several data writes. A header
+    ///          whose magic does not match leaves the target unknown (0.0.0.0)
+    ///          but still writes the attempted record.
+    ///
+    /// \param data Bytes of one image data write.
+    /// \param len  Number of bytes in \p data.
+    ///
+    void ota_capture_header(const uint8_t *data, uint16_t len) noexcept;
+
+    ///
+    /// \brief Write this OTA's \c firmware_update_attempted record exactly once
+    ///        (#86): with the parsed target if the header has arrived, else
+    ///        0.0.0.0. Called when the header parses and before any failure
+    ///        record, so every OTA still logs attempted → completed | failed.
+    ///
+    void ota_log_attempted_once() noexcept;
+
+    ///
+    /// \brief The target version parsed from the image header (#86).
+    ///
+    /// \return The target, or 0.0.0.0 if the header has not arrived or did
+    ///         not parse.
+    ///
+    sentinel::firmware_version ota_target_version() const noexcept;
+
+    ///
     /// \brief Get the current negotiated MTU value
     ///
     /// \return uint16_t Current MTU value
@@ -267,6 +338,23 @@ private:
         m_ota_agent_params; ///< OTA agent configuration parameters
     cy_ota_network_params_t
         m_ota_network_params; ///< OTA network configuration parameters
+
+    /// MCUBoot image header magic (\c ih_magic, little-endian u32 at offset 0).
+    static constexpr uint32_t MCUBOOT_IMAGE_MAGIC_LE = 0x96F3B83Du;
+    /// Offset of \c ih_ver in the MCUBoot image header.
+    static constexpr uint32_t MCUBOOT_HDR_VER_OFFSET = 0x14u;
+    /// Header bytes needed to read \c ih_ver (offset + its 8 bytes).
+    static constexpr uint32_t MCUBOOT_HDR_NEEDED = 0x1Cu;
+
+    std::array<uint8_t, MCUBOOT_HDR_NEEDED>
+        m_ota_header{};               ///< #86: leading image bytes.
+    uint32_t m_ota_header_len{0};     ///< #86: bytes buffered so far.
+    bool m_ota_attempt_logged{false}; ///< #86: attempted written this OTA.
+    bool m_ota_target_known{false};   ///< #86: target parsed from header.
+    uint8_t m_ota_target_major{0};    ///< #86: target major.
+    uint8_t m_ota_target_minor{0};    ///< #86: target minor.
+    uint8_t m_ota_target_patch{0};    ///< #86: target patch (iv_revision).
+    uint16_t m_ota_target_build{0};   ///< #86: target build (iv_build_num).
 
     uint16_t m_mtu; ///< Negotiated MTU value for BLE notifications (default 23,
                     ///< updated on connection)
@@ -358,6 +446,17 @@ private:
 
     /// Magic number indicating invalid/uninitialized BLE context state
     static constexpr auto BLE_CONTEXT_TAG_INVALID = uint32_t{0xDEADBEEF};
+
+    /// Preferred connection interval requested on connect (#76): 12 × 1.25 ms
+    /// = 15 ms, the shortest Apple's accessory guidelines allow.
+    static constexpr auto PREFERRED_CONN_INTERVAL = uint16_t{12};
+
+    /// Preferred peripheral latency (connection events the peripheral may
+    /// skip): 0, so every request is answered on the next event.
+    static constexpr auto PREFERRED_CONN_LATENCY = uint16_t{0};
+
+    /// Preferred supervision timeout, in 10 ms units: 5 s.
+    static constexpr auto PREFERRED_SUPERVISION_TIMEOUT = uint16_t{500};
 };
 
 ///

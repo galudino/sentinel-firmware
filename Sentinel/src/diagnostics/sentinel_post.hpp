@@ -107,6 +107,25 @@ enum class post_subsystem : uint8_t {
 };
 
 ///
+/// \brief Coarse device-readiness state published over the System GATT service
+///        (#69), byte 0 of the \c Device Readiness characteristic.
+///
+/// \details Lets a central that connects while the device is still booting know
+///          when sensors are live, instead of reading stale/zero
+///          characteristics during the pre-POST flash scans. Byte 1 of the
+///          characteristic carries the failing \ref
+///          sentinel::diagnostics::post_subsystem id when \c degraded (0
+///          otherwise). Append-only wire contract, mirrored 1:1 by the iOS
+///          client.
+///
+enum class device_readiness : uint8_t {
+    booting = 0x00, ///< Pre-POST: building context / scanning flash stores.
+    post_running = 0x01, ///< POST probes are executing.
+    ready = 0x02,    ///< POST completed; all subsystems passed, sensors live.
+    degraded = 0x03, ///< POST reported a failure (see the subsystem id byte).
+};
+
+///
 /// \brief Outcome of a single subsystem probe.
 ///
 /// \details Like \ref sentinel::diagnostics::post_subsystem, these are an
@@ -227,20 +246,25 @@ public:
     ///
     /// \brief Probe the DS3231: read the oscillator-stop flag. No response →
     ///        \c fail_no_ack; OSF set → \c fail_self_test (the RTC lost power
-    ///        without a battery; the flag is cleared so the next boot reads
-    ///        clean).
+    ///        without a battery and its time is invalid).
+    ///
+    /// \details The probe only \e reports OSF; it never clears it (#94).
+    ///          Clearing here erased the only evidence that the time is bad,
+    ///          so every boot after the first trusted a 2000-01-01 clock. OSF
+    ///          is cleared only when a real time is written over BLE
+    ///          (\c rtc_service::time_set_from_ble), so POST keeps reporting
+    ///          the fault until the clock is actually fixed.
     ///
     /// \param dev DS3231 driver instance to probe.
     /// \return The subsystem result (\c post_subsystem::ds3231).
     ///
     template <typename Ds3231>
-    static post_subsystem_result probe_ds3231(Ds3231 &dev) noexcept {
+    static post_subsystem_result probe_ds3231(const Ds3231 &dev) noexcept {
         const auto osf = dev.oscillator_stop_flag();
         if (!osf) {
             return {post_subsystem::ds3231, post_result::fail_no_ack, 0u};
         }
         if (*osf) {
-            dev.clear_oscillator_stop_flag();
             return {post_subsystem::ds3231, post_result::fail_self_test, 0u};
         }
         return {post_subsystem::ds3231, post_result::pass, 0u};

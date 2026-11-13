@@ -10,7 +10,7 @@ mutable state in file-static globals.
 | **Bus arbiters** | `i2c_bus`, `spi_bus` — one task per physical bus (request/response queue) |
 | **Service tasks** | `rtc_service`, `bme280_service`, `cpu_die_temp_service`, `battery_service`, `debug_stream` |
 | **Snapshot lanes** | `snapshot_persistence_task` (lane 1, flash), `snapshot_stream_task` (lane 2, BLE) |
-| **Maintenance** | `ble_maintenance_task` — async BLE-triggered clear-store / bootloader request |
+| **Maintenance** | `ble_maintenance_task` — async BLE-triggered record-store clears (snapshots / events) |
 | **Decisions** | [#16 tasks are OO/class](../../../docs/architecture/decisions.md), [#27 / #28 bus arbiters](../../../docs/architecture/decisions.md), [#14 two-lane snapshot](../../../docs/architecture/decisions.md) |
 
 ## The pattern
@@ -37,6 +37,16 @@ sentinel::task::rtc_service::instance().task_create();
 const auto t = sentinel::task::rtc_service::instance().last_unix_time();
 ```
 
+`last_unix_time()` is valid before the task starts: the boot orchestrator calls
+`rtc_service::seed_time()` once (#74). The loop itself acts at most once per RTC
+second, so extra SQW edges on a noisy line collapse into a 1 Hz heartbeat (#68).
+
+If the DS3231's oscillator-stop flag is set at boot (it lost power without a
+working backup battery and restarted at 2000-01-01), `seed_time()` marks the time
+untrusted: `last_unix_time()` stays **0** and records are stamped 0 until a BLE
+time-set calls `time_set_from_ble()`, which clears the flag (#94). The DS3231
+temperature is read on the first tick after boot, then once a minute (#89).
+
 ISRs (battery HAL timer, RTC SQW edge) are private `static` members that recover
 the instance from the HAL callback argument — so no file-static task state remains.
 
@@ -49,7 +59,8 @@ own response queue. See [**Bus arbiter task model**](../README.md#bus-arbiter-ta
 
 ## Two snapshot lanes
 
-`snapshot_persistence_task` writes periodic snapshots to flash (~5 min);
+`snapshot_persistence_task` writes periodic snapshots to flash (~5 min) — its boot
+snapshot waits (≤ 5 s) until the BME280 and DS3231 have real readings (#89);
 `snapshot_stream_task` streams live snapshots over BLE only while a subscriber is
 enabled (~100 ms, idle otherwise). See [**Two-lane snapshot model**](../README.md#two-lane-snapshot-model).
 

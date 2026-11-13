@@ -509,12 +509,15 @@ bool fixture::protection_diagnostic() noexcept {
 
     // The two states that silently swallow erase/program on this part:
     if (wps != 0u) {
-        logw("protection_diagnostic: WPS=1 -> individual block locks; all blocks "
-             "power-on LOCKED until Global Block Unlock (0x98). This is the most "
+        logw("protection_diagnostic: WPS=1 -> individual block locks; all "
+             "blocks "
+             "power-on LOCKED until Global Block Unlock (0x98). This is the "
+             "most "
              "likely cause of erase-succeeds-but-not-blank.");
     }
     if (cmp != 0u) {
-        logw("protection_diagnostic: CMP=1 -> protection complemented; with BP=0 "
+        logw("protection_diagnostic: CMP=1 -> protection complemented; with "
+             "BP=0 "
              "this locks the whole array.");
     }
     if (bp != 0u) {

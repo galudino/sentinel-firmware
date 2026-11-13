@@ -103,6 +103,9 @@ public:
     /// "Unix seconds now, or 0 if the clock is not yet available."
     using now_unix_fn = uint32_t (*)();
 
+    /// "A queued record was just appended to the store" (drain-task context).
+    using appended_fn = void (*)();
+
     ///
     /// \brief Per-store-type singleton accessor.
     ///
@@ -149,6 +152,22 @@ public:
         return true;
     }
 
+    ///
+    /// \brief Bind a hook invoked after each queued record is persisted.
+    ///
+    /// \details Runs in the drain context (the drain task, or the caller of
+    ///          \ref drain_pending()) right after a successful store
+    ///          \c append(). Keeps this layer transport-agnostic: the app binds
+    ///          the BLE Record Count push here (#75). The boot-sequence records
+    ///          are appended before any central can be subscribed and do not
+    ///          fire the hook.
+    ///
+    /// \param on_appended Hook to invoke, or \c nullptr to unbind.
+    ///
+    void set_appended_hook(appended_fn on_appended) noexcept {
+        m_on_appended = on_appended;
+    }
+
     // =====================================================================
     // Recording (non-blocking enqueue)
     // =====================================================================
@@ -185,6 +204,7 @@ public:
         auto r = boot_lifecycle_record{};
         r.header.event_type = system_event::boot_complete;
         r.firmware_version = to_compact(v);
+        r.build_hi = build_high_byte(v);
         r.boot_count = boot_count;
         r.uptime_at_event = 0u;
         return record(as_record(r));
@@ -204,6 +224,7 @@ public:
         auto r = boot_lifecycle_record{};
         r.header.event_type = system_event::shutdown_clean;
         r.firmware_version = to_compact(v);
+        r.build_hi = build_high_byte(v);
         r.boot_count = boot_count;
         r.uptime_at_event = uptime_seconds;
         return record(as_record(r));
@@ -227,8 +248,60 @@ public:
         r.header.event_type = step;
         r.from_version = to_compact(from);
         r.to_version = to_compact(to);
+        r.from_build_hi = build_high_byte(from);
+        r.to_build_hi = build_high_byte(to);
         r.mcuboot_result = mcuboot_result;
         return record(as_record(r));
+    }
+
+    ///
+    /// \brief Record a \c rtc_set_from_ble event (the DS3231 clock was set over
+    ///        GATT). Header-only — the new time is observable from the
+    ///        subsequent records' timestamps.
+    ///
+    /// \return \c true if enqueued; \c false otherwise (see \ref record()).
+    ///
+    bool record_rtc_set_from_ble() noexcept {
+        auto r = system_event_record{};
+        r.header.event_type = system_event::rtc_set_from_ble;
+        return record(r);
+    }
+
+    ///
+    /// \brief Record a \c serial_number_set event (the device serial number was
+    ///        written over GATT). Header-only.
+    ///
+    /// \return \c true if enqueued; \c false otherwise (see \ref record()).
+    ///
+    bool record_serial_number_set() noexcept {
+        auto r = system_event_record{};
+        r.header.event_type = system_event::serial_number_set;
+        return record(r);
+    }
+
+    ///
+    /// \brief Record a \c ble_stack_initialized event (the BLE stack reached
+    ///        \c BTM_ENABLED_EVT). Header-only.
+    ///
+    /// \return \c true if enqueued; \c false otherwise (see \ref record()).
+    ///
+    bool record_ble_stack_initialized() noexcept {
+        auto r = system_event_record{};
+        r.header.event_type = system_event::ble_stack_initialized;
+        return record(r);
+    }
+
+    ///
+    /// \brief Record a \c ble_stack_deinitialized event. Header-only. No
+    ///        production path calls \c stack_deinitialize() today, so this
+    ///        fires only if a teardown path is ever added.
+    ///
+    /// \return \c true if enqueued; \c false otherwise (see \ref record()).
+    ///
+    bool record_ble_stack_deinitialized() noexcept {
+        auto r = system_event_record{};
+        r.header.event_type = system_event::ble_stack_deinitialized;
+        return record(r);
     }
 
     ///
@@ -484,6 +557,7 @@ public:
             su.header.event_type = system_event::shutdown_unexpected;
             su.header.unix_timestamp = last->header.unix_timestamp;
             su.firmware_version = to_compact(current_firmware_version);
+            su.build_hi = build_high_byte(current_firmware_version);
             su.boot_count = prior_boot_count;
             su.uptime_at_event = 0u;
             if (!m_store->append(as_record(su))) {
@@ -496,6 +570,7 @@ public:
         bc.header.event_type = system_event::boot_complete;
         bc.header.unix_timestamp = current_time();
         bc.firmware_version = to_compact(current_firmware_version);
+        bc.build_hi = build_high_byte(current_firmware_version);
         bc.boot_count = found_lifecycle ? prior_boot_count + 1u : 1u;
         bc.uptime_at_event = 0u;
         return m_store->append(as_record(bc));
@@ -519,6 +594,7 @@ public:
         while (xQueueReceive(m_queue, &rec, 0) == pdTRUE) {
             if (m_store->append(rec)) {
                 ++drained;
+                notify_appended();
             }
         }
         return drained;
@@ -531,8 +607,9 @@ public:
         run_boot_sequence();
         for (;;) {
             auto rec = system_event_record{};
-            if (xQueueReceive(m_queue, &rec, portMAX_DELAY) == pdTRUE) {
-                m_store->append(rec);
+            if (xQueueReceive(m_queue, &rec, portMAX_DELAY) == pdTRUE &&
+                m_store->append(rec)) {
+                notify_appended();
             }
         }
     }
@@ -560,6 +637,13 @@ private:
         return m_now != nullptr ? m_now() : 0u;
     }
 
+    /// \brief Invoke the appended hook, if one is bound.
+    void notify_appended() const noexcept {
+        if (m_on_appended != nullptr) {
+            m_on_appended();
+        }
+    }
+
     /// memcpy a typed view into the untyped record the store stores.
     /// \param t Typed record view to convert; must be exactly 36 bytes.
     /// \return The equivalent untyped \ref system_event_record.
@@ -572,10 +656,11 @@ private:
         return out;
     }
 
-    Store *m_store{nullptr};        ///< Non-owning backing store.
-    now_unix_fn m_now{nullptr};     ///< Clock callback, or \c nullptr.
-    QueueHandle_t m_queue{nullptr}; ///< Non-blocking staging queue.
-    bool m_initialized{false};      ///< Set once \ref initialize() runs.
+    Store *m_store{nullptr};            ///< Non-owning backing store.
+    now_unix_fn m_now{nullptr};         ///< Clock callback, or \c nullptr.
+    appended_fn m_on_appended{nullptr}; ///< Post-append hook, or \c nullptr.
+    QueueHandle_t m_queue{nullptr};     ///< Non-blocking staging queue.
+    bool m_initialized{false};          ///< Set once \ref initialize() runs.
 };
 
 } // namespace sentinel::diagnostics

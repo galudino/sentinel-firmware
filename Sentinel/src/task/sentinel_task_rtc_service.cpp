@@ -135,8 +135,56 @@ uint32_t rtc_service::last_unix_time() const noexcept {
     return m_last_unix_seconds;
 }
 
+bool rtc_service::seed_time() noexcept {
+    auto &rtc = sentinel::resource::context().rtc;
+
+    // #94: an oscillator stop means the chip lost power without a working
+    // backup battery and restarted at 2000-01-01 — never stamp records with
+    // that. Leave the latch at 0 ("unknown") until a BLE time-set. An
+    // unreadable flag is treated as "stopped" (fail safe).
+    const auto osf = rtc.oscillator_stop_flag();
+    if (!osf || *osf) {
+        m_time_valid = false;
+        m_last_unix_seconds = 0;
+        sentinel::gatt::ds3231::set_unix_time(0);
+        return osf.has_value();
+    }
+    m_time_valid = true;
+
+    auto now = rtc.time();
+    if (!now) {
+        return false;
+    }
+
+    auto unix = ds3231_t::datetime::to_unix_time(*now);
+    if (!unix) {
+        return false;
+    }
+
+    m_last_unix_seconds = *unix;
+    sentinel::gatt::ds3231::set_unix_time(*unix);
+    return true;
+}
+
 int16_t rtc_service::last_temperature_centi_c() const noexcept {
     return m_last_temperature_centi;
+}
+
+bool rtc_service::has_temperature() const noexcept {
+    return m_temperature_known;
+}
+
+bool rtc_service::time_valid() const noexcept { return m_time_valid; }
+
+void rtc_service::time_set_from_ble(uint32_t unix_seconds) noexcept {
+    auto &rtc = sentinel::resource::context().rtc;
+    if (!rtc.clear_oscillator_stop_flag()) {
+        loge("rtc_service: OSF clear failed (err=%d)",
+             static_cast<int>(rtc.last_error()));
+    }
+    m_last_unix_seconds = unix_seconds;
+    m_time_valid = true;
+    sentinel::gatt::ds3231::set_unix_time(unix_seconds);
 }
 
 BaseType_t rtc_service::task_create() noexcept {
@@ -215,8 +263,14 @@ void rtc_service::run() {
 
     logi("rtc_service: 1 Hz SQW armed (falling-edge IRQ on P6_3)");
 
+    // Second of the last tick acted on (#68). The SQW line is open-drain; a
+    // noisy edge can re-fire the falling-edge IRQ within one RTC second, so
+    // everything past the (idempotent) time latch is gated on the second
+    // actually changing — a true 1 Hz heartbeat regardless of line noise.
+    auto last_second = std::optional<uint8_t>{};
+
     while (true) {
-        // Block until the next SQW falling edge (one per second).
+        // Block until the next SQW falling edge (nominally one per second).
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
         auto now = rtc.time();
@@ -228,17 +282,28 @@ void rtc_service::run() {
 
         // Latch the timestamp first: it is this task's primary product and
         // must not be gated on the best-effort temperature read below.
+        // #94: while the time is untrusted (oscillator stop, not yet set over
+        // BLE) keep the latch and the GATT value at 0 ("unknown").
         auto unix = ds3231_t::datetime::to_unix_time(*now);
-        if (unix) {
+        if (unix && m_time_valid) {
             m_last_unix_seconds = *unix;
             // Refresh the Unix Time GATT read value at 1 Hz (#6; no notify).
             sentinel::gatt::ds3231::set_unix_time(*unix);
         }
 
+        // Spurious intra-second edge: nothing new to do this second (#68).
+        if (last_second && *last_second == now->second) {
+            continue;
+        }
+        last_second = now->second;
+
         // Throttle logging to HEARTBEAT_LOG_PERIOD_SECONDS; the time latch
         // above always runs at 1 Hz regardless. Temperature is only read here,
-        // when a line is actually about to be logged.
-        if (now->second % HEARTBEAT_LOG_PERIOD_SECONDS != 0) {
+        // when a line is actually about to be logged — and once on the first
+        // tick after boot (#89), so the cache never reports a fake 0.00 °C
+        // for up to a minute.
+        if (m_temperature_known &&
+            now->second % HEARTBEAT_LOG_PERIOD_SECONDS != 0) {
             continue;
         }
 
@@ -252,6 +317,7 @@ void rtc_service::run() {
         // Publish the latest temperature for cross-task consumers (the device
         // snapshot #36 reads this cache rather than issuing its own I²C read).
         m_last_temperature_centi = *temp;
+        m_temperature_known = true;
 
         // Publish to the DS3231 RTC Temperature GATT characteristic (#6):
         // refresh the read value and notify a subscribed central.
