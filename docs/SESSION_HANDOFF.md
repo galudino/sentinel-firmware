@@ -20,6 +20,39 @@ than letting them accumulate here.
 
 ---
 
+**Last updated:** 2026-11-13. **#85 overwrite upgrade — COMMITTED + bench-validated;
+#86 full-width versions — COMMITTED, bench-pending.** Both on `release/1.0.2`.
+
+- **#85 (`3805a5c`, `517fc5c`):** MCUBoot switched from swap-using-scratch (~24
+  erase/copy passes through a 16 KiB scratch, tens of seconds) to **overwrite-only**
+  (one erase + copy). Project-local flashmap `Sentinel/psoc63_1m_cm0_int_overwrite_single.json`
+  (no scratch/swap-status, same slots); `OTA_FLASH_MAP` + `scripts/build-mcuboot-app-*.sh`
+  point at it; `flashmap.mk` (tracked) regenerated with `USE_OVERWRITE := 1`.
+  **Gotchas:** deleting `flashmap.mk` before a build trips the vendor Makefile's
+  late-include-after-`DEFINES` ordering (`MCUBOOT_IMAGE_NUMBER` expands empty →
+  `sysflash.h` "no left operand") — regenerate it with `flashmap.py` instead.
+  Signing now passes `--overwrite-only` (via `CY_SIGNING_KEY_ARG`); without it the
+  ~18 KB swap trailer made the Debug testbench (0x5d56b) exceed the 0x60000 slot.
+  The **bootloader must be re-flashed** with the overwrite MCUBootApp. Bench:
+  single pass, much faster boot. #81 `reverted` now means "MCUBoot rejected the
+  image" rather than a rollback.
+- **#86 (`258b0fc`):** versions lost the build's high byte (4-byte compact → wraps
+  at build 256; #81 could call 111→367 a revert). Additive fix in the zeroed
+  reserved tails: `boot_lifecycle_record.build_hi`,
+  `firmware_update_record.{from,to}_build_hi`; marker keeps the high byte in its
+  old reserved word (`from_build_full()`); resolver compares full versions.
+  `firmware_update_attempted` is now written when the MCUBoot header's `ih_ver`
+  arrives, so it carries the real target (failures before that still write
+  attempted first). Old records/markers decode unchanged. **Client mirror
+  pending** (combine `*_build_hi`). Testbench + app build/sign clean; Doxygen 0.
+- **Client findings (filed):** post-DFU Logs list is stale because `LogsView` reads
+  once and the fast overwrite reboot lets the app reconnect mid-boot before the
+  boot records drain (cl#54 comment); return-to-scan after a successful DFU (cl#60).
+- **Build note:** switching `TESTBENCH` wipes `build/` (`.last_testbench`) — build
+  the image you want to flash last.
+- **Open:** RTC drifted to 1999 once (DS3231 lost time — unfiled); 51.0.2.111-session
+  records missing from one downgrade-time list (check after cl#54 refresh fix).
+
 **Last updated:** 2026-11-13. **#81 OTA: emit firmware_update_completed / _reverted
 via a boot-time swap-confirm detector — COMMITTED on `release/1.0.2` (`474d9cc`),
 bench-pending.** A truthful `0x05`/`0x07` is only knowable at the *next* boot (after the
