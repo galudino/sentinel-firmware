@@ -135,14 +135,17 @@ const char *result_name(sentinel::diagnostics::post_result r) noexcept {
 /// \brief #81 boot-time swap-confirm detector: resolve a pending-update marker
 ///        that survived the OTA reset into the honest post-swap event.
 ///
-/// \details If a durable marker (\ref sentinel::storage::firmware_update_marker)
-///          is present, a \e different running version means the MCUBoot swap
+/// \details If a durable marker
+///          (\ref sentinel::storage::firmware_update_marker) is present, a
+///          \e different running version means the MCUBoot swap
 ///          took effect (\c firmware_update_completed); the \e same version
-///          means the swap did not stick (\c firmware_reverted). Records the
-///          event into the (already-initialized) System Event Log and clears the
-///          marker. A clean boot with no marker records nothing. Failures and
-///          user cancels clear the marker before resetting, so neither is ever
-///          seen here.
+///          means the swap did not stick (\c firmware_reverted) — or, if the
+///          marker was still in its downloading stage, that a reset
+///          interrupted the download (\c firmware_update_failed, #71). Records
+///          the event into the (already-initialized) System Event Log and
+///          clears the marker. A clean boot with no marker records nothing.
+///          Failures and user cancels clear the marker before resetting, so
+///          neither is ever seen here.
 ///
 /// \param ctx Shared device context; its event log must be initialized.
 ///
@@ -155,24 +158,35 @@ void resolve_pending_firmware_update(
 
     // #86: full 16-bit build (low byte + high byte), so e.g. 1.0.2.111 and
     // 1.0.2.367 are told apart.
-    const auto from_version = sentinel::firmware_version(
-        marker.from_major, marker.from_minor, marker.from_patch,
-        marker.from_build_full());
+    const auto from_version =
+        sentinel::firmware_version(marker.from_major, marker.from_minor,
+                                   marker.from_patch, marker.from_build_full());
     const auto &running = sentinel::current_firmware_version;
-    const auto step =
-        sentinel::diagnostics::resolve_post_swap_event(from_version, running);
+    const auto step = sentinel::diagnostics::resolve_pending_update(
+        marker.download_finished(), from_version, running);
 
     if (step ==
         sentinel::diagnostics::system_event::firmware_update_completed) {
         logi("boot: OTA swap confirmed — firmware_update_completed (%s -> %s)",
              from_version.c_str(), running.c_str());
         ctx.event_log().record_firmware_update(step, from_version, running, 0u);
+    } else if (step ==
+               sentinel::diagnostics::system_event::firmware_update_failed) {
+        // #71: the board reset (power cut / crash) while the image was still
+        // downloading. The old image is intact and running; this is an
+        // interrupted update, not a revert. Target unknown here → 0.0.0.0.
+        loge("boot: OTA download was interrupted by a reset — "
+             "firmware_update_failed (still on %s)",
+             running.c_str());
+        ctx.event_log().record_firmware_update(
+            step, from_version, sentinel::firmware_version(0u, 0u, 0u, 0u),
+            sentinel::diagnostics::ota_fail_reason::interrupted);
     } else {
         // Reverted / the update did not take: the old image is still running.
-        // Under swap mode this is a MCUBoot rollback; under overwrite mode (#85)
-        // it means MCUBoot rejected the downloaded image and kept the old one.
-        // Either way the attempted target was never captured, so `to` is left
-        // 0.0.0.0 (mirrors the failed-event convention).
+        // Under swap mode this is a MCUBoot rollback; under overwrite mode
+        // (#85) it means MCUBoot rejected the downloaded image and kept the old
+        // one. Either way the attempted target was never captured, so `to` is
+        // left 0.0.0.0 (mirrors the failed-event convention).
         loge("boot: OTA did not take — firmware_reverted (still on %s)",
              running.c_str());
         ctx.event_log().record_firmware_update(

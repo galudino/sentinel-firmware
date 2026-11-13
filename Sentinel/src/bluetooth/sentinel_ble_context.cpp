@@ -104,13 +104,14 @@ wiced_result_t ble_context::stack_initialize() noexcept {
 }
 
 namespace {
-/// \brief Reason written into \c firmware_update_record.mcuboot_result for a
-///        \c firmware_update_failed event (#83); mirrored by the client Logs
-///        view.
-constexpr uint32_t OTA_FAIL_ABORTED = 1u;     ///< client sent the ABORT command
-constexpr uint32_t OTA_FAIL_SIGNAL_LOST = 2u; ///< peer disconnected mid-OTA
-constexpr uint32_t OTA_FAIL_VERIFY = 3u;      ///< image verification failed
-constexpr uint32_t OTA_FAIL_START = 4u;       ///< OTA agent failed to start
+// Reasons written into firmware_update_record.mcuboot_result for a
+// firmware_update_failed event (#83); defined with the event vocabulary so the
+// boot-time resolver shares them (#71).
+namespace fail = sentinel::diagnostics::ota_fail_reason;
+constexpr uint32_t OTA_FAIL_ABORTED = fail::aborted;         ///< Client ABORT.
+constexpr uint32_t OTA_FAIL_SIGNAL_LOST = fail::signal_lost; ///< Link lost.
+constexpr uint32_t OTA_FAIL_VERIFY = fail::verify;           ///< Verify failed.
+constexpr uint32_t OTA_FAIL_START = fail::start; ///< Agent start failed.
 } // namespace
 
 wiced_bt_gatt_status_t ble_context::connection_event_handler(
@@ -165,9 +166,9 @@ wiced_bt_gatt_status_t ble_context::connection_event_handler(
         // #83/#85: a disconnect while an OTA was in flight (signal loss) leaves
         // the agent half-alive and the secondary slot mid-erase — the fragile
         // in-between state the client could not cleanly reconnect to. Log the
-        // failure (reason = signal-lost) and reset to a clean state: a fresh boot
-        // brings every task + GATT service back and re-advertises, so the client
-        // reconnects to a known-good device. Does not return.
+        // failure (reason = signal-lost) and reset to a clean state: a fresh
+        // boot brings every task + GATT service back and re-advertises, so the
+        // client reconnects to a known-good device. Does not return.
         if (m_ota_context != nullptr) {
             ota_fail_and_reset(OTA_FAIL_SIGNAL_LOST);
         }
@@ -230,8 +231,8 @@ cy_rslt_t ble_context::ota_agent_initialize() noexcept {
     if (result != CY_RSLT_SUCCESS) {
         // #85: an agent start failure means the update cannot proceed. Rather
         // than leave the device in an ambiguous half-prepared state, reset to a
-        // clean slate (deterministic recovery). Does not return. (#83 removed the
-        // old infinite while(true) hang here.)
+        // clean slate (deterministic recovery). Does not return. (#83 removed
+        // the old infinite while(true) hang here.)
         m_ota_context = nullptr;
         ota_fail_and_reset(OTA_FAIL_START);
     }
@@ -252,8 +253,8 @@ void ble_context::ota_fail_and_reset(uint32_t reason) noexcept {
     // #85: deterministic recovery from a *failed* OTA (signal loss, verify
     // failure, agent start failure). Persist the failure event, tear the agent
     // down, then reboot so every task + GATT service comes back fresh and the
-    // board re-advertises for the client to reconnect to. A user cancel is not a
-    // failure and never routes here (it stays connected via ota_cleanup()).
+    // board re-advertises for the client to reconnect to. A user cancel is not
+    // a failure and never routes here (it stays connected via ota_cleanup()).
     // #86: attempted first (if the header never arrived), and the failed
     // record carries the real target when known.
     ota_log_attempted_once();
@@ -297,9 +298,8 @@ void ble_context::ota_capture_header(const uint8_t *data,
     }
 
     const auto need = MCUBOOT_HDR_NEEDED - m_ota_header_len;
-    const auto take = (static_cast<uint32_t>(len) < need)
-                          ? static_cast<uint32_t>(len)
-                          : need;
+    const auto take =
+        (static_cast<uint32_t>(len) < need) ? static_cast<uint32_t>(len) : need;
     std::memcpy(m_ota_header.data() + m_ota_header_len, data, take);
     m_ota_header_len += take;
     if (m_ota_header_len < MCUBOOT_HDR_NEEDED) {
@@ -426,9 +426,9 @@ ble_context::ota_agent_write_handler(wiced_bt_gatt_event_data_t *event_data,
 
             if (result != CY_RSLT_SUCCESS) {
                 // #80/#83/#85: image verification failed — the swap will not
-                // happen (the lib already sent the BAD indication to the client).
-                // Log it (reason = verify-failed) and reset to a clean state so
-                // the board returns fully usable. Does not return.
+                // happen (the lib already sent the BAD indication to the
+                // client). Log it (reason = verify-failed) and reset to a clean
+                // state so the board returns fully usable. Does not return.
                 ota_fail_and_reset(OTA_FAIL_VERIFY);
             }
 
@@ -483,6 +483,11 @@ void ble_context::ota_agent_confirmation_handler() noexcept {
     if (ota_lib_state == cy_ota_agent_state_t::CY_OTA_STATE_OTA_COMPLETE &&
         m_reboot_at_end) {
         ota_log_attempted_once(); // #86: no-op unless the header never parsed
+        // #71: the image verified and is staged — a reset from here on is the
+        // planned swap, not an interrupted download.
+        if (sentinel::resource::context_ready()) {
+            sentinel::resource::context().fw_update_marker.mark_staged();
+        }
         cy_rtos_delay_milliseconds(1000);
         NVIC_SystemReset();
     } else {

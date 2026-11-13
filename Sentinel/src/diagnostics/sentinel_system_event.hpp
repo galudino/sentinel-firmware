@@ -184,10 +184,11 @@ inline uint8_t build_high_byte(const sentinel::firmware_version &v) noexcept {
 ///
 /// \param c       Compact version (build low byte).
 /// \param build_hi Build high byte, as stored alongside \p c.
-/// \return The full four-part version, build = <tt>(build_hi << 8) | c.build</tt>.
+/// \return The full four-part version, build = <tt>(build_hi << 8) |
+/// c.build</tt>.
 ///
-inline sentinel::firmware_version
-from_compact(firmware_version_compact c, uint8_t build_hi) noexcept {
+inline sentinel::firmware_version from_compact(firmware_version_compact c,
+                                               uint8_t build_hi) noexcept {
     return sentinel::firmware_version(
         c.major, c.minor, c.patch,
         static_cast<uint16_t>((static_cast<uint16_t>(build_hi) << 8u) |
@@ -223,6 +224,52 @@ resolve_post_swap_event(const sentinel::firmware_version &from,
         from.patch() == running.patch() && from.build() == running.build();
     return same_image ? system_event::firmware_reverted
                       : system_event::firmware_update_completed;
+}
+
+///
+/// \brief Discrete reasons carried in \c firmware_update_record::mcuboot_result
+///        for a \c firmware_update_failed event (#83/#84/#71); mirrored by the
+///        client's Logs view.
+///
+namespace ota_fail_reason {
+inline constexpr uint32_t aborted = 1u;     ///< Client sent the ABORT command.
+inline constexpr uint32_t signal_lost = 2u; ///< Peer disconnected mid-OTA.
+inline constexpr uint32_t verify = 3u;      ///< Image verification failed.
+inline constexpr uint32_t start = 4u;       ///< OTA agent failed to start.
+inline constexpr uint32_t interrupted = 5u; ///< Board reset mid-download
+                                            ///< (power cut / crash), found at
+                                            ///< the next boot (#71).
+} // namespace ota_fail_reason
+
+///
+/// \brief Resolve a pending-update marker found at boot into its event (#71).
+///
+/// \details Extends \ref sentinel::diagnostics::resolve_post_swap_event with
+/// the marker's download
+///          stage. A different running version is always
+///          \c firmware_update_completed. The same version means the update
+///          did not take: \c firmware_reverted if the download had finished
+///          (MCUBoot rejected or rolled back the image), but
+///          \c firmware_update_failed if it had not — the reset (a power cut
+///          or crash) interrupted the download itself, which is not a revert.
+///
+/// \param download_finished \c false only if the marker says the download was
+///                          still in progress when the board reset.
+/// \param from              Version running when the update was attempted.
+/// \param running           Version running now.
+/// \return \c firmware_update_completed, \c firmware_reverted, or
+///         \c firmware_update_failed (reason \ref
+///         sentinel::diagnostics::ota_fail_reason::interrupted).
+///
+inline system_event
+resolve_pending_update(bool download_finished,
+                       const sentinel::firmware_version &from,
+                       const sentinel::firmware_version &running) noexcept {
+    const auto step = resolve_post_swap_event(from, running);
+    if (step == system_event::firmware_reverted && !download_finished) {
+        return system_event::firmware_update_failed;
+    }
+    return step;
 }
 
 ///
