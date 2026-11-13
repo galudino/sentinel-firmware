@@ -110,6 +110,7 @@ namespace {
 constexpr uint32_t OTA_FAIL_ABORTED = 1u;     ///< client sent the ABORT command
 constexpr uint32_t OTA_FAIL_SIGNAL_LOST = 2u; ///< peer disconnected mid-OTA
 constexpr uint32_t OTA_FAIL_VERIFY = 3u;      ///< image verification failed
+constexpr uint32_t OTA_FAIL_START = 4u;       ///< OTA agent failed to start
 } // namespace
 
 wiced_bt_gatt_status_t ble_context::connection_event_handler(
@@ -161,21 +162,14 @@ wiced_bt_gatt_status_t ble_context::connection_event_handler(
                 static_cast<uint8_t>(connection_status.reason));
         }
 
-        // #83: a disconnect while an OTA was in flight (signal loss) leaves the
-        // agent half-alive — log the failure (reason = signal-lost) and tear it
-        // down so the device returns to a clean state and a retry starts fresh.
+        // #83/#85: a disconnect while an OTA was in flight (signal loss) leaves
+        // the agent half-alive and the secondary slot mid-erase — the fragile
+        // in-between state the client could not cleanly reconnect to. Log the
+        // failure (reason = signal-lost) and reset to a clean state: a fresh boot
+        // brings every task + GATT service back and re-advertises, so the client
+        // reconnects to a known-good device. Does not return.
         if (m_ota_context != nullptr) {
-            if (sentinel::resource::context_ready()) {
-                sentinel::resource::context()
-                    .event_log()
-                    .record_firmware_update(
-                        sentinel::diagnostics::system_event::
-                            firmware_update_failed,
-                        sentinel::current_firmware_version,
-                        sentinel::firmware_version(0u, 0u, 0u, 0u),
-                        OTA_FAIL_SIGNAL_LOST);
-            }
-            ota_cleanup();
+            ota_fail_and_reset(OTA_FAIL_SIGNAL_LOST);
         }
     }
 
@@ -234,9 +228,12 @@ cy_rslt_t ble_context::ota_agent_initialize() noexcept {
                                 &m_ota_context);
 
     if (result != CY_RSLT_SUCCESS) {
-        // #83: a failed start must leave the device alive and retryable — do
-        // not hang here (this was an infinite while(true) delay loop).
+        // #85: an agent start failure means the update cannot proceed. Rather
+        // than leave the device in an ambiguous half-prepared state, reset to a
+        // clean slate (deterministic recovery). Does not return. (#83 removed the
+        // old infinite while(true) hang here.)
         m_ota_context = nullptr;
+        ota_fail_and_reset(OTA_FAIL_START);
     }
 
     return result;
@@ -249,6 +246,27 @@ void ble_context::ota_cleanup() noexcept {
         cy_ota_agent_stop(&m_ota_context);
         m_ota_context = nullptr;
     }
+}
+
+void ble_context::ota_fail_and_reset(uint32_t reason) noexcept {
+    // #85: deterministic recovery from a *failed* OTA (signal loss, verify
+    // failure, agent start failure). Persist the failure event, tear the agent
+    // down, then reboot so every task + GATT service comes back fresh and the
+    // board re-advertises for the client to reconnect to. A user cancel is not a
+    // failure and never routes here (it stays connected via ota_cleanup()).
+    if (sentinel::resource::context_ready()) {
+        sentinel::resource::context().event_log().record_firmware_update(
+            sentinel::diagnostics::system_event::firmware_update_failed,
+            sentinel::current_firmware_version,
+            sentinel::firmware_version(0u, 0u, 0u, 0u), reason);
+    }
+
+    ota_cleanup();
+
+    // Let the event-log flush to flash and any in-flight BLE indication settle
+    // before the reset (mirrors the 1 s guard on the success-reboot path).
+    cy_rtos_delay_milliseconds(1000);
+    NVIC_SystemReset();
 }
 
 wiced_bt_gatt_status_t
@@ -321,21 +339,11 @@ ble_context::ota_agent_write_handler(wiced_bt_gatt_event_data_t *event_data,
                                                 m_connection_id);
 
             if (result != CY_RSLT_SUCCESS) {
-                // #80/#83: image verification failed — the swap will not
-                // happen. Log it (reason = verify-failed) and tear the agent
-                // down so a retry starts clean.
-                if (sentinel::resource::context_ready()) {
-                    sentinel::resource::context()
-                        .event_log()
-                        .record_firmware_update(
-                            sentinel::diagnostics::system_event::
-                                firmware_update_failed,
-                            sentinel::current_firmware_version,
-                            sentinel::firmware_version(0u, 0u, 0u, 0u),
-                            OTA_FAIL_VERIFY);
-                }
-                ota_cleanup();
-                return wiced_bt_gatt_status_e::WICED_BT_GATT_ERROR;
+                // #80/#83/#85: image verification failed — the swap will not
+                // happen (the lib already sent the BAD indication to the client).
+                // Log it (reason = verify-failed) and reset to a clean state so
+                // the board returns fully usable. Does not return.
+                ota_fail_and_reset(OTA_FAIL_VERIFY);
             }
 
             return gatt_status;

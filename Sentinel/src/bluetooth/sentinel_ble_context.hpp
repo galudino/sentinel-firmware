@@ -219,6 +219,25 @@ public:
     void ota_cleanup() noexcept;
 
     ///
+    /// \brief Log a failed/interrupted OTA and reset the device to a clean state.
+    ///
+    /// \details The deterministic recovery for a *failed* update (signal loss
+    ///          mid-download, image verification failure, or an agent start
+    ///          failure): record a \c firmware_update_failed event with \p reason,
+    ///          tear the OTA agent down, then \c NVIC_SystemReset() after a short
+    ///          delay so the log flush and any in-flight BLE indication settle.
+    ///          The reboot brings every task + GATT service back fresh and the
+    ///          board re-advertises — the client then reconnects to a known-good
+    ///          device. A deliberate user *cancel* is NOT a failure and does not
+    ///          reset (it stays connected via \ref ota_cleanup).
+    ///
+    /// \param reason The \c firmware_update_record.mcuboot_result reason code
+    ///               (\c OTA_FAIL_SIGNAL_LOST / \c OTA_FAIL_VERIFY /
+    ///               \c OTA_FAIL_START). Does not return.
+    ///
+    [[noreturn]] void ota_fail_and_reset(uint32_t reason) noexcept;
+
+    ///
     /// \brief Get the current negotiated MTU value
     ///
     /// \return uint16_t Current MTU value
