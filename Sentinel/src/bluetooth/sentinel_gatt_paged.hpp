@@ -5,7 +5,9 @@
 /// \details Both aggregate services expose a flash-backed circular record store
 ///          (#33) over the same paged-read protocol: read Record Count, write
 ///          Index (a \e relative cursor in <tt>[0, count)</tt>), read Record
-///          Block (\c floor(max/record_size) records from the cursor). The read
+///          Block (\c floor(min(max, MTU-1, 246)/record_size) records from the
+///          cursor — one LL packet, see
+///          \ref sentinel::gatt::paged::single_payload_block_max). The read
 ///          values are refreshed lazily from \c resource::context()'s stores in
 ///          \ref sentinel::gatt::paged::before_read, just before the GATT read
 ///          responds, so a client
@@ -13,6 +15,13 @@
 ///          write path; Clear Store is deferred to the async maintenance task
 ///          (\c record_store::erase_all erases every sector — far too slow for
 ///          the BT callback).
+///
+///          Record Count is also \b notify-capable (#75): the writers call
+///          \ref sentinel::gatt::paged::publish_snapshot_count /
+///          \ref sentinel::gatt::paged::publish_event_count whenever a store's
+///          count changes (append or clear), so a subscribed central re-reads
+///          on change instead of polling. The payload is the fixed 4-byte
+///          count; coalescing a fast cadence is the client's job.
 ///
 ///          The record stores use \b absolute indices in <tt>[tail, head)</tt>;
 ///          this maps the client's relative cursor via
@@ -37,6 +46,7 @@ extern "C" {
 }
 #pragma GCC diagnostic pop
 
+#include "sentinel_ble_context.hpp"
 #include "sentinel_ble_gatt.hpp"
 #include "sentinel_device_context.hpp"
 #include "sentinel_device_snapshot.hpp"
@@ -50,6 +60,47 @@ namespace sentinel::gatt::paged {
 
 /// \brief Largest Record Block payload (bounded by the GATT DB MaxAttrLength).
 inline constexpr uint16_t BLOCK_SCRATCH = 512;
+
+/// \brief Most unreadable slots one block fill steps past before giving up
+///        (bounds the flash reads done inside the BT-stack read callback).
+inline constexpr uint32_t MAX_SKIPPED_SLOTS = 64;
+
+/// \brief Largest read-response value that fits one LE link-layer packet:
+///        251 B (max Data Length Extension payload) − 4 B L2CAP header − 1 B
+///        ATT opcode.
+inline constexpr uint32_t SINGLE_LL_PACKET_VALUE = 246;
+
+/// \brief Largest Record Block that one read response can carry intact.
+///
+/// \details Measured on the bench (#87, MTU 517 / 515 reported by iOS): a
+///          504-byte Record Block read response arrives with only its first
+///          246 bytes correct — exactly one LL packet's worth of value — and
+///          the remainder wrong, while the client still advances its cursor by
+///          the full block. The tail of every block (records 7–13 of 14
+///          events, 4–6 of 6 snapshots) therefore silently vanished from the
+///          client's view although the flash held every record. The fault is
+///          in how the stack sends a multi-packet response (root cause not yet
+///          isolated); keeping every block within one LL packet, and within
+///          one ATT payload (\c MTU-1), avoids it. Never below one record: a
+///          pre-exchange MTU of 23 still delivers one record per block rather
+///          than an empty block, which the client reads as end-of-store.
+///
+/// \param characteristic_max The characteristic's GATT-DB MaxAttrLength.
+/// \param record_size        Size of one record in bytes.
+/// \return Bytes to fill: \c min(characteristic_max, MTU-1, 246), rounded
+///         down to whole records, but at least one record.
+inline uint32_t single_payload_block_max(uint32_t characteristic_max,
+                                         uint32_t record_size) noexcept {
+    const uint32_t mtu = sentinel::ble_context_object.mtu();
+    const uint32_t payload = mtu > 1u ? mtu - 1u : 0u;
+    uint32_t limit =
+        payload < characteristic_max ? payload : characteristic_max;
+    if (limit > SINGLE_LL_PACKET_VALUE) {
+        limit = SINGLE_LL_PACKET_VALUE;
+    }
+    const uint32_t records = limit / record_size;
+    return (records > 0u ? records : 1u) * record_size;
+}
 
 /// \brief Read a little-endian uint32 from a 4-byte GATT value array.
 /// \param p Pointer to at least 4 bytes, little-endian encoded.
@@ -89,6 +140,16 @@ inline void set_count(const Store &store, uint16_t count_handle) noexcept {
 /// characteristic.
 /// \param  block_max   Maximum bytes the characteristic can hold.
 ///
+/// \details An unreadable slot (a torn / uncommitted record, e.g. from a
+///          power or bus fault mid-append) is \e skipped rather than ending
+///          the block (#76): ending it made every slot past the bad one
+///          unreachable, so one torn record hid the rest of the history. The
+///          client advances its cursor by the number of records returned, so
+///          each skipped slot re-delivers one record at the start of the
+///          next block (dedupe by timestamp); the walk always completes. At
+///          most \ref sentinel::gatt::paged::MAX_SKIPPED_SLOTS bad slots are
+///          stepped past per fill.
+///
 template <typename Rec, typename Store>
 inline void fill_block(const Store &store, uint32_t cursor,
                        uint16_t block_handle, uint32_t block_max) noexcept {
@@ -99,24 +160,25 @@ inline void fill_block(const Store &store, uint32_t cursor,
     const uint32_t per = block_max / rec;
     const uint32_t cnt = store.count();
 
-    uint32_t n = (cursor < cnt) ? (cnt - cursor) : 0u;
-    if (n > per) {
-        n = per;
-    }
-
     uint32_t bytes = 0;
-    for (uint32_t i = 0; i < n; i++) {
-        auto r = store.read(store.tail_index() + cursor + i);
+    uint32_t filled = 0;
+    uint32_t skipped = 0;
+    for (uint32_t pos = cursor; pos < cnt && filled < per; pos++) {
+        auto r = store.read(store.tail_index() + pos);
         if (!r) {
-            break; // a torn/overwritten slot ends the block early.
+            if (++skipped > MAX_SKIPPED_SLOTS) {
+                break;
+            }
+            continue; // torn slot: step past it (see \details).
         }
         std::memcpy(buf + bytes, &*r, rec);
         bytes += rec;
+        ++filled;
     }
     ble_gatt_db_set_value(block_handle, buf, static_cast<uint16_t>(bytes));
 }
 
-/// \brief Refresh the Snapshot History Record Count (used after a clear).
+/// \brief Refresh the Snapshot History Record Count from the store.
 inline void refresh_snapshot_count() noexcept {
     if (resource::context_ready()) {
         set_count(resource::context().snapshot_store,
@@ -124,11 +186,85 @@ inline void refresh_snapshot_count() noexcept {
     }
 }
 
-/// \brief Refresh the System Event Log Record Count (used after a clear).
+/// \brief Refresh the System Event Log Record Count from the store.
 inline void refresh_event_count() noexcept {
     if (resource::context_ready()) {
         set_count(resource::context().event_store,
                   HDLC_SYSTEM_EVENT_LOG_RECORD_COUNT_VALUE);
+    }
+}
+
+// ---- Record Count (R/Notify) — push on count change (#75) ------------------
+
+/// \brief \c true while a central has subscribed to Snapshot History Record
+///        Count notifications.
+/// \return \c true if the CCCD notification bit is set.
+inline bool snapshot_count_notifications_enabled() noexcept {
+    return app_snapshot_history_record_count_client_char_config[0] &
+           wiced_bt_gatt_client_char_config_e::GATT_CLIENT_CONFIG_NOTIFICATION;
+}
+
+/// \brief \c true while a central has subscribed to System Event Log Record
+///        Count notifications.
+/// \return \c true if the CCCD notification bit is set.
+inline bool event_count_notifications_enabled() noexcept {
+    return app_system_event_log_record_count_client_char_config[0] &
+           wiced_bt_gatt_client_char_config_e::GATT_CLIENT_CONFIG_NOTIFICATION;
+}
+
+/// \brief Notify the connected central with the current Snapshot History
+///        Record Count value.
+/// \param connection_id BLE connection to notify.
+/// \return \c wiced_bt_gatt_status_t result of the notification send.
+inline wiced_bt_gatt_status_t
+notify_snapshot_count(uint16_t connection_id) noexcept {
+    return wiced_bt_gatt_server_send_notification(
+        connection_id, HDLC_SNAPSHOT_HISTORY_RECORD_COUNT_VALUE,
+        app_snapshot_history_record_count_len,
+        app_snapshot_history_record_count, nullptr);
+}
+
+/// \brief Notify the connected central with the current System Event Log
+///        Record Count value.
+/// \param connection_id BLE connection to notify.
+/// \return \c wiced_bt_gatt_status_t result of the notification send.
+inline wiced_bt_gatt_status_t
+notify_event_count(uint16_t connection_id) noexcept {
+    return wiced_bt_gatt_server_send_notification(
+        connection_id, HDLC_SYSTEM_EVENT_LOG_RECORD_COUNT_VALUE,
+        app_system_event_log_record_count_len,
+        app_system_event_log_record_count, nullptr);
+}
+
+///
+/// \brief Publish the Snapshot History Record Count: refresh the read value
+///        and notify a subscribed central (mirrors the sensor-char publish
+///        pattern). Call after the store's count changes (append / clear).
+///
+inline void publish_snapshot_count() noexcept {
+    if (!resource::context_ready()) {
+        return;
+    }
+    refresh_snapshot_count();
+    if (sentinel::ble_context_object.connected() &&
+        snapshot_count_notifications_enabled()) {
+        notify_snapshot_count(sentinel::ble_context_object.connection_id());
+    }
+}
+
+///
+/// \brief Publish the System Event Log Record Count: refresh the read value
+///        and notify a subscribed central. Call after the store's count
+///        changes (append / clear).
+///
+inline void publish_event_count() noexcept {
+    if (!resource::context_ready()) {
+        return;
+    }
+    refresh_event_count();
+    if (sentinel::ble_context_object.connected() &&
+        event_count_notifications_enabled()) {
+        notify_event_count(sentinel::ble_context_object.connection_id());
     }
 }
 
@@ -140,9 +276,21 @@ inline void refresh_event_count() noexcept {
 ///          handles. Record Count is recomputed from the store; Record Block is
 ///          filled from the current Index cursor.
 ///
-/// \param handle GATT-DB value handle about to be read.
+///          A Record Block larger than one ATT payload is delivered by
+///          CoreBluetooth as an initial read at \c offset 0 followed by ATT
+///          Read Blob continuations at higher offsets. The block must therefore
+///          be filled exactly once, at the start of that sequence (\c offset
+///          == 0), and left untouched for the continuations — otherwise the
+///          circular store advances between reads, \c cur_len shrinks below the
+///          blob offset (→ \c WICED_BT_GATT_INVALID_OFFSET), and even a
+///          non-erroring block is stitched from two store states (#72). Record
+///          Count is a single 4-byte read (always \c offset 0), so it is
+///          refreshed unconditionally.
 ///
-inline void before_read(uint16_t handle) noexcept {
+/// \param handle GATT-DB value handle about to be read.
+/// \param offset ATT read offset; non-zero marks a Read Blob continuation.
+///
+inline void before_read(uint16_t handle, uint16_t offset) noexcept {
     if (!resource::context_ready()) {
         return;
     }
@@ -153,17 +301,27 @@ inline void before_read(uint16_t handle) noexcept {
         set_count(ctx.snapshot_store, handle);
         break;
     case HDLC_SNAPSHOT_HISTORY_RECORD_BLOCK_VALUE:
-        fill_block<sentinel::telemetry::device_snapshot>(
-            ctx.snapshot_store, read_u32_le(app_snapshot_history_index), handle,
-            MAX_LEN_SNAPSHOT_HISTORY_RECORD_BLOCK);
+        if (offset == 0) {
+            fill_block<sentinel::telemetry::device_snapshot>(
+                ctx.snapshot_store, read_u32_le(app_snapshot_history_index),
+                handle,
+                single_payload_block_max(
+                    MAX_LEN_SNAPSHOT_HISTORY_RECORD_BLOCK,
+                    sizeof(sentinel::telemetry::device_snapshot)));
+        }
         break;
     case HDLC_SYSTEM_EVENT_LOG_RECORD_COUNT_VALUE:
         set_count(ctx.event_store, handle);
         break;
     case HDLC_SYSTEM_EVENT_LOG_RECORD_BLOCK_VALUE:
-        fill_block<sentinel::diagnostics::system_event_record>(
-            ctx.event_store, read_u32_le(app_system_event_log_index), handle,
-            MAX_LEN_SYSTEM_EVENT_LOG_RECORD_BLOCK);
+        if (offset == 0) {
+            fill_block<sentinel::diagnostics::system_event_record>(
+                ctx.event_store, read_u32_le(app_system_event_log_index),
+                handle,
+                single_payload_block_max(
+                    MAX_LEN_SYSTEM_EVENT_LOG_RECORD_BLOCK,
+                    sizeof(sentinel::diagnostics::system_event_record)));
+        }
         break;
     default:
         break;

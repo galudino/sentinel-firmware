@@ -2,7 +2,16 @@
 
 Driver for the Winbond **W25Q128JV** 128 Mbit (16 MB) SPI NOR flash — the backing
 store for the [System Event Log](../../diagnostics/) and [Snapshot History](../../telemetry/)
-(both `record_store`s over distinct regions), and the OTA scratch.
+(both `record_store`s over distinct regions) and the OTA pending-update marker.
+The OTA image slots themselves live in the PSoC's internal flash (MCUBoot
+overwrite mode, #85), not here.
+
+| Region | Offset | Size | Owner |
+|---|---|---|---|
+| OTA pending-update marker | `0x0F0000` | 4 KiB | [`storage/`](../../storage/) `firmware_update_marker_store` (#81, #71) |
+| System Event Log | `0x100000` | 512 KiB | [`diagnostics/`](../../diagnostics/) |
+| Snapshot History | `0x180000` | 1 MiB | [`telemetry/`](../../telemetry/) |
+| Testbench scratch | `0xF00000`+ | — | [`test/`](../../test/) suites only |
 
 | | |
 |---|---|

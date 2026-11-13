@@ -59,11 +59,29 @@ TESTBENCH=0
 # script fixes.
 # MAJOR.MINOR.PATCH are human-owned (bump per docs guidelines); BUILD is
 # CI-owned — CI overrides OTA_APP_VERSION_BUILD with `git rev-list --count HEAD`
-# for a monotonic, OTA-safe build number. Local dev builds default to build 0.
+# for a monotonic, OTA-safe build number. A tagged official release is stamped
+# BUILD=0; a non-zero BUILD marks a development / release-candidate image.
+# Stamped BUILD=0 for the tagged 1.0.2.0 release (#78). Until CI (#60), a
+# development image sets BUILD to the commit count by hand
+# (`OTA_APP_VERSION_BUILD=$(git rev-list --count HEAD)` on the make line) so it
+# is distinguishable from the release. The *maturity* label (release /
+# candidate / WIP) itself is exposed over GATT (see the Firmware Build Info
+# characteristic), which is the clean signal the client reads.
 OTA_APP_VERSION_MAJOR?=1
 OTA_APP_VERSION_MINOR?=0
-OTA_APP_VERSION_PATCH?=1
+OTA_APP_VERSION_PATCH?=2
 OTA_APP_VERSION_BUILD?=0
+
+# Build channel — the *maturity* of this image, exposed over GATT as byte 0 of
+# the System service's Firmware Build Info characteristic (fw#73):
+#   wip (default) — work-in-progress development image
+#   rc            — release candidate
+#   release       — official tagged release (set at the release cut)
+# Override on the command line or via the environment, e.g.
+#   make build SENTINEL_BUILD_CHANNEL=rc
+# The other two Build Info bytes need no setting here: config follows
+# CONFIG (Debug|Release) and variant follows TESTBENCH.
+SENTINEL_BUILD_CHANNEL?=wip
 APP_BUILD_VERSION=$(OTA_APP_VERSION_MAJOR).$(OTA_APP_VERSION_MINOR).$(OTA_APP_VERSION_PATCH)+$(OTA_APP_VERSION_BUILD)
 
 # Name of application (used to derive name of final linked file).
@@ -207,6 +225,21 @@ endif
 
 ###############################################################################
 #
+# Build channel (fw#73) — numeric values mirror sentinel::build_channel
+#
+###############################################################################
+ifeq ($(SENTINEL_BUILD_CHANNEL), release)
+    DEFINES+=SENTINEL_BUILD_CHANNEL=0
+else ifeq ($(SENTINEL_BUILD_CHANNEL), rc)
+    DEFINES+=SENTINEL_BUILD_CHANNEL=1
+else ifeq ($(SENTINEL_BUILD_CHANNEL), wip)
+    DEFINES+=SENTINEL_BUILD_CHANNEL=2
+else
+    $(error SENTINEL_BUILD_CHANNEL must be one of: release, rc, wip (got '$(SENTINEL_BUILD_CHANNEL)'))
+endif
+
+###############################################################################
+#
 # Main app vs Testbench
 #
 # One shared entry point (src/main.cpp) serves both targets; the two source
@@ -300,7 +333,12 @@ else ifeq ($(TARGET), $(filter $(TARGET), APP_CY8CPROTO-063-BLE APP_CYBLE-416045
     OTA_PLATFORM=PSOC_063_1M
     COMPONENTS+=CM0P_BLESS_OTA
     DISABLE_COMPONENTS+=CM0P_BLESS
-    OTA_FLASH_MAP?=$(SEARCH_ota-update)/configs/flashmap/psoc63_1m_cm0_int_swap_single.json
+    # fw#85: OVERWRITE upgrade (project-local flashmap; no scratch/swap-status).
+    # flashmap.py infers overwrite from the absence of scratch/status and emits
+    # USE_OVERWRITE := 1. The MCUBootApp must be rebuilt with the SAME flashmap
+    # (scripts/build-mcuboot-app-*.sh) and re-flashed. The old swap map was
+    # $(SEARCH_ota-update)/configs/flashmap/psoc63_1m_cm0_int_swap_single.json.
+    OTA_FLASH_MAP?=$(CURDIR)/psoc63_1m_cm0_int_overwrite_single.json
 else ifeq ($(TARGET), $(filter $(TARGET), APP_CY8CPROTO-062S3-4343W))
     OTA_PLATFORM=PSOC_062_512K
     OTA_FLASH_MAP?=$(SEARCH_ota-update)/configs/flashmap/psoc62_512k_xip_swap_single.json
@@ -512,7 +550,15 @@ SIGN_SCRIPT_FILE_PATH=$(SEARCH_ota-update)/scripts/sign_script.bash
 # MCUBoot must also be modified to skip checking the signature, see README for more details.
 # For signing, use "sign" and key path:
 IMGTOOL_COMMAND_ARG=sign
-CY_SIGNING_KEY_ARG="-k $(MCUBOOT_KEY_DIR)/$(MCUBOOT_KEY_FILE)"
+# fw#85: an overwrite-only bootloader needs only MCUBoot's small overwrite
+# trailer. Without --overwrite-only, imgtool reserves the swap trailer (sized by
+# -M 768 sectors, ~18 KB) in its slot-size check, which the Debug testbench
+# image overflows. sign_script.bash expands this variable unquoted, so the flag
+# rides along with the key argument.
+ifeq ($(USE_OVERWRITE),1)
+    IMGTOOL_EXTRA_ARGS=--overwrite-only
+endif
+CY_SIGNING_KEY_ARG="-k $(MCUBOOT_KEY_DIR)/$(MCUBOOT_KEY_FILE) $(IMGTOOL_EXTRA_ARGS)"
 # IMGTOOL_COMMAND_ARG=create
 # CY_SIGNING_KEY_ARG=" "
 

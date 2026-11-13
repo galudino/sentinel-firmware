@@ -17,14 +17,22 @@ The orchestrator runs once, in order:
 
 1. Build the shared **device context** ([`resource::context()`](../resource/)) —
    the `bme` / `rtc` / `flash` drivers plus the event-log and snapshot stores.
+   Then seed the clock with one DS3231 read (`rtc_service::seed_time()`, #74) so
+   everything below is stamped with real time, not epoch 0.
 2. `initialize_stores()` — scan both flash regions (fast-scan, #49).
 3. Run [POST](../diagnostics/) against the **real** drivers, caching the first
    failure.
 4. Start the event-log drain task (emits the boot sequence, then drains POST
-   records).
+   records). Its appended hook is bound to the Record Count push (#75).
 5. Start the [service tasks](../task/) — rtc, bme280, snapshot-persistence,
    snapshot-stream, battery, cpu-die-temp.
 6. `vTaskDelete(self)`.
+
+Throughout, the orchestrator publishes **device readiness** on the System GATT
+service (#69): `booting` at entry, `post_running` before the probes, then
+`ready` / `degraded(subsystem)` once POST completes — so a central that connects
+mid-boot (the BLE stack is connectable before sensors are up) can gate its UI on
+the `→ ready` notification instead of reading stale/zero characteristics.
 
 A BLE-stack failure does **not** hard-assert — POST records it and boot proceeds
 degraded (decision #12).

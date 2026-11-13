@@ -32,6 +32,7 @@ extern "C" {
 #pragma GCC diagnostic pop
 
 #include "sentinel_byte_transport.hpp"
+#include "sentinel_cyhal_delay.hpp"
 #include "sentinel_utilities.hpp"
 
 #include <algorithm>
@@ -158,13 +159,13 @@ public:
     }
 
     ///
-    /// \brief Delay
+    /// \brief Delay (full 32-bit range — see \ref sentinel::cyhal_delay_us)
     ///
     /// \param microseconds Delay in microseconds
     /// \return cy_rslt_t CY_RSLT_SUCCESS on success, error code otherwise
     ///
     cy_rslt_t delay_us(uint32_t microseconds) noexcept {
-        cyhal_system_delay_us(microseconds);
+        sentinel::cyhal_delay_us(microseconds);
         return CY_RSLT_SUCCESS;
     }
 

@@ -108,6 +108,16 @@ struct fixture {
     /// \brief Exercise SLEEP -> FORCED -> SLEEP power-mode transitions.
     /// \return \c true if each observed mode is one of the expected values.
     bool sensor_mode_transitions() noexcept;
+    /// \brief A 112.8 ms transport delay (the 16x forced-conversion wait)
+    ///        actually waits that long — not 47 ms after uint16_t
+    ///        truncation (#89).
+    /// \return \c true if the measured wait is within [112, 200) ms.
+    bool long_delay_waits_full_duration() noexcept;
+    /// \brief The very first forced read after a fresh init/soft reset is a
+    ///        real measurement, not the chip's reset registers (which
+    ///        compensate to 25.07 °C / 645.6 hPa / 91.3 %RH) (#89).
+    /// \return \c true if the sample is plausible and not the reset signature.
+    bool first_sample_after_reset_is_real() noexcept;
 };
 
 } // namespace
@@ -307,6 +317,71 @@ bool fixture::sensor_mode_transitions() noexcept {
 }
 
 // ============================================================================
+// fixture::long_delay_waits_full_duration (#89)
+// ============================================================================
+
+bool fixture::long_delay_waits_full_duration() noexcept {
+    constexpr uint32_t REQUEST_US = 112800u; // 16x T/P/H forced conversion
+    const auto start = xTaskGetTickCount();
+    bme280_bus.delay_us(REQUEST_US);
+    const auto elapsed_ms = static_cast<uint32_t>(
+        (xTaskGetTickCount() - start) * portTICK_PERIOD_MS);
+
+    if (elapsed_ms < 112u || elapsed_ms >= 200u) {
+        loge("long_delay_waits_full_duration FAIL: %u us request waited %u ms",
+             static_cast<unsigned>(REQUEST_US),
+             static_cast<unsigned>(elapsed_ms));
+        return false;
+    }
+    logi("long_delay_waits_full_duration PASS: waited %u ms",
+         static_cast<unsigned>(elapsed_ms));
+    return true;
+}
+
+// ============================================================================
+// fixture::first_sample_after_reset_is_real (#89)
+// ============================================================================
+
+bool fixture::first_sample_after_reset_is_real() noexcept {
+    // The constructor soft-resets the part, so its data registers hold reset
+    // values until a conversion completes — exactly the boot condition.
+    auto sensor = sentinel::bme280_i2c<sentinel::cyhal_i2c_bus_transport>(
+        bme280_bus, BME280_I2C_ADDR_PRIM);
+
+    auto data = sensor.read_sensor_data();
+    if (!data) {
+        loge("first_sample_after_reset_is_real FAIL: read error %d",
+             static_cast<int>(sensor.last_error()));
+        return false;
+    }
+
+    const auto t = data->temperature;
+    const auto p = data->pressure;
+    const auto h = data->humidity;
+    const auto t_centi = static_cast<int>(t * 100.0);
+    const auto p_pa = static_cast<int>(p);
+    const auto h_centi = static_cast<int>(h * 100.0);
+
+    // Reset-register signature: 25.07 °C, 64562 Pa, 91.29 %RH.
+    const bool reset_signature = (t_centi >= 2502 && t_centi <= 2512) &&
+                                 (p_pa >= 64500 && p_pa <= 64620) &&
+                                 (h_centi >= 9124 && h_centi <= 9134);
+    const bool plausible = (t > -40.0 && t < 85.0) &&
+                           (p > 30000.0 && p < 110000.0) &&
+                           (h >= 0.0 && h <= 100.0);
+
+    if (reset_signature || !plausible) {
+        loge("first_sample_after_reset_is_real FAIL: T=%d cC P=%d Pa H=%d c%% "
+             "(reset_signature=%d)",
+             t_centi, p_pa, h_centi, static_cast<int>(reset_signature));
+        return false;
+    }
+    logi("first_sample_after_reset_is_real PASS: T=%d cC P=%d Pa H=%d c%%",
+         t_centi, p_pa, h_centi);
+    return true;
+}
+
+// ============================================================================
 // sentinel::test::bme280::run_all
 // ============================================================================
 
@@ -324,6 +399,12 @@ sentinel::test::tally sentinel::test::bme280::run_all() noexcept {
     yield_for_debug_drain(200);
 
     t.record(fx.sensor_mode_transitions());
+    yield_for_debug_drain(200);
+
+    t.record(fx.long_delay_waits_full_duration());
+    yield_for_debug_drain(200);
+
+    t.record(fx.first_sample_after_reset_is_real());
     yield_for_debug_drain(200);
 
     return t;

@@ -42,7 +42,9 @@ extern "C" {
 #include "sentinel_ble_context.hpp"
 #include "sentinel_debug_print.hpp"
 #include "sentinel_device_context.hpp"
+#include "sentinel_firmware_update_marker.hpp"
 #include "sentinel_gatt_dis.hpp"
+#include "sentinel_gatt_paged.hpp"
 #include "sentinel_gatt_snapshot_stream.hpp"
 #include "sentinel_gatt_system.hpp"
 #include "sentinel_orchestrator_entry.hpp"
@@ -129,6 +131,71 @@ const char *result_name(sentinel::diagnostics::post_result r) noexcept {
     return "?";
 }
 
+///
+/// \brief #81 boot-time swap-confirm detector: resolve a pending-update marker
+///        that survived the OTA reset into the honest post-swap event.
+///
+/// \details If a durable marker
+///          (\ref sentinel::storage::firmware_update_marker) is present, a
+///          \e different running version means the MCUBoot swap
+///          took effect (\c firmware_update_completed); the \e same version
+///          means the swap did not stick (\c firmware_reverted) — or, if the
+///          marker was still in its downloading stage, that a reset
+///          interrupted the download (\c firmware_update_failed, #71). Records
+///          the event into the (already-initialized) System Event Log and
+///          clears the marker. A clean boot with no marker records nothing.
+///          Failures and user cancels clear the marker before resetting, so
+///          neither is ever seen here.
+///
+/// \param ctx Shared device context; its event log must be initialized.
+///
+void resolve_pending_firmware_update(
+    sentinel::resource::device_context &ctx) noexcept {
+    auto marker = sentinel::storage::firmware_update_marker{};
+    if (!ctx.fw_update_marker.load(marker)) {
+        return; // no OTA was in flight across this boot
+    }
+
+    // #86: full 16-bit build (low byte + high byte), so e.g. 1.0.2.111 and
+    // 1.0.2.367 are told apart.
+    const auto from_version =
+        sentinel::firmware_version(marker.from_major, marker.from_minor,
+                                   marker.from_patch, marker.from_build_full());
+    const auto &running = sentinel::current_firmware_version;
+    const auto step = sentinel::diagnostics::resolve_pending_update(
+        marker.download_finished(), from_version, running);
+
+    if (step ==
+        sentinel::diagnostics::system_event::firmware_update_completed) {
+        logi("boot: OTA swap confirmed — firmware_update_completed (%s -> %s)",
+             from_version.c_str(), running.c_str());
+        ctx.event_log().record_firmware_update(step, from_version, running, 0u);
+    } else if (step ==
+               sentinel::diagnostics::system_event::firmware_update_failed) {
+        // #71: the board reset (power cut / crash) while the image was still
+        // downloading. The old image is intact and running; this is an
+        // interrupted update, not a revert. Target unknown here → 0.0.0.0.
+        loge("boot: OTA download was interrupted by a reset — "
+             "firmware_update_failed (still on %s)",
+             running.c_str());
+        ctx.event_log().record_firmware_update(
+            step, from_version, sentinel::firmware_version(0u, 0u, 0u, 0u),
+            sentinel::diagnostics::ota_fail_reason::interrupted);
+    } else {
+        // Reverted / the update did not take: the old image is still running.
+        // Under swap mode this is a MCUBoot rollback; under overwrite mode
+        // (#85) it means MCUBoot rejected the downloaded image and kept the old
+        // one. Either way the attempted target was never captured, so `to` is
+        // left 0.0.0.0 (mirrors the failed-event convention).
+        loge("boot: OTA did not take — firmware_reverted (still on %s)",
+             running.c_str());
+        ctx.event_log().record_firmware_update(
+            step, from_version, sentinel::firmware_version(0u, 0u, 0u, 0u), 0u);
+    }
+
+    ctx.fw_update_marker.clear();
+}
+
 /// \brief Start a service task, logging on failure (boot continues regardless).
 /// \param name Service task name, for the failure log line.
 /// \param rc   Result of the \c xTaskCreate call that started it.
@@ -164,6 +231,11 @@ void boot_orchestrator::run() {
 
     logi("boot: starting sequence");
 
+    // Device Readiness starts at `booting` (#69): the BLE stack is connectable
+    // before sensors are up, so a central connecting during the multi-second
+    // flash scans below reads this state instead of stale/zero sensor chars.
+    sentinel::gatt::system::set_readiness(diag::device_readiness::booting, 0);
+
     // ---- 1. Build the shared device context + scan the flash stores. ----
     // First touch of context() constructs the drivers here, post-scheduler, so
     // the BME280 calibration read goes through the running I²C arbiter. The two
@@ -174,6 +246,25 @@ void boot_orchestrator::run() {
     auto &ctx = res::context();
     logi("boot: device context built (BME280 init err=%d)",
          static_cast<int>(ctx.bme.last_error()));
+
+    // Seed the clock from the battery-backed DS3231 now (#74), so POST, the
+    // boot-lifecycle event records, and the first snapshot are stamped with
+    // real time rather than epoch 0. rtc_service (started in step 4) keeps it
+    // fresh from here; on a read failure the clock stays 0 and boot continues.
+    if (task::rtc_service::instance().seed_time()) {
+        if (task::rtc_service::instance().time_valid()) {
+            logi("boot: clock seeded from DS3231");
+        } else {
+            // #94: the DS3231 lost power (no working backup battery) and
+            // restarted at 2000-01-01. Records are stamped 0 until the time
+            // is set over BLE.
+            logw("boot: DS3231 lost its time (oscillator stopped); clock "
+                 "unknown until set over BLE — records stamped 0");
+        }
+    } else {
+        loge("boot: DS3231 clock seed failed (err=%d); boot records stamped 0",
+             static_cast<int>(ctx.rtc.last_error()));
+    }
 
     logi("boot: scanning event-log region (%u slots)...",
          static_cast<unsigned>(ctx.event_store.capacity()));
@@ -198,6 +289,14 @@ void boot_orchestrator::run() {
         // the device runs degraded (decision #12).
     }
 
+    // ---- 1b. #81 boot-time swap-confirm detector. ----
+    // Resolve any pending-update marker that survived an OTA reset into the
+    // honest firmware_update_completed / _reverted event. Needs the event log +
+    // flash healthy, so it runs only when the stores initialized.
+    if (res::g_context_ready) {
+        resolve_pending_firmware_update(ctx);
+    }
+
     // ---- 2. POST against the real drivers; log + record each probe. ----
     // probe_record_store now reuses the already-initialized event store (no
     // redundant rescan), so POST is fast and the per-probe lines print
@@ -213,6 +312,10 @@ void boot_orchestrator::run() {
     // value only if that path somehow has not completed.
     const auto gatt_db_ok =
         sentinel::ble_context_object.gatt_db_ok() || m_gatt_db_ok;
+    // Readiness → post_running just before the probes; notifies a mid-boot
+    // central that connected during the flash scans (#69).
+    sentinel::gatt::system::publish_readiness(
+        diag::device_readiness::post_running, 0);
     const auto summary =
         diag::post::run(ctx.bme, ctx.rtc, ctx.flash, ctx.event_store,
                         m_ble_stack_ok, gatt_db_ok);
@@ -225,12 +328,21 @@ void boot_orchestrator::run() {
     logi("---- [ POST ] done in %u ms: %s ----", post_ms,
          summary.all_passed ? "all subsystems passed" : "failures recorded");
     ctx.post_last_status = first_failure_id(summary);
+    // Readiness → ready / degraded(subsystem); the transition a mid-POST
+    // central is waiting on (#69). post_last_status is 0 when all passed.
+    sentinel::gatt::system::publish_readiness(
+        summary.all_passed ? diag::device_readiness::ready
+                           : diag::device_readiness::degraded,
+        ctx.post_last_status);
     diag::post::record_results(ctx.event_log(), summary); // enqueues records
 
     // ---- 3. Start the event-log drain task. ----
     // Its run() executes run_boot_sequence() (boot-lifecycle records) first,
     // then block-drains the POST records enqueued above. See the file header on
-    // ordering.
+    // ordering. Each drained record pushes the Record Count to a subscribed
+    // central (#75) — bound here so the event log stays BLE-agnostic.
+    ctx.event_log().set_appended_hook(
+        [] { sentinel::gatt::paged::publish_event_count(); });
     start_task("event log", ctx.event_log().task_create());
 
     // ---- 4a. Seed the System service + Device Information Service (#6/#45).
@@ -243,12 +355,20 @@ void boot_orchestrator::run() {
         const auto platform = sentinel::current_platform_id();
         gsys::set_firmware_version(sentinel::current_firmware_version);
         gsys::set_platform_id(platform);
+        gsys::set_build_info(sentinel::current_build_info);
         sentinel::gatt::dis::populate(platform,
                                       sentinel::current_firmware_version,
                                       gsys::serial_number());
         logi("boot: GATT identity seeded (platform=%u, serial=%lu)",
              static_cast<unsigned>(sentinel::to_underlying(platform)),
              static_cast<unsigned long>(gsys::serial_number()));
+        logi("boot: build info (channel=%u, config=%u, variant=%u)",
+             static_cast<unsigned>(
+                 sentinel::to_underlying(sentinel::current_build_info.channel)),
+             static_cast<unsigned>(
+                 sentinel::to_underlying(sentinel::current_build_info.config)),
+             static_cast<unsigned>(sentinel::to_underlying(
+                 sentinel::current_build_info.variant)));
     }
 
     // ---- 4b. Bring up the on-die temperature sensor (#6). ----
@@ -283,8 +403,8 @@ void boot_orchestrator::run() {
     // AC).
     start_task("cpu die-temp service",
                task::cpu_die_temp_service::instance().task_create());
-    // Async handler for slow BLE-triggered maintenance (store clears + deferred
-    // bootloader reset), kept off the Bluetooth callback (#6).
+    // Async handler for slow BLE-triggered maintenance (flash record-store
+    // clears), kept off the Bluetooth callback (#6).
     start_task("ble maintenance",
                task::ble_maintenance_task::instance().task_create());
 

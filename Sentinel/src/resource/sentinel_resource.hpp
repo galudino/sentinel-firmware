@@ -26,6 +26,8 @@
 extern "C" {
 #include "FreeRTOS.h"
 #include "cy_result.h"
+#include "cy_sysclk.h"
+#include "cycfg_clocks.h"
 #include "cycfg_peripherals.h"
 #include "cycfg_pins.h"
 #include "cyhal_gpio.h"
@@ -118,6 +120,47 @@ inline SemaphoreHandle_t flash_device_mutex{nullptr};
 ///
 inline constexpr cyhal_gpio_t rtc_sqw_pin = CYBSP_RTC_SQW;
 
+#ifdef CYBSP_SPI_HW
+/// \brief Target SPI flash clock (#76). The W25Q128 \c 0x03 read is rated to
+///        ~50 MHz; a few MHz is a conservative ceiling for breadboard wiring.
+inline constexpr uint32_t kSpiTargetHz = 4'000'000u;
+
+///
+/// \brief Re-time the SPI flash clock to at most \p target_hz (#76).
+///
+/// \details The Device Configurator default divides CLK_PERI down to ~100 kHz,
+///          which made every flash record read cost milliseconds (a paged GATT
+///          block read spent ~45 ms on SPI alone). The HAL does not own a
+///          configurator clock, so \c cyhal_spi_set_frequency is a no-op here;
+///          this reprograms the SCB's dedicated peripheral divider directly.
+///          Must run before any SPI traffic (the bus task is not yet started).
+///
+/// \param target_hz Upper bound for the resulting SCLK.
+/// \return The SCLK actually configured, in Hz.
+///
+inline uint32_t configure_spi_clock(uint32_t target_hz) noexcept {
+    const auto peri_hz = Cy_SysClk_ClkPeriGetFrequency();
+    const auto oversample = static_cast<uint32_t>(CYBSP_SPI_config.oversample);
+    const auto per_divider = target_hz * oversample;
+
+    auto divider =
+        (peri_hz + per_divider - 1u) / per_divider; // ceil → <= target
+    if (divider < 1u) {
+        divider = 1u;
+    }
+    if (divider > 256u) {
+        divider = 256u; // 8-bit divider: register holds divider - 1.
+    }
+
+    Cy_SysClk_PeriphDisableDivider(CYBSP_SPI_CLK_DIV_HW, CYBSP_SPI_CLK_DIV_NUM);
+    Cy_SysClk_PeriphSetDivider(CYBSP_SPI_CLK_DIV_HW, CYBSP_SPI_CLK_DIV_NUM,
+                               divider - 1u);
+    Cy_SysClk_PeriphEnableDivider(CYBSP_SPI_CLK_DIV_HW, CYBSP_SPI_CLK_DIV_NUM);
+
+    return peri_hz / (divider * oversample);
+}
+#endif /* CYBSP_SPI_HW */
+
 ///
 /// \brief Initialize peripheral resources from Device Configurator.
 ///
@@ -163,6 +206,8 @@ inline void peripheral_initialize() noexcept {
         cyhal_spi_init_cfg(&cybsp_spi, &CYBSP_SPI_hal_config);
     configASSERT(spi_config_result == CY_RSLT_SUCCESS);
     logi("CYBSP_SPI init result: %d", static_cast<int>(spi_config_result));
+    logi("CYBSP_SPI clock: %lu Hz",
+         static_cast<unsigned long>(configure_spi_clock(kSpiTargetHz)));
 #endif /* CYBSP_SPI_HW */
 
 #ifdef CYBSP_I2C_HW

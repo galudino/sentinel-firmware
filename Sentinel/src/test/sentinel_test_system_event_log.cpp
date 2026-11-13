@@ -172,7 +172,9 @@ bool body_typed_round_trip(uint8_t *buf, uint32_t size, const char **why) {
 
     g_test_clock = 2000u;
     const auto from = sentinel::firmware_version(1, 0, 0, 1);
-    const auto to = sentinel::firmware_version(1, 2, 3, 7);
+    // #86: build 0x1207 — low byte 7 in the compact field, high byte 0x12 in
+    // to_build_hi.
+    const auto to = sentinel::firmware_version(1, 2, 3, 0x1207);
     if (!log.record_firmware_update(system_event::firmware_update_completed,
                                     from, to, 0xABu)) {
         *why = "record";
@@ -192,7 +194,8 @@ bool body_typed_round_trip(uint8_t *buf, uint32_t size, const char **why) {
     std::memcpy(&fur, &*rec, sizeof(fur));
     if (fur.from_version.major != 1u || fur.from_version.build != 1u ||
         fur.to_version.minor != 2u || fur.to_version.patch != 3u ||
-        fur.to_version.build != 7u || fur.mcuboot_result != 0xABu) {
+        fur.to_version.build != 7u || fur.mcuboot_result != 0xABu ||
+        fur.from_build_hi != 0u || fur.to_build_hi != 0x12u) {
         *why = "field mismatch";
         return false;
     }

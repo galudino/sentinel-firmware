@@ -163,6 +163,116 @@ to_compact(const sentinel::firmware_version &v) noexcept {
 }
 
 ///
+/// \brief High byte of a version's 16-bit build number (#86).
+///
+/// \details \ref sentinel::diagnostics::firmware_version_compact keeps only the
+///          build's low byte, so
+///          records carry this high byte in their (previously zeroed) reserved
+///          tail. Records written before #86 read back \c 0 here, which
+///          reassembles to exactly the old value.
+///
+/// \param v Full firmware version.
+/// \return Bits 15..8 of \p v's build number.
+///
+inline uint8_t build_high_byte(const sentinel::firmware_version &v) noexcept {
+    return static_cast<uint8_t>(v.build() >> 8u);
+}
+
+///
+/// \brief Reassemble a full version from its compact form + build high byte
+///        (#86).
+///
+/// \param c       Compact version (build low byte).
+/// \param build_hi Build high byte, as stored alongside \p c.
+/// \return The full four-part version, build = <tt>(build_hi << 8) |
+/// c.build</tt>.
+///
+inline sentinel::firmware_version from_compact(firmware_version_compact c,
+                                               uint8_t build_hi) noexcept {
+    return sentinel::firmware_version(
+        c.major, c.minor, c.patch,
+        static_cast<uint16_t>((static_cast<uint16_t>(build_hi) << 8u) |
+                              c.build));
+}
+
+///
+/// \brief Resolve the post-swap event implied by a pending update marker (#81).
+///
+/// \details Called at boot when a durable pending-update marker is present
+///          (see \ref sentinel::storage::firmware_update_marker). Compares the
+///          version that started the update (\p from, carried across the reset
+///          in the marker) against the version now running:
+///          - a \e different image is running → the MCUBoot swap took effect →
+///            \c firmware_update_completed;
+///          - the \e same image is still running → no swap took effect (MCUBoot
+///            reverted, or the reset happened before any swap) →
+///            \c firmware_reverted.
+///          All four components are compared at full width (#86 — the build
+///          is 16-bit, so 1.0.2.111 and 1.0.2.367 are different images even
+///          though their low build bytes match). Direction-agnostic, so a
+///          downgrade is still a completed update.
+///
+/// \param from    Full version recorded when the update was attempted.
+/// \param running Version of the image now executing.
+/// \return \c firmware_update_completed or \c firmware_reverted.
+///
+inline system_event
+resolve_post_swap_event(const sentinel::firmware_version &from,
+                        const sentinel::firmware_version &running) noexcept {
+    const bool same_image =
+        from.major() == running.major() && from.minor() == running.minor() &&
+        from.patch() == running.patch() && from.build() == running.build();
+    return same_image ? system_event::firmware_reverted
+                      : system_event::firmware_update_completed;
+}
+
+///
+/// \brief Discrete reasons carried in \c firmware_update_record::mcuboot_result
+///        for a \c firmware_update_failed event (#83/#84/#71); mirrored by the
+///        client's Logs view.
+///
+namespace ota_fail_reason {
+inline constexpr uint32_t aborted = 1u;     ///< Client sent the ABORT command.
+inline constexpr uint32_t signal_lost = 2u; ///< Peer disconnected mid-OTA.
+inline constexpr uint32_t verify = 3u;      ///< Image verification failed.
+inline constexpr uint32_t start = 4u;       ///< OTA agent failed to start.
+inline constexpr uint32_t interrupted = 5u; ///< Board reset mid-download
+                                            ///< (power cut / crash), found at
+                                            ///< the next boot (#71).
+} // namespace ota_fail_reason
+
+///
+/// \brief Resolve a pending-update marker found at boot into its event (#71).
+///
+/// \details Extends \ref sentinel::diagnostics::resolve_post_swap_event with
+/// the marker's download
+///          stage. A different running version is always
+///          \c firmware_update_completed. The same version means the update
+///          did not take: \c firmware_reverted if the download had finished
+///          (MCUBoot rejected or rolled back the image), but
+///          \c firmware_update_failed if it had not — the reset (a power cut
+///          or crash) interrupted the download itself, which is not a revert.
+///
+/// \param download_finished \c false only if the marker says the download was
+///                          still in progress when the board reset.
+/// \param from              Version running when the update was attempted.
+/// \param running           Version running now.
+/// \return \c firmware_update_completed, \c firmware_reverted, or
+///         \c firmware_update_failed (reason \ref
+///         sentinel::diagnostics::ota_fail_reason::interrupted).
+///
+inline system_event
+resolve_pending_update(bool download_finished,
+                       const sentinel::firmware_version &from,
+                       const sentinel::firmware_version &running) noexcept {
+    const auto step = resolve_post_swap_event(from, running);
+    if (step == system_event::firmware_reverted && !download_finished) {
+        return system_event::firmware_update_failed;
+    }
+    return step;
+}
+
+///
 /// \brief Common 8-byte header prefixing every record.
 ///
 /// \details The leading \c uint32_t makes the whole record 4-aligned. The
@@ -206,7 +316,8 @@ struct boot_lifecycle_record {
     firmware_version_compact firmware_version; ///< 4 bytes
     uint32_t boot_count;                       ///< total boots since erase
     uint32_t uptime_at_event;                  ///< seconds (0 for boot)
-    uint8_t reserved[16];                      ///< Forward-compat padding.
+    uint8_t build_hi;     ///< Build high byte (#86); 0 on pre-#86 records.
+    uint8_t reserved[15]; ///< Forward-compat padding.
 };
 static_assert(sizeof(boot_lifecycle_record) == 36);
 
@@ -218,7 +329,9 @@ struct firmware_update_record {
     firmware_version_compact from_version; ///< 4 bytes
     firmware_version_compact to_version;   ///< 4 bytes
     uint32_t mcuboot_result;               ///< last image-check / etc.
-    uint8_t reserved[16];                  ///< Forward-compat padding.
+    uint8_t from_build_hi; ///< \c from build high byte (#86); 0 pre-#86.
+    uint8_t to_build_hi;   ///< \c to build high byte (#86); 0 pre-#86.
+    uint8_t reserved[14];  ///< Forward-compat padding.
 };
 static_assert(sizeof(firmware_update_record) == 36);
 

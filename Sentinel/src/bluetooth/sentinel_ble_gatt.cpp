@@ -59,6 +59,7 @@ extern "C" {
 #include "sentinel_task_battery_service.hpp"
 #include "sentinel_task_ble_maintenance.hpp"
 #include "sentinel_task_debug_stream.hpp"
+#include "sentinel_task_rtc_service.hpp"
 #include "sentinel_task_snapshot_stream.hpp"
 #include "sentinel_utilities.hpp"
 
@@ -291,8 +292,10 @@ wiced_bt_gatt_status_t sentinel::ble_gatt_request_read_handler(
 
     // Refresh paged Snapshot History / System Event Log values from their
     // record stores just before responding (#6). A no-op for every other
-    // handle.
-    sentinel::gatt::paged::before_read(read_request->handle);
+    // handle. The offset gates block refills so a multi-payload block stays
+    // stable across ATT Read Blob continuations (#72).
+    sentinel::gatt::paged::before_read(read_request->handle,
+                                       read_request->offset);
 
     if ((attribute = ble_gatt_db_find_by_handle(read_request->handle)) ==
         nullptr) {
@@ -301,7 +304,10 @@ wiced_bt_gatt_status_t sentinel::ble_gatt_request_read_handler(
 
     attr_length_to_copy = attribute->cur_len;
 
-    if (read_request->offset >= attribute->cur_len) {
+    // Only an offset *past* the value is invalid (ATT: offset == length reads
+    // an empty value). A zero-length value — e.g. a paged Record Block past
+    // the end of a store — must read as empty, not fail at offset 0 (#76).
+    if (read_request->offset > attribute->cur_len) {
         return wiced_bt_gatt_status_e::WICED_BT_GATT_INVALID_OFFSET;
     }
 
@@ -454,20 +460,11 @@ sentinel::ble_gatt_command_write_handler(wiced_bt_gatt_event_data_t *event_data,
         if (status == wiced_bt_gatt_status_e::WICED_BT_GATT_SUCCESS) {
             sentinel::gatt::dis::set_serial_number(
                 sentinel::gatt::system::serial_number());
-        }
-        return status;
-    }
-
-    case HDLC_SYSTEM_REQUEST_BOOTLOADER_MODE_VALUE: {
-        // Enter the bootloader for OTA DFU (#6): store the write, then request
-        // a deferred reset from the maintenance task (never reset in the BT
-        // callback — the write response must flush first).
-        auto status =
-            ble_gatt_db_set_value(write_request->handle, write_request->p_val,
-                                  write_request->val_len);
-        if (status == wiced_bt_gatt_status_e::WICED_BT_GATT_SUCCESS) {
-            sentinel::task::ble_maintenance_task::instance()
-                .request_bootloader();
+            if (sentinel::resource::context_ready()) {
+                sentinel::resource::context()
+                    .event_log()
+                    .record_serial_number_set();
+            }
         }
         return status;
     }
@@ -523,8 +520,14 @@ sentinel::ble_gatt_command_write_handler(wiced_bt_gatt_event_data_t *event_data,
                                   write_request->val_len);
         if (status == wiced_bt_gatt_status_e::WICED_BT_GATT_SUCCESS &&
             sentinel::resource::context_ready()) {
-            sentinel::resource::context().rtc.set_unix_time(
-                sentinel::gatt::ds3231::unix_time());
+            const auto unix_seconds = sentinel::gatt::ds3231::unix_time();
+            if (sentinel::resource::context().rtc.set_unix_time(unix_seconds)) {
+                // #94: the chip now holds a real time — clear the
+                // oscillator-stop flag and trust the clock again.
+                sentinel::task::rtc_service::instance().time_set_from_ble(
+                    unix_seconds);
+            }
+            sentinel::resource::context().event_log().record_rtc_set_from_ble();
         }
         return status;
     }
