@@ -26,7 +26,10 @@ extern "C" {
 }
 #pragma GCC diagnostic pop
 
+#include "sentinel_firmware_version.hpp"
+
 #include <array>
+#include <cstdint>
 
 namespace sentinel {
 
@@ -238,6 +241,43 @@ public:
     [[noreturn]] void ota_fail_and_reset(uint32_t reason) noexcept;
 
     ///
+    /// \brief Reset the per-OTA attempt bookkeeping (#86) — buffered header
+    ///        bytes, the parsed target version, and the attempted-logged flag.
+    ///        Called at PREPARE, before the agent starts.
+    ///
+    void ota_reset_attempt_state() noexcept;
+
+    ///
+    /// \brief Buffer the leading bytes of the downloaded image until the
+    ///        MCUBoot header's version field is in hand, then parse the target
+    ///        version and write the \c firmware_update_attempted record (#86).
+    ///
+    /// \details Tolerates a header split across several data writes. A header
+    ///          whose magic does not match leaves the target unknown (0.0.0.0)
+    ///          but still writes the attempted record.
+    ///
+    /// \param data Bytes of one image data write.
+    /// \param len  Number of bytes in \p data.
+    ///
+    void ota_capture_header(const uint8_t *data, uint16_t len) noexcept;
+
+    ///
+    /// \brief Write this OTA's \c firmware_update_attempted record exactly once
+    ///        (#86): with the parsed target if the header has arrived, else
+    ///        0.0.0.0. Called when the header parses and before any failure
+    ///        record, so every OTA still logs attempted → completed | failed.
+    ///
+    void ota_log_attempted_once() noexcept;
+
+    ///
+    /// \brief The target version parsed from the image header (#86).
+    ///
+    /// \return The target, or 0.0.0.0 if the header has not arrived or did
+    ///         not parse.
+    ///
+    sentinel::firmware_version ota_target_version() const noexcept;
+
+    ///
     /// \brief Get the current negotiated MTU value
     ///
     /// \return uint16_t Current MTU value
@@ -296,6 +336,23 @@ private:
         m_ota_agent_params; ///< OTA agent configuration parameters
     cy_ota_network_params_t
         m_ota_network_params; ///< OTA network configuration parameters
+
+    /// MCUBoot image header magic (\c ih_magic, little-endian u32 at offset 0).
+    static constexpr uint32_t MCUBOOT_IMAGE_MAGIC_LE = 0x96F3B83Du;
+    /// Offset of \c ih_ver in the MCUBoot image header.
+    static constexpr uint32_t MCUBOOT_HDR_VER_OFFSET = 0x14u;
+    /// Header bytes needed to read \c ih_ver (offset + its 8 bytes).
+    static constexpr uint32_t MCUBOOT_HDR_NEEDED = 0x1Cu;
+
+    std::array<uint8_t, MCUBOOT_HDR_NEEDED>
+        m_ota_header{};                ///< #86: leading image bytes.
+    uint32_t m_ota_header_len{0};      ///< #86: bytes buffered so far.
+    bool m_ota_attempt_logged{false};  ///< #86: attempted written this OTA.
+    bool m_ota_target_known{false};    ///< #86: target parsed from header.
+    uint8_t m_ota_target_major{0};     ///< #86: target major.
+    uint8_t m_ota_target_minor{0};     ///< #86: target minor.
+    uint8_t m_ota_target_patch{0};     ///< #86: target patch (iv_revision).
+    uint16_t m_ota_target_build{0};    ///< #86: target build (iv_build_num).
 
     uint16_t m_mtu; ///< Negotiated MTU value for BLE notifications (default 23,
                     ///< updated on connection)

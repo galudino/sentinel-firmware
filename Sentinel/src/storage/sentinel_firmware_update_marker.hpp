@@ -11,28 +11,30 @@
 ///          boot-time swap-confirm detector (#38 boot orchestrator) can emit the
 ///          two post-swap events honestly.
 ///
-///          \b Storage. One fixed \ref firmware_update_marker struct lives in a
+///          \b Storage. One fixed
+///          \ref sentinel::storage::firmware_update_marker struct lives in a
 ///          dedicated 4 KiB sector on the W25Q128 — \b outside the circular
 ///          \ref sentinel::record_store (which would otherwise rotate it away or
 ///          conflate it with log records). Write == erase-sector + page-program;
-///          clear == erase-sector; presence == \ref kMarkerMagic reads back.
-///          The struct is 16 bytes, so a single page program (<= 256 B, within
-///          one 256 B page) suffices.
+///          clear == erase-sector; presence == the magic reads back. The struct
+///          is 16 bytes, so a single page program (<= 256 B, within one 256 B
+///          page) suffices.
 ///
-///          \b Lifecycle (coordinated with #83/#84/#85):
-///          1. At \c firmware_update_attempted (OTA PREPARE) the BLE context
-///             \ref set s the marker with the running version as \c from.
+///          \b Lifecycle (coordinated with #83/#84/#85/#86):
+///          1. At OTA PREPARE the BLE context \c set()s the marker with the
+///             running version (full 16-bit build) as \c from.
 ///          2. A \e failed OTA (signal loss / verify fail / agent-start fail)
 ///             already logs \c firmware_update_failed and reboots via
-///             \c ota_fail_and_reset — which \ref clear s this marker first, so a
-///             failure is never re-counted as a revert at the next boot.
-///          3. A user \b cancel (ABORT) \ref clear s it too — nothing is pending.
+///             \c ota_fail_and_reset — which \c clear()s this marker first, so
+///             a failure is never re-counted as a revert at the next boot.
+///          3. A user \b cancel (ABORT) \c clear()s it too — nothing is pending.
 ///          4. The \b success path reboots via the OTA confirmation handler
-///             (\c NVIC_SystemReset on \c OTA_COMPLETE) \e without clearing it, so
-///             the marker survives exactly the swap-triggering reset.
-///          5. The next boot \ref load s it, resolves completed-vs-reverted from
-///             the running version (\ref resolve_post_swap_event), records the
-///             event, and \ref clear s the marker.
+///             (\c NVIC_SystemReset on \c OTA_COMPLETE) \e without clearing it,
+///             so the marker survives exactly the swap-triggering reset.
+///          5. The next boot \c load()s it, resolves completed-vs-reverted from
+///             the running version
+///             (\ref sentinel::diagnostics::resolve_post_swap_event), records
+///             the event, and \c clear()s the marker.
 ///
 ///          \b Revert-detection limit. A MCUBoot revert boots the \e old image;
 ///          it can emit \c firmware_reverted only if that old image also carries
@@ -63,17 +65,27 @@ namespace sentinel::storage {
 ///
 /// \details Trivially copyable, fixed 16-byte layout so it lives directly on
 ///          NOR flash. \c from_* hold the four components of the version that
-///          was running when the update was attempted (build is the low 8 bits,
-///          matching \ref sentinel::diagnostics::firmware_version_compact).
+///          was running when the update was attempted. The 16-bit build is
+///          split into \c from_build (low byte) and \c from_build_hi (#86, in
+///          what was the zeroed reserved word — a marker written before #86
+///          reads \c 0 there and reassembles to its old value).
 ///
 struct firmware_update_marker {
     uint32_t magic;          ///< \ref firmware_update_marker_store::kMarkerMagic when present.
     uint8_t from_major;      ///< Running major at attempt.
     uint8_t from_minor;      ///< Running minor at attempt.
     uint8_t from_patch;      ///< Running patch at attempt.
-    uint8_t from_build;      ///< Running build (low 8 bits) at attempt.
+    uint8_t from_build;      ///< Running build, low byte, at attempt.
     uint32_t attempted_unix; ///< Unix seconds at attempt (0 if the RTC was not ready).
-    uint32_t reserved;       ///< Reserved / padding for a future field or CRC.
+    uint8_t from_build_hi;   ///< Running build, high byte, at attempt (#86).
+    uint8_t reserved[3];     ///< Reserved / padding for a future field or CRC.
+
+    /// \brief The full 16-bit build at attempt (#86).
+    /// \return <tt>(from_build_hi << 8) | from_build</tt>.
+    constexpr uint16_t from_build_full() const noexcept {
+        return static_cast<uint16_t>(
+            (static_cast<uint16_t>(from_build_hi) << 8u) | from_build);
+    }
 };
 
 static_assert(sizeof(firmware_update_marker) == 16,
@@ -94,7 +106,7 @@ static_assert(std::is_trivially_copyable_v<firmware_update_marker>,
 ///
 template <typename Transport> class firmware_update_marker_store {
 public:
-    using flash_type = sentinel::w25q128<Transport>;
+    using flash_type = sentinel::w25q128<Transport>; ///< Backing flash driver.
 
     /// Marker-present sentinel programmed into \c magic (distinct from the
     /// 0xFFFFFFFF erased state and a 0x00000000 all-zero slot).
@@ -114,12 +126,12 @@ public:
     /// \param from_major Running major at attempt.
     /// \param from_minor Running minor at attempt.
     /// \param from_patch Running patch at attempt.
-    /// \param from_build Running build (low 8 bits) at attempt.
+    /// \param from_build Running build (full 16 bits, #86) at attempt.
     /// \param attempted_unix Unix seconds at attempt (0 if unknown).
     /// \return \c true if the sector was erased and programmed successfully.
     ///
     bool set(uint8_t from_major, uint8_t from_minor, uint8_t from_patch,
-             uint8_t from_build, uint32_t attempted_unix) noexcept {
+             uint16_t from_build, uint32_t attempted_unix) noexcept {
         if (!m_flash.sector_erase_4kb(m_offset)) {
             return false;
         }
@@ -129,9 +141,9 @@ public:
         rec.from_major = from_major;
         rec.from_minor = from_minor;
         rec.from_patch = from_patch;
-        rec.from_build = from_build;
+        rec.from_build = static_cast<uint8_t>(from_build);
+        rec.from_build_hi = static_cast<uint8_t>(from_build >> 8u);
         rec.attempted_unix = attempted_unix;
-        rec.reserved = 0u;
 
         std::array<uint8_t, sizeof(firmware_update_marker)> buf{};
         std::memcpy(buf.data(), &rec, sizeof(rec));

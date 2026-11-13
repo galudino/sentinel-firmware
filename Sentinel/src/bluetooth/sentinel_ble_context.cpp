@@ -254,12 +254,14 @@ void ble_context::ota_fail_and_reset(uint32_t reason) noexcept {
     // down, then reboot so every task + GATT service comes back fresh and the
     // board re-advertises for the client to reconnect to. A user cancel is not a
     // failure and never routes here (it stays connected via ota_cleanup()).
+    // #86: attempted first (if the header never arrived), and the failed
+    // record carries the real target when known.
+    ota_log_attempted_once();
     if (sentinel::resource::context_ready()) {
         auto &ctx = sentinel::resource::context();
         ctx.event_log().record_firmware_update(
             sentinel::diagnostics::system_event::firmware_update_failed,
-            sentinel::current_firmware_version,
-            sentinel::firmware_version(0u, 0u, 0u, 0u), reason);
+            sentinel::current_firmware_version, ota_target_version(), reason);
 
         // #81: this failure is logged and the board is about to reboot with no
         // swap pending — drop the pending-update marker so the next boot's
@@ -273,6 +275,79 @@ void ble_context::ota_fail_and_reset(uint32_t reason) noexcept {
     // before the reset (mirrors the 1 s guard on the success-reboot path).
     cy_rtos_delay_milliseconds(1000);
     NVIC_SystemReset();
+}
+
+void ble_context::ota_reset_attempt_state() noexcept {
+    m_ota_header_len = 0u;
+    m_ota_attempt_logged = false;
+    m_ota_target_known = false;
+    m_ota_target_major = 0u;
+    m_ota_target_minor = 0u;
+    m_ota_target_patch = 0u;
+    m_ota_target_build = 0u;
+}
+
+void ble_context::ota_capture_header(const uint8_t *data,
+                                     uint16_t len) noexcept {
+    // Only while an OTA is active and before its attempted record is written
+    // (after that the header has been handled; later writes are image body).
+    if (m_ota_context == nullptr || m_ota_attempt_logged || data == nullptr ||
+        len == 0u) {
+        return;
+    }
+
+    const auto need = MCUBOOT_HDR_NEEDED - m_ota_header_len;
+    const auto take = (static_cast<uint32_t>(len) < need)
+                          ? static_cast<uint32_t>(len)
+                          : need;
+    std::memcpy(m_ota_header.data() + m_ota_header_len, data, take);
+    m_ota_header_len += take;
+    if (m_ota_header_len < MCUBOOT_HDR_NEEDED) {
+        return; // header split across writes — wait for more
+    }
+
+    // MCUBoot image header: ih_magic (LE u32) at 0; ih_ver at 0x14 =
+    // { u8 iv_major, u8 iv_minor, u16 iv_revision, u32 iv_build_num }.
+    auto magic = uint32_t{0};
+    std::memcpy(&magic, m_ota_header.data(), sizeof(magic));
+    if (magic == MCUBOOT_IMAGE_MAGIC_LE) {
+        const auto *ver = m_ota_header.data() + MCUBOOT_HDR_VER_OFFSET;
+        auto revision = uint16_t{0};
+        auto build = uint32_t{0};
+        std::memcpy(&revision, ver + 2, sizeof(revision));
+        std::memcpy(&build, ver + 4, sizeof(build));
+        m_ota_target_major = ver[0];
+        m_ota_target_minor = ver[1];
+        // firmware_version is u8.u8.u8.u16 — clip the wider MCUBoot fields.
+        m_ota_target_patch =
+            static_cast<uint8_t>(revision > 0xFFu ? 0xFFu : revision);
+        m_ota_target_build =
+            static_cast<uint16_t>(build > 0xFFFFu ? 0xFFFFu : build);
+        m_ota_target_known = true;
+    }
+
+    ota_log_attempted_once();
+}
+
+void ble_context::ota_log_attempted_once() noexcept {
+    if (m_ota_attempt_logged) {
+        return;
+    }
+    m_ota_attempt_logged = true;
+
+    if (sentinel::resource::context_ready()) {
+        sentinel::resource::context().event_log().record_firmware_update(
+            sentinel::diagnostics::system_event::firmware_update_attempted,
+            sentinel::current_firmware_version, ota_target_version(), 0u);
+    }
+}
+
+sentinel::firmware_version ble_context::ota_target_version() const noexcept {
+    if (!m_ota_target_known) {
+        return sentinel::firmware_version(0u, 0u, 0u, 0u);
+    }
+    return sentinel::firmware_version(m_ota_target_major, m_ota_target_minor,
+                                      m_ota_target_patch, m_ota_target_build);
 }
 
 wiced_bt_gatt_status_t
@@ -298,6 +373,10 @@ ble_context::ota_agent_write_handler(wiced_bt_gatt_event_data_t *event_data,
     case HDLC_OTA_FW_UPGRADE_SERVICE_OTA_UPGRADE_CONTROL_POINT_VALUE:
         switch (write_request->p_val[0]) {
         case CY_OTA_UPGRADE_COMMAND_PREPARE_DOWNLOAD:
+            // #86: fresh per-OTA bookkeeping before anything can fail, so an
+            // agent-start failure still logs attempted → failed.
+            ota_reset_attempt_state();
+
             // Call application-level OTA initialization
             result = ota_agent_initialize();
 
@@ -312,24 +391,18 @@ ble_context::ota_agent_write_handler(wiced_bt_gatt_event_data_t *event_data,
                 return wiced_bt_gatt_status_e::WICED_BT_GATT_ERROR;
             }
 
-            // #80: an OTA download is now starting. The target version is not
-            // known until the image header arrives, so `to` is left 0.0.0.0.
-            // #81: persist a durable pending-update marker here too, so the next
-            // boot's swap-confirm detector can emit firmware_update_completed /
+            // #81: persist a durable pending-update marker so the next boot's
+            // swap-confirm detector can emit firmware_update_completed /
             // _reverted honestly. The marker survives the success reboot and is
             // cleared on any failure (ota_fail_and_reset) or user abort.
+            // #86: the firmware_update_attempted record is no longer written
+            // here — the target is unknown until the image header arrives, so
+            // ota_capture_header() writes it with the real target (or a
+            // failure path writes it first if no header ever arrives).
             if (sentinel::resource::context_ready()) {
-                auto &ctx = sentinel::resource::context();
-                ctx.event_log().record_firmware_update(
-                    sentinel::diagnostics::system_event::
-                        firmware_update_attempted,
-                    sentinel::current_firmware_version,
-                    sentinel::firmware_version(0u, 0u, 0u, 0u), 0u);
-
                 const auto &v = sentinel::current_firmware_version;
-                ctx.fw_update_marker.set(
-                    v.major(), v.minor(), v.patch(),
-                    static_cast<uint8_t>(v.build()),
+                sentinel::resource::context().fw_update_marker.set(
+                    v.major(), v.minor(), v.patch(), v.build(),
                     sentinel::resource::now_unix_seconds());
             }
 
@@ -366,12 +439,14 @@ ble_context::ota_agent_write_handler(wiced_bt_gatt_event_data_t *event_data,
 
             // #80/#83: the client aborted the OTA. Log it (reason = aborted)
             // and tear the agent down so a retry starts clean.
+            // #86: attempted first (if the header never arrived), and the
+            // failed record carries the real target when known.
+            ota_log_attempted_once();
             if (sentinel::resource::context_ready()) {
                 auto &ctx = sentinel::resource::context();
                 ctx.event_log().record_firmware_update(
                     sentinel::diagnostics::system_event::firmware_update_failed,
-                    sentinel::current_firmware_version,
-                    sentinel::firmware_version(0u, 0u, 0u, 0u),
+                    sentinel::current_firmware_version, ota_target_version(),
                     OTA_FAIL_ABORTED);
 
                 // #81: a user cancel leaves nothing pending across a reset —
@@ -387,6 +462,8 @@ ble_context::ota_agent_write_handler(wiced_bt_gatt_event_data_t *event_data,
         break;
 
     case HDLC_OTA_FW_UPGRADE_SERVICE_OTA_UPGRADE_DATA_VALUE:
+        // #86: peek the leading image bytes for the MCUBoot header's version.
+        ota_capture_header(write_request->p_val, write_request->val_len);
         result = cy_ota_ble_download_write(m_ota_context, event_data);
         return (result == CY_RSLT_SUCCESS)
                    ? wiced_bt_gatt_status_e::WICED_BT_GATT_SUCCESS
@@ -405,6 +482,7 @@ void ble_context::ota_agent_confirmation_handler() noexcept {
 
     if (ota_lib_state == cy_ota_agent_state_t::CY_OTA_STATE_OTA_COMPLETE &&
         m_reboot_at_end) {
+        ota_log_attempted_once(); // #86: no-op unless the header never parsed
         cy_rtos_delay_milliseconds(1000);
         NVIC_SystemReset();
     } else {

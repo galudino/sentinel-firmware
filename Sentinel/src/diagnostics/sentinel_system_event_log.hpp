@@ -204,6 +204,7 @@ public:
         auto r = boot_lifecycle_record{};
         r.header.event_type = system_event::boot_complete;
         r.firmware_version = to_compact(v);
+        r.build_hi = build_high_byte(v);
         r.boot_count = boot_count;
         r.uptime_at_event = 0u;
         return record(as_record(r));
@@ -223,6 +224,7 @@ public:
         auto r = boot_lifecycle_record{};
         r.header.event_type = system_event::shutdown_clean;
         r.firmware_version = to_compact(v);
+        r.build_hi = build_high_byte(v);
         r.boot_count = boot_count;
         r.uptime_at_event = uptime_seconds;
         return record(as_record(r));
@@ -246,6 +248,8 @@ public:
         r.header.event_type = step;
         r.from_version = to_compact(from);
         r.to_version = to_compact(to);
+        r.from_build_hi = build_high_byte(from);
+        r.to_build_hi = build_high_byte(to);
         r.mcuboot_result = mcuboot_result;
         return record(as_record(r));
     }
@@ -553,6 +557,7 @@ public:
             su.header.event_type = system_event::shutdown_unexpected;
             su.header.unix_timestamp = last->header.unix_timestamp;
             su.firmware_version = to_compact(current_firmware_version);
+            su.build_hi = build_high_byte(current_firmware_version);
             su.boot_count = prior_boot_count;
             su.uptime_at_event = 0u;
             if (!m_store->append(as_record(su))) {
@@ -565,6 +570,7 @@ public:
         bc.header.event_type = system_event::boot_complete;
         bc.header.unix_timestamp = current_time();
         bc.firmware_version = to_compact(current_firmware_version);
+        bc.build_hi = build_high_byte(current_firmware_version);
         bc.boot_count = found_lifecycle ? prior_boot_count + 1u : 1u;
         bc.uptime_at_event = 0u;
         return m_store->append(as_record(bc));

@@ -153,16 +153,14 @@ void resolve_pending_firmware_update(
         return; // no OTA was in flight across this boot
     }
 
-    const auto from = sentinel::diagnostics::firmware_version_compact{
+    // #86: full 16-bit build (low byte + high byte), so e.g. 1.0.2.111 and
+    // 1.0.2.367 are told apart.
+    const auto from_version = sentinel::firmware_version(
         marker.from_major, marker.from_minor, marker.from_patch,
-        marker.from_build};
+        marker.from_build_full());
     const auto &running = sentinel::current_firmware_version;
     const auto step =
-        sentinel::diagnostics::resolve_post_swap_event(from, running);
-
-    const auto from_version =
-        sentinel::firmware_version(marker.from_major, marker.from_minor,
-                                   marker.from_patch, marker.from_build);
+        sentinel::diagnostics::resolve_post_swap_event(from_version, running);
 
     if (step ==
         sentinel::diagnostics::system_event::firmware_update_completed) {
