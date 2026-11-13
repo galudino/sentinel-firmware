@@ -5,7 +5,9 @@
 /// \details Both aggregate services expose a flash-backed circular record store
 ///          (#33) over the same paged-read protocol: read Record Count, write
 ///          Index (a \e relative cursor in <tt>[0, count)</tt>), read Record
-///          Block (\c floor(max/record_size) records from the cursor). The read
+///          Block (\c floor(min(max, MTU-1, 246)/record_size) records from the
+///          cursor — one LL packet, see
+///          \ref sentinel::gatt::paged::single_payload_block_max). The read
 ///          values are refreshed lazily from \c resource::context()'s stores in
 ///          \ref sentinel::gatt::paged::before_read, just before the GATT read
 ///          responds, so a client
@@ -62,6 +64,43 @@ inline constexpr uint16_t BLOCK_SCRATCH = 512;
 /// \brief Most unreadable slots one block fill steps past before giving up
 ///        (bounds the flash reads done inside the BT-stack read callback).
 inline constexpr uint32_t MAX_SKIPPED_SLOTS = 64;
+
+/// \brief Largest read-response value that fits one LE link-layer packet:
+///        251 B (max Data Length Extension payload) − 4 B L2CAP header − 1 B
+///        ATT opcode.
+inline constexpr uint32_t SINGLE_LL_PACKET_VALUE = 246;
+
+/// \brief Largest Record Block that one read response can carry intact.
+///
+/// \details Measured on the bench (#87, MTU 517 / 515 reported by iOS): a
+///          504-byte Record Block read response arrives with only its first
+///          246 bytes correct — exactly one LL packet's worth of value — and
+///          the remainder wrong, while the client still advances its cursor by
+///          the full block. The tail of every block (records 7–13 of 14
+///          events, 4–6 of 6 snapshots) therefore silently vanished from the
+///          client's view although the flash held every record. The fault is
+///          in how the stack sends a multi-packet response (root cause not yet
+///          isolated); keeping every block within one LL packet, and within
+///          one ATT payload (\c MTU-1), avoids it. Never below one record: a
+///          pre-exchange MTU of 23 still delivers one record per block rather
+///          than an empty block, which the client reads as end-of-store.
+///
+/// \param characteristic_max The characteristic's GATT-DB MaxAttrLength.
+/// \param record_size        Size of one record in bytes.
+/// \return Bytes to fill: \c min(characteristic_max, MTU-1, 246), rounded
+///         down to whole records, but at least one record.
+inline uint32_t single_payload_block_max(uint32_t characteristic_max,
+                                         uint32_t record_size) noexcept {
+    const uint32_t mtu = sentinel::ble_context_object.mtu();
+    const uint32_t payload = mtu > 1u ? mtu - 1u : 0u;
+    uint32_t limit =
+        payload < characteristic_max ? payload : characteristic_max;
+    if (limit > SINGLE_LL_PACKET_VALUE) {
+        limit = SINGLE_LL_PACKET_VALUE;
+    }
+    const uint32_t records = limit / record_size;
+    return (records > 0u ? records : 1u) * record_size;
+}
 
 /// \brief Read a little-endian uint32 from a 4-byte GATT value array.
 /// \param p Pointer to at least 4 bytes, little-endian encoded.
@@ -265,7 +304,10 @@ inline void before_read(uint16_t handle, uint16_t offset) noexcept {
         if (offset == 0) {
             fill_block<sentinel::telemetry::device_snapshot>(
                 ctx.snapshot_store, read_u32_le(app_snapshot_history_index),
-                handle, MAX_LEN_SNAPSHOT_HISTORY_RECORD_BLOCK);
+                handle,
+                single_payload_block_max(
+                    MAX_LEN_SNAPSHOT_HISTORY_RECORD_BLOCK,
+                    sizeof(sentinel::telemetry::device_snapshot)));
         }
         break;
     case HDLC_SYSTEM_EVENT_LOG_RECORD_COUNT_VALUE:
@@ -275,7 +317,10 @@ inline void before_read(uint16_t handle, uint16_t offset) noexcept {
         if (offset == 0) {
             fill_block<sentinel::diagnostics::system_event_record>(
                 ctx.event_store, read_u32_le(app_system_event_log_index),
-                handle, MAX_LEN_SYSTEM_EVENT_LOG_RECORD_BLOCK);
+                handle,
+                single_payload_block_max(
+                    MAX_LEN_SYSTEM_EVENT_LOG_RECORD_BLOCK,
+                    sizeof(sentinel::diagnostics::system_event_record)));
         }
         break;
     default:
