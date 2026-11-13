@@ -103,6 +103,15 @@ wiced_result_t ble_context::stack_initialize() noexcept {
     return result;
 }
 
+namespace {
+/// \brief Reason written into \c firmware_update_record.mcuboot_result for a
+///        \c firmware_update_failed event (#83); mirrored by the client Logs
+///        view.
+constexpr uint32_t OTA_FAIL_ABORTED = 1u;     ///< client sent the ABORT command
+constexpr uint32_t OTA_FAIL_SIGNAL_LOST = 2u; ///< peer disconnected mid-OTA
+constexpr uint32_t OTA_FAIL_VERIFY = 3u;      ///< image verification failed
+} // namespace
+
 wiced_bt_gatt_status_t ble_context::connection_event_handler(
     const wiced_bt_gatt_connection_status_t &connection_status) {
     auto status = wiced_bt_gatt_status_e::WICED_BT_GATT_ERROR;
@@ -151,6 +160,23 @@ wiced_bt_gatt_status_t ble_context::connection_event_handler(
                 connection_status.bd_addr, connection_status.addr_type,
                 static_cast<uint8_t>(connection_status.reason));
         }
+
+        // #83: a disconnect while an OTA was in flight (signal loss) leaves the
+        // agent half-alive — log the failure (reason = signal-lost) and tear it
+        // down so the device returns to a clean state and a retry starts fresh.
+        if (m_ota_context != nullptr) {
+            if (sentinel::resource::context_ready()) {
+                sentinel::resource::context()
+                    .event_log()
+                    .record_firmware_update(
+                        sentinel::diagnostics::system_event::
+                            firmware_update_failed,
+                        sentinel::current_firmware_version,
+                        sentinel::firmware_version(0u, 0u, 0u, 0u),
+                        OTA_FAIL_SIGNAL_LOST);
+            }
+            ota_cleanup();
+        }
     }
 
     update_advertising_led();
@@ -197,18 +223,32 @@ cy_rslt_t ble_context::ota_agent_initialize() noexcept {
         return CY_RSLT_OTA_ERROR_BADARG;
     }
 
+    // #83: a prior OTA that was aborted or interrupted (signal loss) may have
+    // left the agent running; tear it down first so cy_ota_agent_start does not
+    // fail with "OTA context already created!".
+    ota_cleanup();
+
     ota_value_initialize();
 
     result = cy_ota_agent_start(&m_ota_network_params, &m_ota_agent_params,
                                 &m_ota_context);
 
     if (result != CY_RSLT_SUCCESS) {
-        while (true) {
-            cy_rtos_delay_milliseconds(10);
-        }
+        // #83: a failed start must leave the device alive and retryable — do
+        // not hang here (this was an infinite while(true) delay loop).
+        m_ota_context = nullptr;
     }
 
     return result;
+}
+
+void ble_context::ota_cleanup() noexcept {
+    // #83: stop the OTA agent and drop the context so a later PREPARE can start
+    // a fresh one. No-op when no OTA is active.
+    if (m_ota_context != nullptr) {
+        cy_ota_agent_stop(&m_ota_context);
+        m_ota_context = nullptr;
+    }
 }
 
 wiced_bt_gatt_status_t
@@ -281,7 +321,9 @@ ble_context::ota_agent_write_handler(wiced_bt_gatt_event_data_t *event_data,
                                                 m_connection_id);
 
             if (result != CY_RSLT_SUCCESS) {
-                // #80: image verification failed — the swap will not happen.
+                // #80/#83: image verification failed — the swap will not
+                // happen. Log it (reason = verify-failed) and tear the agent
+                // down so a retry starts clean.
                 if (sentinel::resource::context_ready()) {
                     sentinel::resource::context()
                         .event_log()
@@ -290,8 +332,9 @@ ble_context::ota_agent_write_handler(wiced_bt_gatt_event_data_t *event_data,
                                 firmware_update_failed,
                             sentinel::current_firmware_version,
                             sentinel::firmware_version(0u, 0u, 0u, 0u),
-                            static_cast<uint32_t>(result));
+                            OTA_FAIL_VERIFY);
                 }
+                ota_cleanup();
                 return wiced_bt_gatt_status_e::WICED_BT_GATT_ERROR;
             }
 
@@ -300,7 +343,8 @@ ble_context::ota_agent_write_handler(wiced_bt_gatt_event_data_t *event_data,
         case CY_OTA_UPGRADE_COMMAND_ABORT:
             result = cy_ota_ble_download_abort(m_ota_context);
 
-            // #80: the client aborted the OTA before completion.
+            // #80/#83: the client aborted the OTA. Log it (reason = aborted)
+            // and tear the agent down so a retry starts clean.
             if (sentinel::resource::context_ready()) {
                 sentinel::resource::context()
                     .event_log()
@@ -309,8 +353,9 @@ ble_context::ota_agent_write_handler(wiced_bt_gatt_event_data_t *event_data,
                             firmware_update_failed,
                         sentinel::current_firmware_version,
                         sentinel::firmware_version(0u, 0u, 0u, 0u),
-                        static_cast<uint32_t>(result));
+                        OTA_FAIL_ABORTED);
             }
+            ota_cleanup();
 
             return wiced_bt_gatt_status_e::WICED_BT_GATT_SUCCESS;
         }
@@ -339,7 +384,7 @@ void ble_context::ota_agent_confirmation_handler() noexcept {
         cy_rtos_delay_milliseconds(1000);
         NVIC_SystemReset();
     } else {
-        cy_ota_agent_stop(&m_ota_context);
+        ota_cleanup(); // #83: stop + null the context (was stop-only)
     }
 }
 

@@ -209,6 +209,16 @@ public:
     void ota_agent_confirmation_handler() noexcept;
 
     ///
+    /// \brief Stop the OTA agent and drop the context (#83).
+    ///
+    /// \details Idempotent — safe to call when no OTA is active (no-op). Called
+    ///          on every terminal OTA path (abort, verify-fail, in-flight
+    ///          disconnect, and before a fresh start) so a later PREPARE does
+    ///          not hit "OTA context already created!".
+    ///
+    void ota_cleanup() noexcept;
+
+    ///
     /// \brief Get the current negotiated MTU value
     ///
     /// \return uint16_t Current MTU value
