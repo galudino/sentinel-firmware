@@ -42,6 +42,7 @@ extern "C" {
 #include "sentinel_ble_context.hpp"
 #include "sentinel_debug_print.hpp"
 #include "sentinel_device_context.hpp"
+#include "sentinel_firmware_update_marker.hpp"
 #include "sentinel_gatt_dis.hpp"
 #include "sentinel_gatt_paged.hpp"
 #include "sentinel_gatt_snapshot_stream.hpp"
@@ -130,6 +131,57 @@ const char *result_name(sentinel::diagnostics::post_result r) noexcept {
     return "?";
 }
 
+///
+/// \brief #81 boot-time swap-confirm detector: resolve a pending-update marker
+///        that survived the OTA reset into the honest post-swap event.
+///
+/// \details If a durable marker (\ref sentinel::storage::firmware_update_marker)
+///          is present, a \e different running version means the MCUBoot swap
+///          took effect (\c firmware_update_completed); the \e same version
+///          means the swap did not stick (\c firmware_reverted). Records the
+///          event into the (already-initialized) System Event Log and clears the
+///          marker. A clean boot with no marker records nothing. Failures and
+///          user cancels clear the marker before resetting, so neither is ever
+///          seen here.
+///
+/// \param ctx Shared device context; its event log must be initialized.
+///
+void resolve_pending_firmware_update(
+    sentinel::resource::device_context &ctx) noexcept {
+    auto marker = sentinel::storage::firmware_update_marker{};
+    if (!ctx.fw_update_marker.load(marker)) {
+        return; // no OTA was in flight across this boot
+    }
+
+    const auto from = sentinel::diagnostics::firmware_version_compact{
+        marker.from_major, marker.from_minor, marker.from_patch,
+        marker.from_build};
+    const auto &running = sentinel::current_firmware_version;
+    const auto step =
+        sentinel::diagnostics::resolve_post_swap_event(from, running);
+
+    const auto from_version =
+        sentinel::firmware_version(marker.from_major, marker.from_minor,
+                                   marker.from_patch, marker.from_build);
+
+    if (step ==
+        sentinel::diagnostics::system_event::firmware_update_completed) {
+        logi("boot: OTA swap confirmed — firmware_update_completed (%s -> %s)",
+             from_version.c_str(), running.c_str());
+        ctx.event_log().record_firmware_update(step, from_version, running, 0u);
+    } else {
+        // Reverted / no swap took effect: the attempted target was never
+        // captured, so `to` is left 0.0.0.0 (mirrors the failed-event
+        // convention).
+        loge("boot: OTA did not take — firmware_reverted (still on %s)",
+             running.c_str());
+        ctx.event_log().record_firmware_update(
+            step, from_version, sentinel::firmware_version(0u, 0u, 0u, 0u), 0u);
+    }
+
+    ctx.fw_update_marker.clear();
+}
+
 /// \brief Start a service task, logging on failure (boot continues regardless).
 /// \param name Service task name, for the failure log line.
 /// \param rc   Result of the \c xTaskCreate call that started it.
@@ -213,6 +265,14 @@ void boot_orchestrator::run() {
         loge("boot: flash store init failed (event/snapshot scan)");
         // Continue regardless — POST will record the record-store failure and
         // the device runs degraded (decision #12).
+    }
+
+    // ---- 1b. #81 boot-time swap-confirm detector. ----
+    // Resolve any pending-update marker that survived an OTA reset into the
+    // honest firmware_update_completed / _reverted event. Needs the event log +
+    // flash healthy, so it runs only when the stores initialized.
+    if (res::g_context_ready) {
+        resolve_pending_firmware_update(ctx);
     }
 
     // ---- 2. POST against the real drivers; log + record each probe. ----

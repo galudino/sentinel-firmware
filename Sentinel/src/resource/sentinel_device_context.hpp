@@ -56,6 +56,7 @@ extern "C" {
 #include "sentinel_cyhal_spi_bus_transport.hpp"
 #include "sentinel_device_snapshot.hpp"
 #include "sentinel_ds3231.hpp"
+#include "sentinel_firmware_update_marker.hpp"
 #include "sentinel_record_store.hpp"
 #include "sentinel_resource.hpp"
 #include "sentinel_system_event.hpp"
@@ -77,8 +78,9 @@ namespace sentinel::resource {
 // region offset/size are owned by the System Event Log header (#34, decision
 // #11); the snapshot region is finalized here alongside it (#38, decision #13).
 //
-//   [0x100000 .. 0x180000)  System Event Log   512 KiB  (#34)
-//   [0x180000 .. 0x280000)  Device Snapshots     1 MiB  (#38)
+//   [0x0F0000 .. 0x100000)  Firmware-Update Marker  4 KiB  (#81, one sector)
+//   [0x100000 .. 0x180000)  System Event Log      512 KiB  (#34)
+//   [0x180000 .. 0x280000)  Device Snapshots        1 MiB  (#38)
 //
 
 /// \brief Snapshot-history region base offset — immediately after the event
@@ -95,6 +97,19 @@ static_assert(kSnapshotRegionOffsetBytes >=
                   sentinel::diagnostics::kEventLogRegionOffsetBytes +
                       sentinel::diagnostics::kEventLogRegionSizeBytes,
               "snapshot region must not overlap the event-log region");
+
+/// \brief Firmware-update marker (#81) region base — one 4 KiB sector sitting
+///        immediately below the event log, outside both circular record stores.
+inline constexpr uint32_t kFirmwareUpdateMarkerOffsetBytes = 0x0F0000u;
+
+/// \brief Firmware-update marker region size — a single W25Q128 sector.
+inline constexpr uint32_t kFirmwareUpdateMarkerSizeBytes = 0x1000u; // 4 KiB
+
+static_assert(kFirmwareUpdateMarkerOffsetBytes +
+                      kFirmwareUpdateMarkerSizeBytes <=
+                  sentinel::diagnostics::kEventLogRegionOffsetBytes,
+              "firmware-update marker sector must not overlap the event-log "
+              "region");
 
 // ===========================================================================
 // Concrete instantiations (production cyhal bus transports)
@@ -118,6 +133,11 @@ using event_store_t =
 using snapshot_store_t =
     sentinel::record_store<sentinel::telemetry::device_snapshot,
                            sentinel::cyhal_spi_bus_transport>;
+
+/// \brief Durable pending-OTA-update marker store (#81) on the W25Q128.
+using fw_update_marker_store_t =
+    sentinel::storage::firmware_update_marker_store<
+        sentinel::cyhal_spi_bus_transport>;
 
 /// \brief The application's System Event Log, bound to \ref event_store_t.
 using event_log_t = sentinel::diagnostics::system_event_log<event_store_t>;
@@ -178,6 +198,9 @@ struct device_context {
     snapshot_store_t snapshot_store{
         flash, kSnapshotRegionOffsetBytes,
         kSnapshotRegionSizeBytes}; ///< Snapshot history's store.
+    fw_update_marker_store_t fw_update_marker{
+        flash,
+        kFirmwareUpdateMarkerOffsetBytes}; ///< OTA swap-confirm marker (#81).
 
     ///
     /// \brief First failed POST subsystem id (0 = all passed), cached by the

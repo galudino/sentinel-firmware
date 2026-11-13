@@ -255,10 +255,16 @@ void ble_context::ota_fail_and_reset(uint32_t reason) noexcept {
     // board re-advertises for the client to reconnect to. A user cancel is not a
     // failure and never routes here (it stays connected via ota_cleanup()).
     if (sentinel::resource::context_ready()) {
-        sentinel::resource::context().event_log().record_firmware_update(
+        auto &ctx = sentinel::resource::context();
+        ctx.event_log().record_firmware_update(
             sentinel::diagnostics::system_event::firmware_update_failed,
             sentinel::current_firmware_version,
             sentinel::firmware_version(0u, 0u, 0u, 0u), reason);
+
+        // #81: this failure is logged and the board is about to reboot with no
+        // swap pending — drop the pending-update marker so the next boot's
+        // detector does not mistake it for a MCUBoot revert (double-log).
+        ctx.fw_update_marker.clear();
     }
 
     ota_cleanup();
@@ -308,16 +314,23 @@ ble_context::ota_agent_write_handler(wiced_bt_gatt_event_data_t *event_data,
 
             // #80: an OTA download is now starting. The target version is not
             // known until the image header arrives, so `to` is left 0.0.0.0.
-            // (firmware_update_completed / _reverted need a boot-time swap
-            // detector — staged as a follow-up.)
+            // #81: persist a durable pending-update marker here too, so the next
+            // boot's swap-confirm detector can emit firmware_update_completed /
+            // _reverted honestly. The marker survives the success reboot and is
+            // cleared on any failure (ota_fail_and_reset) or user abort.
             if (sentinel::resource::context_ready()) {
-                sentinel::resource::context()
-                    .event_log()
-                    .record_firmware_update(
-                        sentinel::diagnostics::system_event::
-                            firmware_update_attempted,
-                        sentinel::current_firmware_version,
-                        sentinel::firmware_version(0u, 0u, 0u, 0u), 0u);
+                auto &ctx = sentinel::resource::context();
+                ctx.event_log().record_firmware_update(
+                    sentinel::diagnostics::system_event::
+                        firmware_update_attempted,
+                    sentinel::current_firmware_version,
+                    sentinel::firmware_version(0u, 0u, 0u, 0u), 0u);
+
+                const auto &v = sentinel::current_firmware_version;
+                ctx.fw_update_marker.set(
+                    v.major(), v.minor(), v.patch(),
+                    static_cast<uint8_t>(v.build()),
+                    sentinel::resource::now_unix_seconds());
             }
 
             return wiced_bt_gatt_status_e::WICED_BT_GATT_SUCCESS;
@@ -354,14 +367,17 @@ ble_context::ota_agent_write_handler(wiced_bt_gatt_event_data_t *event_data,
             // #80/#83: the client aborted the OTA. Log it (reason = aborted)
             // and tear the agent down so a retry starts clean.
             if (sentinel::resource::context_ready()) {
-                sentinel::resource::context()
-                    .event_log()
-                    .record_firmware_update(
-                        sentinel::diagnostics::system_event::
-                            firmware_update_failed,
-                        sentinel::current_firmware_version,
-                        sentinel::firmware_version(0u, 0u, 0u, 0u),
-                        OTA_FAIL_ABORTED);
+                auto &ctx = sentinel::resource::context();
+                ctx.event_log().record_firmware_update(
+                    sentinel::diagnostics::system_event::firmware_update_failed,
+                    sentinel::current_firmware_version,
+                    sentinel::firmware_version(0u, 0u, 0u, 0u),
+                    OTA_FAIL_ABORTED);
+
+                // #81: a user cancel leaves nothing pending across a reset —
+                // drop the marker so the next boot logs neither completed nor
+                // reverted.
+                ctx.fw_update_marker.clear();
             }
             ota_cleanup();
 

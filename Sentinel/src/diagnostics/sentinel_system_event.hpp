@@ -163,6 +163,38 @@ to_compact(const sentinel::firmware_version &v) noexcept {
 }
 
 ///
+/// \brief Resolve the post-swap event implied by a pending update marker (#81).
+///
+/// \details Called at boot when a durable pending-update marker is present
+///          (see \ref sentinel::storage::firmware_update_marker). Compares the
+///          version that started the update (\p from, carried across the reset
+///          in the marker) against the version now running:
+///          - a \e different image is running → the MCUBoot swap took effect →
+///            \c firmware_update_completed;
+///          - the \e same image is still running → no swap took effect (MCUBoot
+///            reverted, or the reset happened before any swap) →
+///            \c firmware_reverted.
+///          Build is compared on its low 8 bits only, matching
+///          \ref firmware_version_compact; any change across the four
+///          components counts as a different image (direction-agnostic, so a
+///          downgrade is still a completed update).
+///
+/// \param from    Compact version recorded when the update was attempted.
+/// \param running Version of the image now executing.
+/// \return \c firmware_update_completed or \c firmware_reverted.
+///
+inline system_event
+resolve_post_swap_event(firmware_version_compact from,
+                        const sentinel::firmware_version &running) noexcept {
+    const auto now = to_compact(running);
+    const bool same_image =
+        from.major == now.major && from.minor == now.minor &&
+        from.patch == now.patch && from.build == now.build;
+    return same_image ? system_event::firmware_reverted
+                      : system_event::firmware_update_completed;
+}
+
+///
 /// \brief Common 8-byte header prefixing every record.
 ///
 /// \details The leading \c uint32_t makes the whole record 4-aligned. The
