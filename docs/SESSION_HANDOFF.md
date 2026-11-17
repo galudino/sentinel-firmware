@@ -7,6 +7,23 @@ below. Update this file at the end of any session; keep it lean (~150 lines) by
 pushing decisions / infra / as-built detail into the architecture docs rather
 than letting them accumulate here.
 
+**Last updated:** 2026-11-16. **Docs + release-tag housekeeping (no firmware
+change).** Added [`docs/board-template.md`](board-template.md) — a reusable,
+project-agnostic GitHub Projects board spec (column model + transition rules +
+`gh`/GraphQL recipe), factored out of the `sentinel` board. Committed to
+`develop` (`fc09a03`), merged to `main` (`82f7f8a`). **`v1.0.2` tag moved** to
+that board-doc merge (was `52f79bb` → now `82f7f8a`) so it tracks main's head —
+it therefore also picked up the earlier README-refresh merge (`fb213c7`) that had
+sat just past the old tag. Force-pushed (annotated, message
+`Sentinel firmware v1.0.2 (1.0.2.0)` preserved). **GitHub Release v1.0.2 is
+PUBLISHED** (since 2026-11-13; 6 signed assets), **not** a draft — binaries were
+**not** rebuilt (still `1.0.2.0`; the tag move is git metadata only; anyone who
+already fetched the tag needs `git fetch --tags --force`). Also tidied the
+project board: `On Hold/Blocked` reordered after `In Progress`, and `Done`
+reworded "Shipped" → "Merged; all AC met; ship status via Milestone" (option ids
+preserved, so no issue was reassigned). This handoff commit lands after the tag,
+so the tag again lags `main` by one (expected).
+
 ## Durable reference (read these for the "why")
 
 - [`architecture/decisions.md`](architecture/decisions.md) — **cumulative
@@ -22,8 +39,9 @@ than letting them accumulate here.
 
 **Last updated:** 2026-11-13. **Firmware 1.0.2.0 RELEASED (#78)** — tagged
 `v1.0.2`, squash-merged `release/1.0.2` → `develop` → `main`; pre-squash history
-at tag `release-1.0.2-history`. GitHub Release v1.0.2 created as a **draft**
-(review + publish). Phase I firmware work is done; the next stretch is
+at tag `release-1.0.2-history`. GitHub Release v1.0.2 **published** (6 signed
+assets; see the 2026-11-16 note above re: the later tag move). Phase I firmware
+work is done; the next stretch is
 **client-only** (see "Client follow-ups" below).
 
 Landed in this final stretch (all bench-validated on the CYBLE-416045):
